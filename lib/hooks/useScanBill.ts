@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from '../supabase';
 import { showAlert, getErrorMessage } from '../utils/alert';
+import { edgeFunctionErrorText } from '../utils/edgeFunctionError';
 
 export interface ScannedBillItem {
   description: string;
@@ -49,10 +50,7 @@ export function useScanBill() {
         body: { image: base64, mimeType: 'image/jpeg' },
       });
       if (error || !data || data.error) {
-        showAlert(
-          'Could not read that bill',
-          data?.error ?? getErrorMessage(error, 'Please try again or fill it in by hand.')
-        );
+        showAlert('Could not read that bill', data?.error ?? (await edgeFunctionErrorText(error, 'Bill scanning')));
         return null;
       }
       return data as ScannedBill;

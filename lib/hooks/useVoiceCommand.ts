@@ -4,6 +4,7 @@ import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, s
 import { File } from 'expo-file-system';
 import { supabase } from '../supabase';
 import { showAlert, getErrorMessage } from '../utils/alert';
+import { edgeFunctionErrorText } from '../utils/edgeFunctionError';
 
 export type VoiceAction = 'add_sale' | 'add_purchase' | 'add_expense' | 'payment_in' | 'payment_out';
 
@@ -60,10 +61,7 @@ export function useVoiceCommand() {
         body: { audio: base64, mimeType: 'audio/aac' },
       });
       if (error || !data || data.error) {
-        showAlert(
-          'Could not understand that',
-          data?.error ?? getErrorMessage(error, 'Please try again or fill it in by hand.')
-        );
+        showAlert('Could not understand that', data?.error ?? (await edgeFunctionErrorText(error, 'Voice entry')));
         return null;
       }
       const result = data as VoiceCommandResult;
