@@ -1,5 +1,4 @@
 // lib/components/web/WebSidebarShell.tsx
-import { useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { router, usePathname, useGlobalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,36 +12,20 @@ export interface WebNavItem {
   // Sub-links shown nested under this item - for a section like Finance with
   // several destinations (Day Book, Ledger, Report, ...) that would otherwise
   // mean going back to a dashboard and re-picking a shortcut tile every time.
-  // A row with children (e.g. Report's family of report types) gets a chevron
-  // button to expand and collapse them, indented one step further each level down.
+  // The children are always shown, indented one step further each level down:
+  // nothing in the side panel opens or closes.
   children?: WebNavItem[];
-}
-
-/** True when `item` or anything nested under it is the page that is open. */
-function containsActive(item: WebNavItem, isActive: (href: string) => boolean): boolean {
-  return isActive(item.href) || !!item.children?.some((child) => containsActive(child, isActive));
 }
 
 /** One row of the nav list, indented by how deep it sits (0 = Home/Finance,
  * 1 = Finance's own children, 2 = a child's own children, ...), and its
- * children drawn the same way one level deeper. A row that has children
- * (Report) carries a chevron button that expands and collapses them; it
- * starts closed and opens by itself when it or one of its children is the page
- * that is open. Defined outside WebSidebarShell so its
- * identity is stable across renders - an inline component here would remount
- * this whole branch (and its children) on every render instead of just
- * updating it. */
+ * children drawn the same way one level deeper, always visible (no dropdown).
+ * Defined outside WebSidebarShell so its identity is stable across renders -
+ * an inline component here would remount this whole branch (and its children)
+ * on every render instead of just updating it. */
 function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; isActive: (href: string) => boolean }) {
   const active = isActive(item.href);
   const top = depth === 0;
-  const collapsible = !!item.children?.length;
-  const insideOpen = containsActive(item, isActive);
-  const [open, setOpen] = useState(insideOpen);
-  // Landing on this group (a link from the Report page, the browser's back
-  // button) opens it so the open page is never hidden inside a closed group.
-  useEffect(() => {
-    if (insideOpen) setOpen(true);
-  }, [insideOpen]);
 
   const color = active ? '#2563EB' : top ? '#6B7280' : '#9CA3AF';
   return (
@@ -56,10 +39,7 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
         }}
       >
         <Pressable
-          onPress={() => {
-            if (collapsible) setOpen(true);
-            router.push(item.href as any);
-          }}
+          onPress={() => router.push(item.href as any)}
           accessibilityRole="link"
           accessibilityLabel={item.label}
           accessibilityState={{ selected: active }}
@@ -71,7 +51,7 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
             gap: top ? 12 : 10,
             paddingVertical: 10,
             paddingLeft: 14 + depth * 20,
-            paddingRight: collapsible ? 4 : 14,
+            paddingRight: 14,
           }}
         >
           <Ionicons
@@ -86,22 +66,9 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
             {item.label}
           </Text>
         </Pressable>
-
-        {collapsible && (
-          <Pressable
-            onPress={() => setOpen((o) => !o)}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel={`${open ? 'Collapse' : 'Expand'} ${item.label}`}
-            accessibilityState={{ expanded: open }}
-            style={{ paddingVertical: 10, paddingHorizontal: 10 }}
-          >
-            <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={15} color={active ? '#2563EB' : '#6B7280'} />
-          </Pressable>
-        )}
       </View>
 
-      {!!item.children && (!collapsible || open) && (
+      {!!item.children?.length && (
         <View style={{ marginTop: 2, marginBottom: 4, gap: 1 }}>
           {item.children.map((child) => (
             <NavRow key={child.href} item={child} depth={depth + 1} isActive={isActive} />
