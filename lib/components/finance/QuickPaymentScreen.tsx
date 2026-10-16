@@ -29,6 +29,7 @@ import { toBsLabel, toBsHistoryLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import type { Customer } from '../../../types/database.types';
 import { localTodayIso } from '../../utils/localDate';
+import { round2, formatMoney } from '../../utils/money';
 
 // Local date, not UTC - see localTodayIso.
 const todayIso = localTodayIso;
@@ -101,7 +102,7 @@ function QuickPaymentForm() {
   // paying alike: the books' own figures (the same as the account lists show). Cash has none.
   const balances = useAccountBalances(userId);
   const available = useMemo(
-    () => (balances.ready ? { byId: Object.fromEntries(balances.perAccount.map((a) => [a.id, Math.round(a.balance)])) } : null),
+    () => (balances.ready ? { byId: Object.fromEntries(balances.perAccount.map((a) => [a.id, round2(a.balance)])) } : null),
     [balances]
   );
   const phoneContacts = usePhoneContacts();
@@ -206,7 +207,7 @@ function QuickPaymentForm() {
       showAlert('Add a customer', 'Tap the field to search or add a customer for this payment.');
       return;
     }
-    const value = Number(amount);
+    const value = round2(Number(amount));
     if (!amount.trim() || Number.isNaN(value) || value <= 0) {
       showAlert('Enter an amount', 'Add a valid amount in NPR.');
       return;
@@ -218,7 +219,7 @@ function QuickPaymentForm() {
         ...(receiptNo.trim() ? [{ label: isOut ? 'Payment no.' : 'Receipt no.', value: receiptNo.trim() }] : []),
         { label: 'Paid via', value: selectedAccountName },
       ],
-      total: { label: 'Amount', value: `NPR ${value.toLocaleString()}`, color: isOut ? MONEY.out.base : MONEY.in.base },
+      total: { label: 'Amount', value: `NPR ${formatMoney(value)}`, color: isOut ? MONEY.out.base : MONEY.in.base },
     });
     if (!ok) return;
     setSaving(true);
@@ -240,7 +241,7 @@ function QuickPaymentForm() {
       } as any);
       showAlert(
         isOut ? 'Paid saved' : 'Received saved',
-        `NPR ${value.toLocaleString()} for ${customer.name}.`
+        `NPR ${formatMoney(value)} for ${customer.name}.`
       );
       setAmount('');
       setNote('');
@@ -407,11 +408,11 @@ function QuickPaymentForm() {
     const ok = await confirmSave({
       title: `Save ${validRows.length === 1 ? 'this' : `these ${validRows.length}`} ${isOut ? 'Paid' : 'Received'} ${validRows.length === 1 ? 'entry' : 'entries'}?`,
       rows: [
-        ...validRows.slice(0, 5).map((r) => ({ label: r.customerName.trim(), value: `NPR ${Number(r.amount).toLocaleString()}` })),
+        ...validRows.slice(0, 5).map((r) => ({ label: r.customerName.trim(), value: `NPR ${formatMoney(Number(r.amount))}` })),
         ...(validRows.length > 5 ? [{ label: `+ ${validRows.length - 5} more` }] : []),
         { label: 'Paid via', value: selectedAccountName },
       ],
-      total: { label: 'Total', value: `NPR ${sum.toLocaleString()}`, color: isOut ? MONEY.out.base : MONEY.in.base },
+      total: { label: 'Total', value: `NPR ${formatMoney(sum)}`, color: isOut ? MONEY.out.base : MONEY.in.base },
     });
     if (!ok) return;
     setSaving(true);
@@ -439,7 +440,7 @@ function QuickPaymentForm() {
           [payTarget === 'vendor' ? 'vendor_id' : 'customer_id']: customer.id,
           owner_id: userId,
           entry_type: entryType,
-          amount: Number(row.amount),
+          amount: round2(Number(row.amount)),
           note: row.note.trim() || null,
           source: 'manual',
           bank_account_id: bankAccountId,
@@ -453,9 +454,9 @@ function QuickPaymentForm() {
       }
       showAlert(
         isOut ? 'Paid saved' : 'Received saved',
-        `${validRows.length} ${validRows.length === 1 ? 'entry' : 'entries'} saved, NPR ${validRows
-          .reduce((sum, r) => sum + Number(r.amount), 0)
-          .toLocaleString()} total.`
+        `${validRows.length} ${validRows.length === 1 ? 'entry' : 'entries'} saved, NPR ${formatMoney(
+          validRows.reduce((sum, r) => sum + Number(r.amount), 0)
+        )} total.`
       );
       const fresh = emptyPaymentRow();
       setRows([fresh]);
@@ -756,7 +757,7 @@ function QuickPaymentForm() {
                         </Text>
                       </View>
                       <Text className="text-xs font-bold" style={{ color: accent }}>
-                        NPR {entry.amount.toLocaleString()}
+                        NPR {formatMoney(entry.amount)}
                       </Text>
                     </View>
                   ))

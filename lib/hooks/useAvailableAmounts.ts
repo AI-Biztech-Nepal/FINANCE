@@ -1,6 +1,7 @@
 // lib/hooks/useAvailableAmounts.ts
 import { useMemo } from 'react';
 import { useAccountBalances } from './useAccountBalances';
+import { formatMoney, round2 } from '../utils/money';
 
 export interface AvailableAmounts {
   /** Money available to spend in each bank / wallet, by bank account id - never below 0.
@@ -34,10 +35,10 @@ export function useAvailableAmounts(userId: string | undefined): AvailableAmount
 
 /** What can be spent: a balance below zero is 0 (also keeps a rounded "-0" from showing). */
 function spendable(balance: number): number {
-  return Math.round(Math.max(0, balance));
+  return round2(Math.max(0, balance));
 }
 
 /** "Esewa — NPR 0"; just the name while the amount isn't known. */
 export function optionLabel(name: string, amount: number | undefined): string {
-  return amount === undefined ? name : `${name}  —  NPR ${amount.toLocaleString()}`;
+  return amount === undefined ? name : `${name}  —  NPR ${formatMoney(amount)}`;
 }

@@ -5,17 +5,18 @@
 // ones exportWorkRecord already uses.
 import * as XLSX from 'xlsx';
 import { deliver, escapeHtml, printHtml } from './exportWorkRecord';
+import { formatMoney, round2 } from './money';
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-/** Whole rupees with separators. */
-const rs = (n: number) => Math.round(n).toLocaleString();
+/** Rupees with separators (and paise when there are some). */
+const rs = (n: number) => formatMoney(n);
 
 /** "98,900 Dr" (they owe you) / "12,000 Cr" (you owe them) / "0". */
 export function drCrText(balance: number): string {
-  const whole = Math.round(balance);
-  if (whole === 0) return '0';
-  return `${Math.abs(whole).toLocaleString()} ${whole > 0 ? 'Dr' : 'Cr'}`;
+  const exact = round2(balance);
+  if (exact === 0) return '0';
+  return `${formatMoney(Math.abs(exact))} ${exact > 0 ? 'Dr' : 'Cr'}`;
 }
 
 export interface StatementLine {
@@ -138,12 +139,12 @@ export async function exportStatementXlsx(s: StatementData) {
       l.adDate,
       l.description,
       l.reference,
-      l.debit ? Math.round(l.debit) : '',
-      l.credit ? Math.round(l.credit) : '',
-      Math.abs(Math.round(l.balance)),
-      l.balance > 0.5 ? 'Dr' : l.balance < -0.5 ? 'Cr' : '',
+      l.debit ? round2(l.debit) : '',
+      l.credit ? round2(l.credit) : '',
+      Math.abs(round2(l.balance)),
+      round2(l.balance) > 0 ? 'Dr' : round2(l.balance) < 0 ? 'Cr' : '',
     ]),
-    ['', '', '', 'Total', Math.round(s.totalDebit), Math.round(s.totalCredit), Math.abs(Math.round(s.closing)), s.closing > 0.5 ? 'Dr' : s.closing < -0.5 ? 'Cr' : ''],
+    ['', '', '', 'Total', round2(s.totalDebit), round2(s.totalCredit), Math.abs(round2(s.closing)), round2(s.closing) > 0 ? 'Dr' : round2(s.closing) < 0 ? 'Cr' : ''],
   ];
   const sheet = XLSX.utils.aoa_to_sheet(aoa);
   sheet['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 40 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 7 }];

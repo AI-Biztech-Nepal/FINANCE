@@ -11,6 +11,7 @@ import { useStatementImport, usePendingStatementRows, type ReviewRow } from '../
 import { showAlert } from '../../utils/alert';
 import { DEBIT_TYPES, CREDIT_TYPES, type StatementAction } from '../../utils/parseStatement';
 import type { Customer } from '../../../types/database.types';
+import { formatMoney } from '../../utils/money';
 
 const TYPE_META: Record<StatementAction, { label: string; color: string; bg: string }> = {
   payment_out: { label: 'Paid', color: '#DC2626', bg: '#FEF2F2' },
@@ -225,7 +226,7 @@ export function ImportStatementScreen() {
                       style={{ color: item.credit > 0 ? '#059669' : '#DC2626' }}
                     >
                       {item.credit > 0 ? '+' : '-'}
-                      {(item.credit || item.debit).toLocaleString()}
+                      {formatMoney((item.credit || item.debit))}
                     </Text>
                   </View>
 

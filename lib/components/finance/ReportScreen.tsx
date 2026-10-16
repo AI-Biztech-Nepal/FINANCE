@@ -7,6 +7,7 @@ import { useSupabaseQuery } from '../../hooks/useSupabase';
 import { useBookLayout, useBookToolbar } from './BookKit';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
+import { round2 } from '../../utils/money';
 import { reportHtml, type PrintReport } from '../../utils/printReport';
 import { ExcelButton, PrintButton, exportReportDocument, printReportDocument } from './PrintButton';
 import { DateStepFilter, monthLabelOf, monthRange } from './DateRangeFilter';
@@ -18,12 +19,13 @@ const BRAND_DARK = '#1E3A8A';
 const BRAND = '#2563EB';
 const BRAND_TINT = '#EFF6FF';
 
-/** 1234567 -> "12,34,567" */
+/** 1234567 -> "12,34,567"; paise only when there are some: 1234567.5 -> "12,34,567.50" */
 function inr(n: number): string {
-  const v = Math.round(n);
-  const s = String(Math.abs(v));
-  const out = s.length <= 3 ? s : `${s.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${s.slice(-3)}`;
-  return v < 0 ? `-${out}` : out;
+  const v = round2(n);
+  const [whole, paise] = Math.abs(v).toFixed(2).split('.');
+  const out = whole.length <= 3 ? whole : `${whole.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${whole.slice(-3)}`;
+  const text = paise === '00' ? out : `${out}.${paise}`;
+  return v < 0 ? `-${text}` : text;
 }
 
 function SideHead({ title }: { title: string }) {

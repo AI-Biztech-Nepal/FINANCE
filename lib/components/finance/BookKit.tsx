@@ -9,11 +9,12 @@ import { Text } from './CapsText';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useScreenHeader } from '../../hooks/useScreenHeader';
+import { formatMoney } from '../../utils/money';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../web/WebSidebarShell';
 
-/** Whole rupees with thousands separators; a dash for "nothing". */
+/** Rupees with thousands separators, and paise when there are some; a dash for "nothing". */
 export function money(n: number | null | undefined): string {
-  return n == null ? '—' : Math.round(n).toLocaleString();
+  return n == null ? '—' : formatMoney(n);
 }
 
 /** Same breakpoints the Day Book uses: `wide` once the sidebar layout is on,

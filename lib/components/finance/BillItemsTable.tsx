@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { FinanceItem, Product } from '../../../types/database.types';
 import { readKey } from '../../utils/webKeys';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
+import { round2, formatMoney } from '../../utils/money';
+import { decimalInput } from '../../utils/number';
 
 export interface BillItemRow {
   /** Optional HS code of the item (customs / tariff classification). */
@@ -60,11 +62,11 @@ function isBlank(row: BillItemRow): boolean {
 }
 
 function amountOf(row: BillItemRow): number {
-  return (Number(row.qty) || 0) * (Number(row.rate) || 0);
+  return round2((Number(row.qty) || 0) * (Number(row.rate) || 0));
 }
 
 function cleanNumber(v: string): string {
-  return v.replace(/[^0-9.]/g, '');
+  return decimalInput(v);
 }
 
 export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function BillItemsTable(
@@ -92,7 +94,7 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
         key: `p-${p.id}`,
         name: p.name,
         rate: Number(p.price) > 0 ? Number(p.price) : null,
-        hint: `${Number(p.price) > 0 ? `NPR ${Number(p.price).toLocaleString()} · ` : ''}stock ${p.stock_level}`,
+        hint: `${Number(p.price) > 0 ? `NPR ${formatMoney(Number(p.price))} · ` : ''}stock ${p.stock_level}`,
       });
     }
     for (const f of financeItems) {
@@ -103,7 +105,7 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
         key: `f-${f.id}`,
         name: f.name,
         rate: f.rate != null ? Number(f.rate) : null,
-        hint: f.rate != null ? `NPR ${Number(f.rate).toLocaleString()}` : 'Saved item',
+        hint: f.rate != null ? `NPR ${formatMoney(Number(f.rate))}` : 'Saved item',
       });
     }
     return out;
@@ -329,7 +331,7 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
               style={{ width: 130 }}
               numberOfLines={1}
             >
-              {amount > 0 ? amount.toLocaleString() : '—'}
+              {amount > 0 ? formatMoney(amount) : '—'}
             </Text>
 
             <View style={{ width: 36, alignItems: 'center' }}>

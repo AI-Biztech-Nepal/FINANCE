@@ -13,6 +13,7 @@ import { WEB_SIDEBAR_MIN_WIDTH } from '../web/WebSidebarShell';
 import { MONEY, type MoneyTone } from './moneyColors';
 import { CARD_SHADOW, Card, RecentActivityCard, SalesTrendCard } from './dashboard/FinanceDashboard';
 import { ENTRY_KINDS } from './entryKinds';
+import { formatMoney } from '../../utils/money';
 
 const BLUE = '#2563EB';
 
@@ -172,7 +173,7 @@ function Metric({
   compact?: boolean;
   onPress: () => void;
 }) {
-  const text = `${value < 0 ? '−' : ''}NPR ${Math.abs(value).toLocaleString()}`;
+  const text = `${value < 0 ? '−' : ''}NPR ${formatMoney(Math.abs(value))}`;
   if (compact) {
     return (
       <Pressable
@@ -364,7 +365,7 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
   // Overview figures sit in half-width tiles; their text is fitted too.
   const halfTile = (zoneLeft - 12) / 2;
   const overviewTile = (label: string, caption: string, value: number, tone: MoneyTone, path: string) => {
-    const text = `NPR ${value.toLocaleString()}`;
+    const text = `NPR ${formatMoney(value)}`;
     return (
       <Pressable onPress={go(path)} accessibilityRole="button" accessibilityLabel={label} className={`flex-1 overflow-hidden rounded-xl ${fit ? 'px-3 py-2' : 'p-3'}`} style={{ backgroundColor: tone.bg }}>
         <View className="flex-row items-center" style={{ gap: 6 }}>
@@ -381,7 +382,7 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
     );
   };
 
-  const balanceText = `NPR ${availableBalance.toLocaleString()}`;
+  const balanceText = `NPR ${formatMoney(availableBalance)}`;
   const metrics = [
     { label: 'Sales', value: totals.sale, caption: 'All time', icon: 'trending-up' as const, color: MONEY.in.base, path: '/transactions?type=sale' },
     { label: 'Purchase', value: totals.purchase, caption: 'All time', icon: 'cart' as const, color: MONEY.out.base, path: '/transactions?type=purchase' },

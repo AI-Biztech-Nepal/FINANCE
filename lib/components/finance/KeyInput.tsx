@@ -2,6 +2,7 @@
 import { useState, type Ref } from 'react';
 import { TextInput, type StyleProp, type TextStyle } from 'react-native';
 import { readKey, type WebKeyInfo } from '../../utils/webKeys';
+import { decimalInput } from '../../utils/number';
 
 /** A plain text/number box for keyboard-driven forms: visible focus ring,
  * select-all on focus (typing replaces the old value), Enter -> `onEnter`,
@@ -42,7 +43,7 @@ export function KeyInput({
     <TextInput
       ref={inputRef}
       value={value}
-      onChangeText={(v) => onChangeText(numeric ? v.replace(/[^0-9.]/g, '') : v)}
+      onChangeText={(v) => onChangeText(numeric ? decimalInput(v) : v)}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onKeyPress={(e) => {

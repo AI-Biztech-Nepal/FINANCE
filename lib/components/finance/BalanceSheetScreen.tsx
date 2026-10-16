@@ -19,6 +19,7 @@ import { useAccountBalances } from '../../hooks/useAccountBalances';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { adStringToBs, bsToAdString, bsDaysInMonth, numericDateLabel, BS_MONTHS } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
+import { round2 } from '../../utils/money';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../web/WebSidebarShell';
 import { shortcuts } from './FinanceDashboardScreen';
 
@@ -35,15 +36,16 @@ const AMBER = BRAND_DARK;
 const TABULAR: TextStyle = { fontVariant: ['tabular-nums'] };
 
 // ---------- numbers ----------
-/** 2316130 -> "23,16,130" (the South Asian grouping); a minus sign for a negative. */
+/** 2316130 -> "23,16,130" (the South Asian grouping), with paise when there are some; a minus sign for a negative. */
 function inr(n: number): string {
-  const v = Math.round(n);
+  const v = round2(n);
   const sign = v < 0 ? '-' : '';
-  const s = String(Math.abs(v));
-  if (s.length <= 3) return sign + s;
+  const [s, paise] = Math.abs(v).toFixed(2).split('.');
+  const dec = paise === '00' ? '' : `.${paise}`;
+  if (s.length <= 3) return sign + s + dec;
   const tail = s.slice(-3);
   const head = s.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',');
-  return `${sign}${head},${tail}`;
+  return `${sign}${head},${tail}${dec}`;
 }
 function lakh(n: number): string {
   const a = Math.abs(n);
@@ -416,12 +418,12 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
       [company, 'Balance sheet', `As on ${asOn}`],
       [],
       ['Side', 'Group', 'Item', 'Amount (NPR)'],
-      ...cashRows.map((r) => ['Assets', 'Cash & bank', r.label, Math.round(r.amount)]),
-      ...receivableRows.map((r) => ['Assets', 'Receivables & stock', r.label, Math.round(r.amount)]),
-      ['Assets', '', 'Total assets', Math.round(now.assets)],
-      ...liabilityRows.map((r) => ['Liabilities', 'Current liabilities', r.label, Math.round(r.amount)]),
-      ['Equity', 'Capital', "Owner's capital & retained earnings", Math.round(now.equity)],
-      ['', '', 'Total liabilities & equity', Math.round(now.liabilities + now.equity)],
+      ...cashRows.map((r) => ['Assets', 'Cash & bank', r.label, round2(r.amount)]),
+      ...receivableRows.map((r) => ['Assets', 'Receivables & stock', r.label, round2(r.amount)]),
+      ['Assets', '', 'Total assets', round2(now.assets)],
+      ...liabilityRows.map((r) => ['Liabilities', 'Current liabilities', r.label, round2(r.amount)]),
+      ['Equity', 'Capital', "Owner's capital & retained earnings", round2(now.equity)],
+      ['', '', 'Total liabilities & equity', round2(now.liabilities + now.equity)],
     ];
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const a = document.createElement('a');

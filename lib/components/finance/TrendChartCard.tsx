@@ -6,6 +6,7 @@ import { NetTrendChart } from '../NetTrendChart';
 import { toBsDayChartLabel, toBsMonthChartLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import type { BusinessTransaction, BusinessTransactionType } from '../../../types/database.types';
+import { formatMoney } from '../../utils/money';
 
 export type TrendMetric = 'all' | BusinessTransactionType;
 export type Granularity = 'week' | 'month';
@@ -155,7 +156,7 @@ export function TrendChartCard({
           data={typeChartData}
           color={accentColor}
           selectedColor={accentColor}
-          formatValue={(v) => `NPR ${Math.round(v).toLocaleString()}`}
+          formatValue={(v) => `NPR ${formatMoney(v)}`}
           formatLabel={(label, i) => formatBucketLabel(granularity, label, i, typeChartData.length)}
         />
       )}

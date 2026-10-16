@@ -21,6 +21,7 @@ import { ExcelButton, PrintButton, exportReportDocument, printReportDocument } f
 import { reportHtml, type PrintReport, type PrintSection } from '../../utils/printReport';
 import { Checkbox, LEDGER_TONE, StatusBadges, SummaryCard } from './ledger/LedgerUi';
 import { partyPosition, type PartyPosition } from '../../utils/partyBalance';
+import { round2 } from '../../utils/money';
 import {
   compareItems,
   drCr,
@@ -339,7 +340,7 @@ function positionOf(data: PartyRowData): PartyPosition {
   return { ...base, bothLedgers: data.totals.hasCustomer && data.totals.hasVendor };
 }
 
-const dash = (n: number) => (Math.round(n) === 0 ? '—' : bookMoney(n));
+const dash = (n: number) => (round2(n) === 0 ? '—' : bookMoney(n));
 
 /** One header of the Ledger: a Ledger type (Customer, Vendor, Employee, Expense ...) and the parties
  * under it, with what they add up to. */
@@ -680,9 +681,9 @@ function PartyLedgerPopup({
   const credit = lines.reduce((sum, l) => sum + l.credit, 0);
   const closing = debit - credit;
 
-  const sideWord = (b: number) => (Math.round(b) > 0 ? ' Dr' : Math.round(b) < 0 ? ' Cr' : '');
+  const sideWord = (b: number) => (round2(b) > 0 ? ' Dr' : round2(b) < 0 ? ' Cr' : '');
   const balanceText = (b: number) => `${dash(Math.abs(b))}${sideWord(b)}`;
-  const balanceColor = (b: number) => (Math.round(b) > 0 ? LEDGER_TONE.receivable.text : Math.round(b) < 0 ? LEDGER_TONE.payable.text : '#6B7280');
+  const balanceColor = (b: number) => (round2(b) > 0 ? LEDGER_TONE.receivable.text : round2(b) < 0 ? LEDGER_TONE.payable.text : '#6B7280');
   const kindOf = (item: LedgerItem) =>
     journalOf(item.note)
       ? 'Journal voucher'
@@ -1071,13 +1072,13 @@ function LedgerList({ basePath }: { basePath: string }) {
         Phone: d.row.phone ?? '',
         Address: d.row.kind === 'customer' ? d.row.customer.address ?? '' : '',
         'Last transaction': d.totals.lastDay ? toBsHistoryLabel(d.totals.lastDay) : '',
-        Sales: Math.round(d.sales),
-        Purchases: Math.round(d.purchases),
-        Payments: Math.round(d.payments),
-        Balance: Math.abs(Math.round(d.balance)),
+        Sales: round2(d.sales),
+        Purchases: round2(d.purchases),
+        Payments: round2(d.payments),
+        Balance: Math.abs(round2(d.balance)),
         'Dr / Cr': d.status === 'receivable' ? 'Dr' : d.status === 'payable' ? 'Cr' : '',
         Status: d.status === 'receivable' ? 'Receivable' : d.status === 'payable' ? 'Payable' : 'Settled',
-        Overdue: Math.round(d.overdue),
+        Overdue: round2(d.overdue),
       }));
       await exportPartiesXlsx(rows);
     } catch (err) {
@@ -1115,7 +1116,7 @@ function LedgerList({ basePath }: { basePath: string }) {
   // party, so they print only when nothing narrows the list.
   const buildReport = (): PrintReport => {
     const balanceText = (value: number) => {
-      const side = Math.round(value) > 0 ? ' Dr' : Math.round(value) < 0 ? ' Cr' : '';
+      const side = round2(value) > 0 ? ' Dr' : round2(value) < 0 ? ' Cr' : '';
       return `${dash(Math.abs(value))}${side}`;
     };
     const sections: PrintSection[] = groups.map((g) => ({

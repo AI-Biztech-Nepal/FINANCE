@@ -20,8 +20,9 @@ import { localTodayIso } from '../../lib/utils/localDate';
 import { supabase } from '../../lib/supabase';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../../lib/components/web/WebSidebarShell';
 import { CARD_SHADOW, RecentActivityCard } from '../../lib/components/finance/dashboard/FinanceDashboard';
+import { formatMoney } from '../../lib/utils/money';
 
-const npr = (n: number) => `NPR ${Math.round(n).toLocaleString()}`;
+const npr = (n: number) => `NPR ${formatMoney(n)}`;
 /** 1,23,456 -> "1.23L", 12,34,567 -> "12.3L", 1,23,45,678 -> "1.23Cr": short money for charts. */
 function lakh(n: number): string {
   const a = Math.abs(n);

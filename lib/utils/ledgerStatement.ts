@@ -1,4 +1,5 @@
 // lib/utils/ledgerStatement.ts
+import { round2 } from './money';
 //
 // The arithmetic behind the Ledger page and a party's statement, kept free of
 // React so it can be checked on its own.
@@ -143,10 +144,10 @@ export function withRunningBalance<T extends { debit: number; credit: number }>(
 
 export type PartyStatus = 'receivable' | 'payable' | 'settled';
 
-/** Whole rupees, like every figure on screen: 0.4 is settled. */
+/** To the paise, like every figure on screen: 0.004 is settled, 0.29 is not. */
 export function statusOf(balance: number): PartyStatus {
-  const whole = Math.round(balance);
-  return whole > 0 ? 'receivable' : whole < 0 ? 'payable' : 'settled';
+  const exact = round2(balance);
+  return exact > 0 ? 'receivable' : exact < 0 ? 'payable' : 'settled';
 }
 
 export interface Aging {
@@ -225,9 +226,9 @@ export function receivableAging(items: readonly LedgerItem[], asOf: string, cred
  * they owe you in all - if you owe them on the vendor ledger too, that is netted
  * off first - and someone who is not in debt to you has nothing overdue. */
 export function overdueAmount(balance: number, aging: Aging): number {
-  const owed = Math.round(balance);
+  const owed = round2(balance);
   if (owed <= 0) return 0;
-  return Math.min(Math.round(aging.overdue), owed);
+  return Math.min(round2(aging.overdue), owed);
 }
 
 /** "Today", "Yesterday", "5 days ago", "3 months ago" - for a Last Transaction cell. */

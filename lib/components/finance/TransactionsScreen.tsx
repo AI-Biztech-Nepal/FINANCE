@@ -52,6 +52,7 @@ import type {
   VendorLedgerEntry,
 } from '../../../types/database.types';
 import { localTodayIso } from '../../utils/localDate';
+import { round2, formatMoney } from '../../utils/money';
 
 // Local date, not UTC - see localTodayIso.
 const todayIso = localTodayIso;
@@ -78,7 +79,7 @@ function emptyExpenseRow(): ExpenseRow {
 }
 
 function lineTotal(row: ItemRowState) {
-  return (Number(row.qty) || 0) * (Number(row.rate) || 0);
+  return round2((Number(row.qty) || 0) * (Number(row.rate) || 0));
 }
 
 /** A line that actually gets saved on the bill - the subtotal only counts
@@ -143,7 +144,7 @@ function ItemLineRow({
         />
         <Text className="text-[10px] text-gray-400">=</Text>
         <Text className="text-right text-xs font-bold text-gray-900" numberOfLines={1}>
-          NPR {lineTotal(item).toLocaleString()}
+          NPR {formatMoney(lineTotal(item))}
         </Text>
       </View>
     </View>
@@ -286,7 +287,7 @@ function ItemPickerModal({
                           {row.product.stock_level} in stock
                         </Text>
                       </View>
-                      <Text className="text-sm font-semibold text-gray-900">NPR {Number(row.product.price).toLocaleString()}</Text>
+                      <Text className="text-sm font-semibold text-gray-900">NPR {formatMoney(Number(row.product.price))}</Text>
                     </Pressable>
                   ) : (
                     <Pressable
@@ -300,7 +301,7 @@ function ItemPickerModal({
                         <Text className="text-xs text-gray-400">Not in stock — used before</Text>
                       </View>
                       {row.item.rate != null && (
-                        <Text className="text-sm font-semibold text-gray-900">NPR {Number(row.item.rate).toLocaleString()}</Text>
+                        <Text className="text-sm font-semibold text-gray-900">NPR {formatMoney(Number(row.item.rate))}</Text>
                       )}
                     </Pressable>
                   )
@@ -396,7 +397,7 @@ function RecentEntriesCard({
       align: 'right',
       render: (tx) => (
         <Text className="text-xs font-bold" style={{ color, fontVariant: ['tabular-nums'] }}>
-          {tx.amount.toLocaleString()}
+          {formatMoney(tx.amount)}
         </Text>
       ),
     },
@@ -685,7 +686,7 @@ function TransactionForm({
   // other kinds of entry read them when their list of accounts is opened.)
   const balances = useAccountBalances(type === 'expense' ? userId : undefined);
   const available = useMemo(
-    () => (balances.ready ? { byId: Object.fromEntries(balances.perAccount.map((a) => [a.id, Math.round(a.balance)])) } : null),
+    () => (balances.ready ? { byId: Object.fromEntries(balances.perAccount.map((a) => [a.id, round2(a.balance)])) } : null),
     [balances]
   );
   const [categoryId, setCategoryId] = useState<string | null>(initial?.expense_category_id ?? null);
@@ -748,11 +749,11 @@ function TransactionForm({
   const [saving, setSaving] = useState(false);
 
   const isBill = type !== 'expense';
-  const subtotal = items.filter(isSavableItem).reduce((sum, row) => sum + lineTotal(row), 0);
+  const subtotal = round2(items.filter(isSavableItem).reduce((sum, row) => sum + lineTotal(row), 0));
   const discountAmount =
     discountMode === 'percent'
-      ? Math.round((subtotal * Math.min(Number(discountPercentInput) || 0, 100)) / 100)
-      : Number(discountAmountInput) || 0;
+      ? round2((subtotal * Math.min(Number(discountPercentInput) || 0, 100)) / 100)
+      : round2(Number(discountAmountInput) || 0);
   const discountPercentDisplay = subtotal > 0 ? (discountAmount / subtotal) * 100 : 0;
   // Flips the single discount box between a percent and an NPR amount, carrying
   // the value across so what is on screen never changes meaning under the user.
@@ -766,8 +767,8 @@ function TransactionForm({
     setDiscountMode(unit);
   }
   const discountInputValue = discountMode === 'percent' ? discountPercentInput : discountAmountInput;
-  const vatAmount = Math.round(((subtotal - discountAmount) * (Number(vatPercent) || 0)) / 100);
-  const grandTotal = subtotal - discountAmount + vatAmount;
+  const vatAmount = round2(((subtotal - discountAmount) * (Number(vatPercent) || 0)) / 100);
+  const grandTotal = round2(subtotal - discountAmount + vatAmount);
   const selectedCategory = (categories ?? []).find((c) => c.id === categoryId) ?? null;
   const selectedAccountName = bankAccountId
     ? bankAccounts.accounts.find((a) => a.id === bankAccountId)?.name ?? 'Cash'
@@ -964,10 +965,10 @@ function TransactionForm({
           { label: type === 'purchase' ? 'Vendor' : 'Customer', value: partyName.trim() },
           { label: 'Items', value: String(validItems.length) },
           ...(billNo.trim() ? [{ label: 'Bill no.', value: billNo.trim() }] : []),
-          ...(discountAmount > 0 ? [{ label: 'Discount', value: `− NPR ${discountAmount.toLocaleString()}` }] : []),
-          ...(vatAmount > 0 ? [{ label: 'VAT', value: `+ NPR ${vatAmount.toLocaleString()}` }] : []),
+          ...(discountAmount > 0 ? [{ label: 'Discount', value: `− NPR ${formatMoney(discountAmount)}` }] : []),
+          ...(vatAmount > 0 ? [{ label: 'VAT', value: `+ NPR ${formatMoney(vatAmount)}` }] : []),
         ],
-        total: { label: 'Grand total', value: `NPR ${grandTotal.toLocaleString()}`, color: TYPE_META[type].color },
+        total: { label: 'Grand total', value: `NPR ${formatMoney(grandTotal)}`, color: TYPE_META[type].color },
       });
       if (!ok) return;
       setSaving(true);
@@ -1012,9 +1013,9 @@ function TransactionForm({
             description: r.description.trim(),
             qty: Number(r.qty),
             rate: Number(r.rate),
-            amount: Number(r.qty) * Number(r.rate),
+            amount: round2(Number(r.qty) * Number(r.rate)),
           })),
-          discount_amount: Math.round(discountAmount),
+          discount_amount: round2(discountAmount),
           vat_amount: vatAmount,
           // A new bill is saved as cash. Editing one keeps the method it already has - that is changed
           // from the bill's card (tap Payment Method) - instead of putting it back to cash on every save.
@@ -1035,7 +1036,7 @@ function TransactionForm({
       return;
     }
 
-    const value = Number(amount);
+    const value = round2(Number(amount));
     if (!amount.trim() || Number.isNaN(value) || value <= 0) {
       showAlert('Enter an amount', 'Add a valid amount in NPR.');
       return;
@@ -1047,7 +1048,7 @@ function TransactionForm({
         ...(selectedCategory ? [{ label: 'Category', value: selectedCategory.name }] : []),
         { label: 'Paid via', value: selectedAccountName },
       ],
-      total: { label: 'Amount', value: `NPR ${value.toLocaleString()}`, color: TYPE_META.expense.color },
+      total: { label: 'Amount', value: `NPR ${formatMoney(value)}`, color: TYPE_META.expense.color },
     });
     if (!ok) return;
     setSaving(true);
@@ -1276,7 +1277,7 @@ function TransactionForm({
   async function handleSaveAllExpenses() {
     if (editingExpense && initial) {
       const row = expenseRows[0];
-      const value = Number(row.amount);
+      const value = round2(Number(row.amount));
       if (!row.amount.trim() || !Number.isFinite(value) || value <= 0) {
         showAlert('Enter an amount', 'Add a valid amount in NPR.');
         return;
@@ -1289,7 +1290,7 @@ function TransactionForm({
           ...(categoryName ? [{ label: 'Category', value: categoryName }] : []),
           { label: 'Paid via', value: selectedAccountName },
         ],
-        total: { label: 'Amount', value: `NPR ${value.toLocaleString()}`, color: TYPE_META.expense.color },
+        total: { label: 'Amount', value: `NPR ${formatMoney(value)}`, color: TYPE_META.expense.color },
       });
       if (!ok) return;
       setSaving(true);
@@ -1327,12 +1328,12 @@ function TransactionForm({
       rows: [
         ...validRows.slice(0, 5).map((r) => {
           const cat = (categories ?? []).find((c) => c.id === r.categoryId)?.name;
-          return { label: `${r.partyName.trim() || 'Expenses'}${cat ? ' · ' + cat : ''}`, value: `NPR ${Number(r.amount).toLocaleString()}` };
+          return { label: `${r.partyName.trim() || 'Expenses'}${cat ? ' · ' + cat : ''}`, value: `NPR ${formatMoney(Number(r.amount))}` };
         }),
         ...(validRows.length > 5 ? [{ label: `+ ${validRows.length - 5} more` }] : []),
         { label: 'Paid via', value: selectedAccountName },
       ],
-      total: { label: 'Total', value: `NPR ${sum.toLocaleString()}`, color: TYPE_META.expense.color },
+      total: { label: 'Total', value: `NPR ${formatMoney(sum)}`, color: TYPE_META.expense.color },
     });
     if (!ok) return;
     setSaving(true);
@@ -1341,7 +1342,7 @@ function TransactionForm({
         await createTx.mutateAsync({
           owner_id: userId,
           type: 'expense',
-          amount: Number(row.amount),
+          amount: round2(Number(row.amount)),
           party_name: tidyName(row.partyName.trim()) || null,
           customer_id: row.customerId,
           note: row.note.trim() || null,
@@ -1745,7 +1746,7 @@ function TransactionForm({
                   <View style={{ width: 320 }}>
                     <View className="flex-row items-center justify-between py-1.5">
                       <Text className="text-xs text-gray-500">Subtotal</Text>
-                      <Text className="text-xs font-semibold text-gray-700">NPR {subtotal.toLocaleString()}</Text>
+                      <Text className="text-xs font-semibold text-gray-700">NPR {formatMoney(subtotal)}</Text>
                     </View>
                     <View className="flex-row items-center justify-between py-1">
                       <Text className="text-xs text-gray-500">{discountMode === 'percent' ? 'Discount (%)' : 'Discount (Rs)'}</Text>
@@ -1805,7 +1806,7 @@ function TransactionForm({
                           })}
                         </View>
                         <Text className="text-right text-xs font-semibold text-gray-700" style={{ width: 70 }}>
-                          − {discountAmount.toLocaleString()}
+                          − {formatMoney(discountAmount)}
                         </Text>
                       </View>
                     </View>
@@ -1850,7 +1851,7 @@ function TransactionForm({
                             <Text className="text-[10px] font-semibold text-gray-500">13%</Text>
                           </Pressable>
                           <Text className="text-right text-xs font-semibold text-gray-700" style={{ width: 70 }}>
-                            + {vatAmount.toLocaleString()}
+                            + {formatMoney(vatAmount)}
                           </Text>
                         </View>
                       </View>
@@ -1877,7 +1878,7 @@ function TransactionForm({
                     <View className="mt-2 flex-row items-center justify-between border-t border-gray-300 pt-2.5">
                       <Text className="text-xs font-bold text-gray-900">G. Total</Text>
                       <Text className="text-lg font-extrabold" style={{ color: TYPE_META[type].color }}>
-                        NPR {grandTotal.toLocaleString()}
+                        NPR {formatMoney(grandTotal)}
                       </Text>
                     </View>
                   </View>
@@ -2054,7 +2055,7 @@ function TransactionForm({
             <View className="mb-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-1">
               <View className="flex-row items-center justify-between py-1.5">
                 <Text className="text-xs text-gray-500">Subtotal</Text>
-                <Text className="text-xs font-semibold text-gray-700">NPR {subtotal.toLocaleString()}</Text>
+                <Text className="text-xs font-semibold text-gray-700">NPR {formatMoney(subtotal)}</Text>
               </View>
               {/* The +/close toggle always sits in the same leading spot, whether the row
                   is collapsed or expanded, so tapping it never means aiming at a target
@@ -2083,7 +2084,7 @@ function TransactionForm({
                       className="w-14 rounded border border-gray-300 bg-white px-1 py-0.5 text-center text-xs text-gray-900"
                     />
                     <Text className="text-[10px] text-gray-400">({discountPercentDisplay.toFixed(1)}%)</Text>
-                    <Text className="w-16 text-right text-xs text-gray-700">− NPR {discountAmount.toLocaleString()}</Text>
+                    <Text className="w-16 text-right text-xs text-gray-700">− NPR {formatMoney(discountAmount)}</Text>
                   </View>
                 )}
               </View>
@@ -2114,14 +2115,14 @@ function TransactionForm({
                       />
                       <Text className="text-[10px] text-gray-400">%</Text>
                     </View>
-                    <Text className="w-16 text-right text-xs text-gray-700">+ NPR {vatAmount.toLocaleString()}</Text>
+                    <Text className="w-16 text-right text-xs text-gray-700">+ NPR {formatMoney(vatAmount)}</Text>
                   </View>
                 )}
               </View>
             </View>
             <View className="flex-row items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5">
               <Text className="text-sm font-bold text-gray-900">G. Total</Text>
-              <Text className="text-base font-extrabold text-gray-900">NPR {grandTotal.toLocaleString()}</Text>
+              <Text className="text-base font-extrabold text-gray-900">NPR {formatMoney(grandTotal)}</Text>
             </View>
             <TextInput
               value={note}
@@ -2337,7 +2338,7 @@ function TransactionRow({
       </View>
       <View className="items-end">
         <Text className="text-sm font-extrabold" style={{ color: meta.color }}>
-          NPR {tx.amount.toLocaleString()}
+          NPR {formatMoney(tx.amount)}
         </Text>
         {tx.type === 'expense' && (
           <View className="mt-0.5 flex-row items-center gap-1">
@@ -2457,7 +2458,7 @@ function BillEditPopup({
   const hasItems = tx.items.length > 0;
 
   async function handleSave() {
-    const value = Number(amount);
+    const value = round2(Number(amount));
     if (!hasItems && (!amount.trim() || Number.isNaN(value) || value <= 0)) {
       showAlert('Enter an amount', 'Add a valid amount in NPR.');
       return;
@@ -2533,7 +2534,7 @@ function BillEditPopup({
         <Field label="Amount (NPR)" basis={160}>
           {hasItems ? (
             <View className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
-              <Text className="text-sm font-semibold text-gray-700">{tx.amount.toLocaleString()}</Text>
+              <Text className="text-sm font-semibold text-gray-700">{formatMoney(tx.amount)}</Text>
             </View>
           ) : (
             <TextInput
@@ -2606,21 +2607,21 @@ function BillItemsReadOnly({ tx }: { tx: BusinessTransaction }) {
             {item.qty}
           </BillCell>
           <BillCell align="right" width={BILL_COL.rate}>
-            {item.rate.toLocaleString()}
+            {formatMoney(item.rate)}
           </BillCell>
           <BillCell ruled={false} align="right" width={BILL_COL.amount} textClass="font-semibold text-gray-900">
-            {item.amount.toLocaleString()}
+            {formatMoney(item.amount)}
           </BillCell>
         </View>
       ))}
       {(tx.discount_amount > 0 || tx.vat_amount > 0) && (
-        <BillTotal label="Sub-total" value={tx.items.reduce((sum, item) => sum + item.amount, 0).toLocaleString()} />
+        <BillTotal label="Sub-total" value={formatMoney(tx.items.reduce((sum, item) => sum + item.amount, 0))} />
       )}
-      {tx.discount_amount > 0 && <BillTotal label="Discount" value={`− ${tx.discount_amount.toLocaleString()}`} />}
-      {tx.vat_amount > 0 && <BillTotal label="VAT" value={`+ ${tx.vat_amount.toLocaleString()}`} />}
+      {tx.discount_amount > 0 && <BillTotal label="Discount" value={`− ${formatMoney(tx.discount_amount)}`} />}
+      {tx.vat_amount > 0 && <BillTotal label="VAT" value={`+ ${formatMoney(tx.vat_amount)}`} />}
       <BillTotal
         label="Total (NPR)"
-        value={tx.amount.toLocaleString()}
+        value={formatMoney(tx.amount)}
         tint={TYPE_META[tx.type].bg}
         color={TYPE_META[tx.type].color}
         strong
@@ -2689,7 +2690,7 @@ function BillViewPopup({
           <ReadBox>{tx.bill_no || '—'}</ReadBox>
         </Field>
         <Field label="Amount (NPR)" basis={160}>
-          <ReadBox>{tx.amount.toLocaleString()}</ReadBox>
+          <ReadBox>{formatMoney(tx.amount)}</ReadBox>
         </Field>
         <Field label="Remarks" basis={260}>
           <ReadBox>{tx.note || '—'}</ReadBox>
@@ -2846,20 +2847,20 @@ export function TransactionDetailModal({
                         {item.qty}
                       </BillCell>
                       <BillCell align="right" width={BILL_COL.rate}>
-                        {item.rate.toLocaleString()}
+                        {formatMoney(item.rate)}
                       </BillCell>
                       <BillCell ruled={false} align="right" width={BILL_COL.amount} textClass="font-semibold text-gray-900">
-                        {item.amount.toLocaleString()}
+                        {formatMoney(item.amount)}
                       </BillCell>
                     </View>
                   ))}
                 </>
               )}
 
-              {showSubtotal && <BillTotal label="Sub-total" value={subtotal.toLocaleString()} />}
-              {tx.discount_amount > 0 && <BillTotal label="Discount" value={`− ${tx.discount_amount.toLocaleString()}`} />}
-              {tx.vat_amount > 0 && <BillTotal label="VAT" value={`+ ${tx.vat_amount.toLocaleString()}`} />}
-              <BillTotal label="Total (NPR)" value={tx.amount.toLocaleString()} tint={meta.bg} color={meta.color} strong />
+              {showSubtotal && <BillTotal label="Sub-total" value={formatMoney(subtotal)} />}
+              {tx.discount_amount > 0 && <BillTotal label="Discount" value={`− ${formatMoney(tx.discount_amount)}`} />}
+              {tx.vat_amount > 0 && <BillTotal label="VAT" value={`+ ${formatMoney(tx.vat_amount)}`} />}
+              <BillTotal label="Total (NPR)" value={formatMoney(tx.amount)} tint={meta.bg} color={meta.color} strong />
 
               {!!tx.note && (
                 <BillLine label="Remarks">
@@ -2942,7 +2943,7 @@ function LedgerRow({ item, customerName, basePath }: { item: CustomerLedgerEntry
         </Text>
       </View>
       <Text className="text-sm font-extrabold" style={{ color: isOut ? '#DC2626' : '#059669' }}>
-        NPR {item.amount.toLocaleString()}
+        NPR {formatMoney(item.amount)}
       </Text>
     </Pressable>
   );
@@ -2969,7 +2970,7 @@ function VendorFeedRow({ item, vendorName, basePath }: { item: VendorLedgerEntry
         </Text>
       </View>
       <Text className="text-sm font-extrabold" style={{ color: '#DC2626' }}>
-        NPR {item.amount.toLocaleString()}
+        NPR {formatMoney(item.amount)}
       </Text>
     </Pressable>
   );
@@ -3010,7 +3011,7 @@ function TransferFeedRow({
           {transfer.note ?? 'Between your own accounts'} · {toBsHistoryLabel(transfer.transfer_date ?? transfer.created_at)}
         </Text>
       </View>
-      <Text className="text-sm font-extrabold text-gray-900">NPR {transfer.amount.toLocaleString()}</Text>
+      <Text className="text-sm font-extrabold text-gray-900">NPR {formatMoney(transfer.amount)}</Text>
     </Pressable>
   );
 }
@@ -3317,7 +3318,7 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
     const label = TYPE_META[tx.type].label.toLowerCase();
     showAlert(
       `Delete this ${label}?`,
-      `${tidyName(tx.party_name) || 'Unnamed'} · NPR ${tx.amount.toLocaleString()}${tx.customer_id ? '. It is also taken off their ledger.' : ''}`,
+      `${tidyName(tx.party_name) || 'Unnamed'} · NPR ${formatMoney(tx.amount)}${tx.customer_id ? '. It is also taken off their ledger.' : ''}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

@@ -10,6 +10,7 @@ import { isStaffLedgerType, reportKindOfType, usePartyDestination } from '../../
 import { isSettledOnTheSpot } from '../../hooks/useAccountBalances';
 import { monthGroupLabel, shortDateLabel, toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
+import { formatMoney, round2 } from '../../utils/money';
 import { journalOf } from '../../utils/journalVoucher';
 import { reportHtml, type PrintReport, type PrintSection } from '../../utils/printReport';
 import { SALARY_HEADER, expenseHeading, groupExpenseNames, isSalaryName, nameKey, reportCategoryName } from '../../utils/expenseGroups';
@@ -738,14 +739,14 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   const partyBalance = useMemo(() => {
     const sum = (rows: { entry_type: string; amount: number }[]) =>
       rows.reduce((s, e) => s + (e.entry_type === 'debit' ? Number(e.amount) : -Number(e.amount)), 0);
-    const net = Math.round(sum(partyCustomerEntries ?? []) - sum(partyVendorEntries ?? []));
+    const net = round2(sum(partyCustomerEntries ?? []) - sum(partyVendorEntries ?? []));
     const words =
       net > 0
         ? { label: 'To receive', color: MONEY.in.text }
         : net < 0
           ? { label: 'To pay', color: MONEY.out.text }
           : { label: 'Balance', color: '#374151' };
-    return { ...words, value: `NPR ${Math.abs(net).toLocaleString()}` };
+    return { ...words, value: `NPR ${formatMoney(Math.abs(net))}` };
   }, [partyCustomerEntries, partyVendorEntries]);
 
   const open = (e: Entry) => {

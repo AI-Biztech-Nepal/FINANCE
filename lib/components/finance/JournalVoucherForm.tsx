@@ -13,6 +13,7 @@ import { showAlert, getErrorMessage } from '../../utils/alert';
 import { localTodayIso } from '../../utils/localDate';
 import { journalNote, newJournalCode } from '../../utils/journalVoucher';
 import { tidyName } from '../../utils/nameCaps';
+import { formatMoney } from '../../utils/money';
 
 type Person = { id: string; name: string };
 type Side = 'debit' | 'credit';
@@ -38,7 +39,7 @@ async function hasEntries(table: 'customer_ledger_entries' | 'vendor_ledger_entr
   return (count ?? 0) > 0;
 }
 
-const money = (n: number) => `NPR ${Math.round(n * 100) / 100 === Math.round(n) ? Math.round(n).toLocaleString() : (Math.round(n * 100) / 100).toLocaleString()}`;
+const money = (n: number) => `NPR ${formatMoney(n)}`;
 
 /** The Journal voucher form: any number of Debit lines and Credit lines that add up to the same total.
  * A line is a person's ledger (either side) or an expense head (debit only, e.g. Salary Expenses

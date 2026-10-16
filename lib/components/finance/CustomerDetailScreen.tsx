@@ -16,6 +16,7 @@ import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { useFreshLedgerArea } from '../../hooks/useFreshLedgerArea';
 import { journalOf } from '../../utils/journalVoucher';
+import { formatMoney, round2 } from '../../utils/money';
 import { BankAccountPickerModal } from './BankAccountPickerModal';
 import { EntryWhenFields, PartyMoveField, PaymentMethodButton, stampOf, timeOf, useEntryParty, useEntryWhen } from './EntryEditParts';
 import { PartyTypeField } from './PartyTypeField';
@@ -343,7 +344,7 @@ function AddEntryForm({
     : 'Cash';
 
   async function handleSave() {
-    const value = Number(amount);
+    const value = round2(Number(amount));
     if (!amount.trim() || Number.isNaN(value) || value <= 0) {
       showAlert('Enter an amount', 'Add a valid amount in NPR.');
       return;
@@ -538,7 +539,7 @@ function AddVendorEntryForm({
   }
 
   async function handleSave() {
-    const value = Number(amount);
+    const value = round2(Number(amount));
     if (!amount.trim() || Number.isNaN(value) || value <= 0) {
       showAlert('Enter an amount', 'Add a valid amount in NPR.');
       return;
@@ -555,8 +556,8 @@ function AddVendorEntryForm({
           showAlert(
             'Moved to Received',
             movedTo
-              ? `NPR ${value.toLocaleString()} is now a Received entry on ${nameCaps(movedTo.name)}'s ledger.`
-              : `NPR ${value.toLocaleString()} is now a Received entry on the customer ledger.`
+              ? `NPR ${formatMoney(value)} is now a Received entry on ${nameCaps(movedTo.name)}'s ledger.`
+              : `NPR ${formatMoney(value)} is now a Received entry on the customer ledger.`
           );
         }
       } else if (initial) {
@@ -788,7 +789,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
           id: e.id,
           side: 'customer',
           entryType: e.entry_type,
-          amount: Number(e.amount),
+          amount: round2(Number(e.amount)),
           day: entryDay(e.entry_date, e.created_at),
           createdAt: e.created_at,
         })
@@ -798,7 +799,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
           id: e.id,
           side: 'vendor',
           entryType: e.entry_type,
-          amount: Number(e.amount),
+          amount: round2(Number(e.amount)),
           day: entryDay(e.entry_date, e.created_at),
           createdAt: e.created_at,
         })
@@ -1040,8 +1041,8 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       totalCredit: totals.credit,
       closing: totals.closing,
       summary: [
-        ...(totals.hasCustomer ? [{ label: 'Total sales', value: `NPR ${Math.round(sides.billed).toLocaleString()}` }, { label: 'Total payments', value: `NPR ${Math.round(sides.received).toLocaleString()}` }] : []),
-        ...(totals.hasVendor ? [{ label: 'Total purchases', value: `NPR ${Math.round(sides.purchased).toLocaleString()}` }, { label: 'Paid out', value: `NPR ${Math.round(sides.paid).toLocaleString()}` }] : []),
+        ...(totals.hasCustomer ? [{ label: 'Total sales', value: `NPR ${formatMoney(sides.billed)}` }, { label: 'Total payments', value: `NPR ${formatMoney(sides.received)}` }] : []),
+        ...(totals.hasVendor ? [{ label: 'Total purchases', value: `NPR ${formatMoney(sides.purchased)}` }, { label: 'Paid out', value: `NPR ${formatMoney(sides.paid)}` }] : []),
         { label: 'Outstanding balance', value: `${drCrText(totals.closing)} · ${closingWords}` },
       ],
       lines: statementAsc
@@ -1097,12 +1098,12 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   // not part of the balance (an Expense) has no figure of its own, so it gets none.
   const balanceNote = (row: HistoryRow) => {
     if (row.info) return null;
-    const left = Math.round(row.balance);
+    const left = round2(row.balance);
     const note =
       left > 0
-        ? { text: `To receive ${left.toLocaleString()}`, color: MONEY.in.text }
+        ? { text: `To receive ${formatMoney(left)}`, color: MONEY.in.text }
         : left < 0
-          ? { text: `To pay ${Math.abs(left).toLocaleString()}`, color: MONEY.out.text }
+          ? { text: `To pay ${formatMoney(Math.abs(left))}`, color: MONEY.out.text }
           : { text: 'Settled 0', color: '#6B7280' };
     return (
       <Text className="mt-0.5 text-[11px] font-semibold" style={{ color: note.color }} numberOfLines={1}>
@@ -1124,7 +1125,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     render: (row) => (
       <View className="items-end">
         <Text className="text-[13px] font-bold" style={{ color: row.amountColor }}>
-          {row.amount.toLocaleString()}
+          {formatMoney(row.amount)}
         </Text>
         {balanceNote(row)}
       </View>
@@ -1216,7 +1217,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
             </View>
             <View className="items-end">
               <Text className="text-sm font-extrabold" style={{ color: row.amountColor }}>
-                NPR {row.amount.toLocaleString()}
+                NPR {formatMoney(row.amount)}
               </Text>
               {balanceNote(row)}
             </View>
@@ -1229,14 +1230,14 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   // The balance, shown in the name card itself rather than a row of their own: one figure,
   // both of their ledgers netted (as the Ledger list does), worded the way the Ledger
   // words it - "To receive" is money coming to you, "To pay" is money you owe.
-  const netBalance = Math.round(balance - vendorBalance);
+  const netBalance = round2(balance - vendorBalance);
   const words =
     netBalance > 0
       ? { label: 'To receive', color: MONEY.in.text }
       : netBalance < 0
         ? { label: 'To pay', color: MONEY.out.text }
         : { label: 'Balance', color: '#374151' };
-  const summary = <BalanceFigure label={words.label} value={`NPR ${Math.abs(netBalance).toLocaleString()}`} color={words.color} />;
+  const summary = <BalanceFigure label={words.label} value={`NPR ${formatMoney(Math.abs(netBalance))}`} color={words.color} />;
 
   return (
     <>

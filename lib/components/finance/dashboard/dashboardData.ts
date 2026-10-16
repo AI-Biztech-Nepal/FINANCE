@@ -1,5 +1,6 @@
 // lib/components/finance/dashboard/dashboardData.ts
 import { toBsDayChartLabel } from '../../../utils/nepaliDate';
+import { formatMoney } from '../../../utils/money';
 import type { BusinessTransaction, BusinessTransactionType } from '../../../../types/database.types';
 
 export type PeriodKey = '1d' | '1w' | '1m';
@@ -128,9 +129,9 @@ export function seriesByBucket(txs: BusinessTransaction[], type: BusinessTransac
   return values;
 }
 
-/** Whole rupees with thousands separators, matching the app's existing "NPR 12,345" look. */
+/** Rupees with thousands separators (and paise when there are some), matching the app's "NPR 12,345" look. */
 export function npr(v: number): string {
-  return `NPR ${Math.round(v).toLocaleString()}`;
+  return `NPR ${formatMoney(v)}`;
 }
 
 /** Axis-friendly amounts in the units Nepali businesses use: 25k, 1.5L (lakh), 2Cr (crore). */

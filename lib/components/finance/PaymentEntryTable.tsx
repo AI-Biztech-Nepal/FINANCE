@@ -7,6 +7,8 @@ import type { PhoneContactEntry } from '../../hooks/usePhoneContacts';
 import { buildCustomerSuggestions, type CustomerSuggestion } from '../../utils/customerSuggestions';
 import { readKey } from '../../utils/webKeys';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
+import { decimalInput } from '../../utils/number';
+import { formatMoney } from '../../utils/money';
 
 export interface PaymentRow {
   key: string;
@@ -284,7 +286,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
                   inputRefs.current[`${row.key}:1`] = el;
                 }}
                 value={row.amount}
-                onChangeText={(v) => onUpdateRow(row.key, { amount: v.replace(/[^0-9.]/g, '') })}
+                onChangeText={(v) => onUpdateRow(row.key, { amount: decimalInput(v) })}
                 onFocus={() => setFocusedCell({ key: row.key, col: 1 })}
                 onBlur={() => setFocusedCell((cur) => (cur?.key === row.key && cur.col === 1 ? null : cur))}
                 onKeyPress={(e) => handleKeyPress(e, row, rowIndex, 1)}
@@ -351,7 +353,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
         <View className="flex-row items-baseline gap-3 pr-2">
           <Text className="text-[13px] font-semibold text-gray-500">{totalLabel}</Text>
           <Text className="text-xl font-extrabold" style={{ color: totalColor ?? accent }}>
-            NPR {total.toLocaleString()}
+            NPR {formatMoney(total)}
           </Text>
         </View>
       </View>

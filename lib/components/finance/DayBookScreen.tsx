@@ -16,6 +16,7 @@ import { ContactPickerModal } from '../ContactPickerModal';
 import { useWideDetail } from '../detail/DetailLayout';
 import { dateLabels, useCalendarMode } from '../../hooks/useCalendarMode';
 import { shortDateLabel, toBsHistoryLabel } from '../../utils/nepaliDate';
+import { formatMoney, round2 } from '../../utils/money';
 import { DateFilterButton, DayStepButton } from './DateRangeFilter';
 import { useBookToolbar } from './BookKit';
 import { MONEY } from './moneyColors';
@@ -30,6 +31,7 @@ import { journalOf } from '../../utils/journalVoucher';
 import { supabase } from '../../supabase';
 import { tidyName } from '../../utils/nameCaps';
 import type { BusinessTransaction } from '../../../types/database.types';
+import { decimalInput } from '../../utils/number';
 
 type Kind = 'opening' | 'received' | 'paid' | 'expense' | 'sale' | 'purchase' | 'transfer' | 'journal';
 
@@ -142,7 +144,7 @@ function addDays(ymd: string, delta: number): string {
 }
 
 function money(n: number | null | undefined): string {
-  return n == null ? '—' : Math.round(n).toLocaleString();
+  return n == null ? '—' : formatMoney(n);
 }
 
 function amountText(n: number | null | undefined): string {
@@ -658,7 +660,7 @@ function EditEntryModal({ target, onClose }: { target: EditTarget | null; onClos
                     <Text className="mb-1 text-xs font-medium text-gray-500">Amount (NPR)</Text>
                     <EditInput
                       value={form.amount}
-                      onChangeText={(v) => set('amount')(v.replace(/[^0-9.]/g, ''))}
+                      onChangeText={(v) => set('amount')(decimalInput(v))}
                       keyboardType="decimal-pad"
                       editable={!locked}
                     />
@@ -668,7 +670,7 @@ function EditEntryModal({ target, onClose }: { target: EditTarget | null; onClos
                       <Text className="mb-1 text-xs font-medium text-gray-500">Discount (NPR)</Text>
                       <EditInput
                         value={form.discount}
-                        onChangeText={(v) => set('discount')(v.replace(/[^0-9.]/g, ''))}
+                        onChangeText={(v) => set('discount')(decimalInput(v))}
                         keyboardType="decimal-pad"
                         editable={!locked}
                       />
@@ -824,9 +826,9 @@ function AccountPicker({ options, selected, onSelect, userId }: {
   // What each bank / wallet holds, and all of them together. Cash has no figure: cash in hand is not tracked.
   const amountOf = (key: AccountKey | null): number | undefined => {
     if (!books.ready) return undefined;
-    if (key == null) return Math.round(books.perAccount.reduce((sum, a) => sum + a.balance, 0));
+    if (key == null) return round2(books.perAccount.reduce((sum, a) => sum + a.balance, 0));
     const account = books.perAccount.find((a) => a.id === key);
-    return account ? Math.round(account.balance) : undefined;
+    return account ? round2(account.balance) : undefined;
   };
   const insets = useSafeAreaInsets();
   type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -873,7 +875,7 @@ function AccountPicker({ options, selected, onSelect, userId }: {
                     </Text>
                     {amountOf(c.key) !== undefined && (
                       <Text className="text-xs font-bold" style={{ color: (amountOf(c.key) ?? 0) < 0 ? '#DC2626' : '#374151' }}>
-                        NPR {(amountOf(c.key) ?? 0).toLocaleString()}
+                        NPR {formatMoney(amountOf(c.key) ?? 0)}
                       </Text>
                     )}
                     {on && <Ionicons name="checkmark" size={17} color="#1D4ED8" />}
@@ -1141,7 +1143,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
       }
       return v;
     };
-    const named = (who: string, amount: number) => `${who} ${amount.toLocaleString()}`;
+    const named = (who: string, amount: number) => `${who} ${formatMoney(amount)}`;
     for (const e of customerEntries ?? []) {
       const j = journalOf(e.note);
       if (!j) continue;
@@ -1251,7 +1253,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
     const stray = accounts ? [...seen].filter((k) => !listedKeys.has(k)) : [];
     const openingByAccount = [...listed, ...stray.map((key) => ({ key, name: 'Other account' }))]
       .map((o) => ({ name: o.name, amount: openingBy[o.key] ?? 0 }))
-      .filter((a) => Math.round(a.amount) !== 0);
+      .filter((a) => round2(a.amount) !== 0);
 
     // One account on its own: its opening balance, and only the entries that
     // touched it. A transfer is a real in or out there, unlike in the combined
@@ -1357,7 +1359,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
   };
   const removeBill = (tx: BusinessTransaction) => {
     setViewingTx(null);
-    showAlert(`Delete this ${tx.type}?`, `${tidyName(tx.party_name) || 'Unnamed'} · NPR ${tx.amount.toLocaleString()}`, [
+    showAlert(`Delete this ${tx.type}?`, `${tidyName(tx.party_name) || 'Unnamed'} · NPR ${formatMoney(tx.amount)}`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',

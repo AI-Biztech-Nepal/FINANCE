@@ -1,6 +1,7 @@
 // lib/components/NetTrendChart.tsx
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { formatMoney } from '../utils/money';
 
 // A per-period NET value that can swing positive or negative (e.g. Available
 // Balance's sale - purchase - expense), rendered as bars diverging from a
@@ -80,7 +81,7 @@ export function NetTrendChart({
         <View className="mt-2.5 self-start rounded-lg bg-gray-900 px-3 py-1.5">
           <Text className="text-xs font-semibold text-white">
             {data[selected].label}: {data[selected].net >= 0 ? positiveLabel : negativeLabel} NPR{' '}
-            {Math.abs(data[selected].net).toLocaleString()}
+            {formatMoney(Math.abs(data[selected].net))}
           </Text>
         </View>
       )}

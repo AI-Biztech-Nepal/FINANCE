@@ -6,13 +6,14 @@ import { showAlert, getErrorMessage } from '../../utils/alert';
 import type { BankAccount } from '../../../types/database.types';
 import type { AvailableAmounts } from '../../hooks/useAvailableAmounts';
 import { useAccountBalances } from '../../hooks/useAccountBalances';
+import { formatMoney, round2 } from '../../utils/money';
 
 /** The money available in an account, shown at the right of its row. */
 function Available({ amount }: { amount: number | undefined }) {
   if (amount === undefined) return null;
   return (
     <Text className="text-xs font-bold" style={{ color: amount < 0 ? '#DC2626' : '#374151' }}>
-      NPR {amount.toLocaleString()}
+      NPR {formatMoney(amount)}
     </Text>
   );
 }
@@ -56,7 +57,7 @@ export function BankAccountPickerModal({
   // hand is not tracked - and "All accounts" is the bank and wallet accounts together.
   const books = useAccountBalances(visible && !available ? accounts[0]?.owner_id : undefined);
   const amounts: AvailableAmounts | null =
-    available ?? (books.ready ? { byId: Object.fromEntries(books.perAccount.map((a) => [a.id, Math.round(a.balance)])) } : null);
+    available ?? (books.ready ? { byId: Object.fromEntries(books.perAccount.map((a) => [a.id, round2(a.balance)])) } : null);
   const total = totalAmount ?? (amounts ? Object.values(amounts.byId).reduce((sum, n) => sum + n, 0) : undefined);
 
   async function handleRename(id: string) {
@@ -89,7 +90,7 @@ export function BankAccountPickerModal({
               <Ionicons name="wallet-outline" size={16} color="#1D4ED8" />
               <Text className="flex-1 text-sm font-semibold text-blue-800">All accounts · without cash</Text>
               <Text className="text-xs font-bold" style={{ color: total < 0 ? '#DC2626' : '#047857' }}>
-                NPR {total.toLocaleString()}
+                NPR {formatMoney(total)}
               </Text>
             </View>
           )}

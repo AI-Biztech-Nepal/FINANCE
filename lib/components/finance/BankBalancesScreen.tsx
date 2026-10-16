@@ -16,6 +16,7 @@ import { ToolbarButton, useBarActions, useBookLayout } from './BookKit';
 import { localTodayIso } from '../../utils/localDate';
 import { useReportActions } from './PrintButton';
 import type { PrintReport, PrintSection } from '../../utils/printReport';
+import { round2, formatMoney } from '../../utils/money';
 
 // Local date, not UTC - see localTodayIso.
 const todayIso = localTodayIso;
@@ -67,7 +68,7 @@ function ActivityRow({
         </Text>
       </View>
       <Text className="text-xs font-bold" style={{ color: item.isInflow ? '#059669' : '#DC2626' }}>
-        {item.isInflow ? '+' : '−'} NPR {item.amount.toLocaleString()}
+        {item.isInflow ? '+' : '−'} NPR {formatMoney(item.amount)}
       </Text>
     </Pressable>
   );
@@ -92,7 +93,7 @@ export function TransferForm({ userId, onDone, bare = false }: { userId: string;
   const nameFor = (id: string | null) => (id ? accounts.find((a) => a.id === id)?.name ?? 'Bank' : 'Cash');
 
   async function handleSave() {
-    const value = Number(amount);
+    const value = round2(Number(amount));
     if (!amount.trim() || Number.isNaN(value) || value <= 0) {
       showAlert('Enter an amount', 'Add a valid amount in NPR.');
       return;
@@ -221,7 +222,7 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
       rows: items.map((item) => [
         toBsHistoryLabel(item.date),
         [item.label, item.sub].filter(Boolean).join(' · '),
-        `${item.isInflow ? '+' : '-'}${item.amount.toLocaleString()}`,
+        `${item.isInflow ? '+' : '-'}${formatMoney(item.amount)}`,
       ]),
       emptyText: 'No activity yet.',
     });
@@ -234,18 +235,18 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
       businessName: profile?.business_name ?? profile?.full_name ?? '',
       printedOn: toBsHistoryLabel(localTodayIso()),
       summary: [
-        { label: 'Available balance (Cash + Banks)', value: `NPR ${balances.total.toLocaleString()}` },
-        { label: 'Bank total', value: `NPR ${bankTotal.toLocaleString()}` },
-        { label: 'Cash', value: `NPR ${balances.cash.toLocaleString()}` },
+        { label: 'Available balance (Cash + Banks)', value: `NPR ${formatMoney(balances.total)}` },
+        { label: 'Bank total', value: `NPR ${formatMoney(bankTotal)}` },
+        { label: 'Cash', value: `NPR ${formatMoney(balances.cash)}` },
       ],
       sections: [
         {
           columns: [{ label: 'SN' }, { label: 'Account' }, { label: 'Balance (NPR)', align: 'right' }],
           rows: [
-            ['1', 'Cash', balances.cash.toLocaleString()],
-            ...balances.perAccount.map((a, i) => [String(i + 2), a.name, a.balance.toLocaleString()]),
+            ['1', 'Cash', formatMoney(balances.cash)],
+            ...balances.perAccount.map((a, i) => [String(i + 2), a.name, formatMoney(a.balance)]),
           ],
-          footer: ['', 'Total', balances.total.toLocaleString()],
+          footer: ['', 'Total', formatMoney(balances.total)],
         },
         ...(opened ? [opened] : []),
       ],
@@ -277,14 +278,14 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
           Available Balance (Cash + Banks)
         </Text>
         <Text className="text-2xl font-extrabold" style={{ color: balances.total >= 0 ? '#2563EB' : '#DC2626' }}>
-          NPR {balances.total.toLocaleString()}
+          NPR {formatMoney(balances.total)}
         </Text>
       </View>
 
       <View className="mb-4 rounded-2xl border border-gray-200 bg-white p-4">
         <Text className="text-xs font-semibold text-gray-500">Bank Total</Text>
         <Text className="text-lg font-extrabold" style={{ color: bankTotal >= 0 ? '#111827' : '#DC2626' }}>
-          NPR {bankTotal.toLocaleString()}
+          NPR {formatMoney(bankTotal)}
         </Text>
       </View>
 
@@ -298,7 +299,7 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
           </View>
           <Text className="flex-1 text-sm font-semibold text-gray-900">Cash</Text>
           <Text className="text-sm font-bold" style={{ color: balances.cash >= 0 ? '#111827' : '#DC2626' }}>
-            NPR {balances.cash.toLocaleString()}
+            NPR {formatMoney(balances.cash)}
           </Text>
           <Ionicons name={expandedKey === 'cash' ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
         </View>
@@ -335,7 +336,7 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
                 </View>
                 <Text className="flex-1 text-sm font-semibold text-gray-900">{acc.name}</Text>
                 <Text className="text-sm font-bold" style={{ color: acc.balance >= 0 ? '#059669' : '#DC2626' }}>
-                  NPR {acc.balance.toLocaleString()}
+                  NPR {formatMoney(acc.balance)}
                 </Text>
                 <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
               </View>
