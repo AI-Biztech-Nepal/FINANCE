@@ -59,10 +59,12 @@ export function useSupabaseQuery<T extends TableName>(
   const { filters = {}, columns = '*', orderBy, all = false, enabled = true, queryOptions } = options ?? {};
 
   return useQuery<Row<T>[]>({
-    // `all` is part of the key: a full read and a capped read of the same
-    // table + filter are different data and must never share a cache entry.
-    // (Invalidations match on the leading [table], so they still reach both.)
-    queryKey: all ? [table, filters, orderBy, 'all'] : [table, filters, orderBy],
+    // `all` and a narrowed `columns` are part of the key: a full read, a capped
+    // read and a few-columns read of the same table + filter are different data
+    // and must never share a cache entry (a screen asking for every column would
+    // otherwise be handed rows with no dates or amounts).
+    // (Invalidations match on the leading [table], so they still reach all of them.)
+    queryKey: [table, filters, orderBy, ...(all ? ['all'] : []), ...(columns === '*' ? [] : [columns])],
     enabled,
     queryFn: async () => {
       // Cast to `any` here: postgrest-js's `.select()`/`.eq()` overloads resolve
