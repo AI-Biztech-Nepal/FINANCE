@@ -15,11 +15,9 @@ import { ENTRY_KINDS } from '../../lib/components/finance/entryKinds';
 // the two never drift. Received, Payment Out, Sales, Purchase and Expenses are already reachable
 // from the buttons on the Day Book, so the side panel doesn't repeat them.
 const DAYBOOK_ENTRY_KEYS = new Set(ENTRY_KINDS.map((kind) => kind.key));
-// Finance shortcuts that sit at the top level of the side panel instead of under Finance.
-const STANDALONE_KEYS = new Set(['inventory']);
-
-// The order Finance's pages run down the side panel. Anything not named here goes after them.
-const FINANCE_NAV_ORDER = ['daybook', 'customers', 'transactions', 'bank-accounts', 'report'];
+// The order Finance's pages run down the side panel: Stock and Inventory sits just below the Statement,
+// and Report stays last. Anything not named here goes after them.
+const FINANCE_NAV_ORDER = ['daybook', 'customers', 'transactions', 'inventory', 'bank-accounts', 'report'];
 const financeNavRank = (key: string) => {
   const i = FINANCE_NAV_ORDER.indexOf(key);
   return i === -1 ? FINANCE_NAV_ORDER.length : i;
@@ -40,14 +38,12 @@ const REPORT_FAMILY: WebNavItem[] = [
 
 const NAV_ITEMS: WebNavItem[] = [
   { href: '/(store)/company-dashboard', label: 'Dashboard', icon: 'grid' },
-  // Stock and Inventory is a page of its own in the side panel, not a child of Finance.
-  { href: '/(store)/inventory', label: 'Stock and Inventory', icon: 'cube' },
   {
     href: '/(store)/finance',
     label: 'Finance',
     icon: 'wallet',
     children: financeShortcuts('/(store)')
-      .filter((s) => !DAYBOOK_ENTRY_KEYS.has(s.key) && !STANDALONE_KEYS.has(s.key))
+      .filter((s) => !DAYBOOK_ENTRY_KEYS.has(s.key))
       .sort((a, b) => financeNavRank(a.key) - financeNavRank(b.key))
       .map((s) => ({
         href: s.href,
@@ -62,6 +58,8 @@ const HIDDEN: [string, string][] = [
   ['customers', 'Ledger'],
   ['customer/[id]', 'Ledger'],
   ['transactions', 'Statement'],
+  // Stock and Inventory is one of Finance's pages now (side panel, and a tile on the Finance page on a phone).
+  ['inventory', 'Stock and Inventory'],
   ['quick-payment', 'Quick Payment'],
   ['voucher', 'Journal Voucher'],
   ['received', 'Total Received'],
@@ -104,15 +102,6 @@ export default function StoreLayout() {
       <Tabs.Screen
         name="company-dashboard"
         options={{ title: 'Dashboard', tabBarIcon: ({ color, focused }) => <TabIcon name="grid" color={color} focused={focused} /> }}
-      />
-      {/* Stock and Inventory: a tab of its own on a phone, as it is its own item in the side panel. */}
-      <Tabs.Screen
-        name="inventory"
-        options={{
-          title: 'Stock and Inventory',
-          tabBarLabel: 'Stock',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="cube" color={color} focused={focused} />,
-        }}
       />
       <Tabs.Screen
         name="finance"
