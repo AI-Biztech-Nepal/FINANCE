@@ -20,7 +20,7 @@ export const ENTRY_KINDS: EntryKind[] = [
   },
   {
     key: 'payment-out',
-    label: 'Payment Out',
+    label: 'Paid',
     icon: 'arrow-up-circle',
     color: '#DC2626',
     path: '/quick-payment?type=out',
@@ -43,7 +43,7 @@ export const ENTRY_KINDS: EntryKind[] = [
   {
     key: 'expenses',
     label: 'Expenses',
-    menuLabel: 'Expense',
+    menuLabel: 'Expenses',
     icon: 'receipt',
     color: '#DC2626',
     path: '/transactions?type=expense&add=1',

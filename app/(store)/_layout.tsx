@@ -2,6 +2,7 @@
 import { Platform, useWindowDimensions } from 'react-native';
 import { Tabs } from 'expo-router';
 import { RoleGuard } from '../../lib/components/RoleGuard';
+import { freshScreenLayout } from '../../lib/components/FreshScreen';
 import { TabIcon } from '../../lib/components/TabIcon';
 import { PortalHeaderBar } from '../../lib/components/PortalHeaderBar';
 import { ROLE_ACCENT } from '../../lib/constants/roleColors';
@@ -9,57 +10,71 @@ import { WebSidebarShell, WEB_SIDEBAR_MIN_WIDTH, type WebNavItem } from '../../l
 import { shortcuts as financeShortcuts } from '../../lib/components/finance/FinanceDashboardScreen';
 import { ENTRY_KINDS } from '../../lib/components/finance/entryKinds';
 
-// Received, Payment Out, Sales, Purchase and Expenses are already reachable from the cards in the
-// Day Book's title row, so the side panel doesn't repeat them.
+// The mobile bottom tabs below, as a persistent left rail on web instead - see WebSidebarShell.
+// Finance's own shortcuts are nested under Finance, reusing the same list the Finance page uses, so
+// the two never drift. Received, Payment Out, Sales, Purchase and Expenses are already reachable
+// from the buttons on the Day Book, so the side panel doesn't repeat them.
 const DAYBOOK_ENTRY_KEYS = new Set(ENTRY_KINDS.map((kind) => kind.key));
+// Finance shortcuts that sit at the top level of the side panel instead of under Finance.
+const STANDALONE_KEYS = new Set(['inventory']);
 
 // The order Finance's pages run down the side panel. Anything not named here goes after them.
-const FINANCE_NAV_ORDER = ['daybook', 'customers', 'transactions', 'inventory', 'bank-accounts', 'report'];
+const FINANCE_NAV_ORDER = ['daybook', 'customers', 'transactions', 'bank-accounts', 'report'];
 const financeNavRank = (key: string) => {
   const i = FINANCE_NAV_ORDER.indexOf(key);
   return i === -1 ? FINANCE_NAV_ORDER.length : i;
 };
 
 // Every report there is (the same list the Report page itself shows, see ReportScreen.tsx),
-// nested under Report in the side panel so each is one click away.
+// nested under Report in the side panel - a family of report types one step in, all reachable
+// without opening the Report page first.
 const REPORT_FAMILY: WebNavItem[] = [
   { href: '/(store)/sales-report', label: 'Sales Report', icon: 'trending-up' },
   { href: '/(store)/purchase-report', label: 'Purchase Report', icon: 'cart' },
-  { href: '/(store)/expense-report', label: 'Expense Report', icon: 'receipt' },
+  { href: '/(store)/expense-report', label: 'Expenses Report', icon: 'receipt' },
   { href: '/(store)/to-receive', label: 'Receivable Report', icon: 'people' },
   { href: '/(store)/to-give', label: 'Payable Report', icon: 'storefront' },
+  { href: '/(store)/received', label: 'Total Received', icon: 'arrow-down-circle' },
+  { href: '/(store)/paid', label: 'Total Paid', icon: 'arrow-up-circle' },
 ];
 
-// On web the sections sit in a persistent left rail (see WebSidebarShell),
-// reusing the Finance dashboard's own shortcut list so the two never drift.
-// There is no "Dashboard" row of its own above them - the dashboard is the page
-// a sign-in opens on, and these pages are the rail.
-const NAV_ITEMS: WebNavItem[] = financeShortcuts('/(store)')
-  .filter((s) => !DAYBOOK_ENTRY_KEYS.has(s.key))
-  .sort((a, b) => financeNavRank(a.key) - financeNavRank(b.key))
-  .map((s) => ({
-    href: s.href,
-    label: s.label,
-    icon: s.icon,
-    ...(s.key === 'report' ? { children: REPORT_FAMILY } : null),
-  }));
+const NAV_ITEMS: WebNavItem[] = [
+  { href: '/(store)/company-dashboard', label: 'Dashboard', icon: 'grid' },
+  // Stock and Inventory is a page of its own in the side panel, not a child of Finance.
+  { href: '/(store)/inventory', label: 'Stock and Inventory', icon: 'cube' },
+  {
+    href: '/(store)/finance',
+    label: 'Finance',
+    icon: 'wallet',
+    children: financeShortcuts('/(store)')
+      .filter((s) => !DAYBOOK_ENTRY_KEYS.has(s.key) && !STANDALONE_KEYS.has(s.key))
+      .sort((a, b) => financeNavRank(a.key) - financeNavRank(b.key))
+      .map((s) => ({
+        href: s.href,
+        label: s.label,
+        icon: s.icon,
+        ...(s.key === 'report' ? { children: REPORT_FAMILY } : null),
+      })),
+  },
+];
 
 const HIDDEN: [string, string][] = [
   ['customers', 'Ledger'],
-  ['customer/[id]', 'Customer'],
+  ['customer/[id]', 'Ledger'],
   ['transactions', 'Statement'],
   ['quick-payment', 'Quick Payment'],
+  ['voucher', 'Journal Voucher'],
   ['received', 'Total Received'],
   ['paid', 'Total Paid'],
   ['sales-report', 'Sales Report'],
   ['purchase-report', 'Purchase Report'],
-  ['expense-report', 'Expense Report'],
+  ['expense-report', 'Expenses Report'],
+  ['party-report', 'Ledger'],
   ['to-receive', 'Receivable Report'],
   ['to-give', 'Payable Report'],
   ['bank-accounts', 'Bank Accounts'],
   ['bank-balances', 'Available Balance'],
   ['import-statement', 'Import Statement'],
-  ['inventory', 'Inventory'],
   ['report', 'Report'],
   ['daybook', 'Day Book'],
   ['profile', 'Store Details'],
@@ -71,6 +86,8 @@ export default function StoreLayout() {
   const tabs = (
     <Tabs
       backBehavior="history"
+      // Coming back to a page starts it fresh: nothing left open, nothing typed, the figures read again.
+      screenLayout={freshScreenLayout}
       screenOptions={{
         header: ({ options }) => (
           <PortalHeaderBar
@@ -85,14 +102,23 @@ export default function StoreLayout() {
       }}
     >
       <Tabs.Screen
-        name="finance"
-        options={{ title: 'Dashboard', tabBarIcon: ({ color, focused }) => <TabIcon name="wallet" color={color} focused={focused} /> }}
+        name="company-dashboard"
+        options={{ title: 'Dashboard', tabBarIcon: ({ color, focused }) => <TabIcon name="grid" color={color} focused={focused} /> }}
       />
+      {/* Stock and Inventory: a tab of its own on a phone, as it is its own item in the side panel. */}
       <Tabs.Screen
         name="inventory"
-        options={{ title: 'Inventory', tabBarIcon: ({ color, focused }) => <TabIcon name="grid" color={color} focused={focused} /> }}
+        options={{
+          title: 'Stock and Inventory',
+          tabBarLabel: 'Stock',
+          tabBarIcon: ({ color, focused }) => <TabIcon name="cube" color={color} focused={focused} />,
+        }}
       />
-      {HIDDEN.filter(([name]) => name !== 'inventory').map(([name, title]) => (
+      <Tabs.Screen
+        name="finance"
+        options={{ title: 'Finance', tabBarIcon: ({ color, focused }) => <TabIcon name="wallet" color={color} focused={focused} /> }}
+      />
+      {HIDDEN.map(([name, title]) => (
         <Tabs.Screen key={name} name={name} options={{ href: null, title }} />
       ))}
     </Tabs>

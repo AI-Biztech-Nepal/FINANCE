@@ -2,9 +2,9 @@
 //
 // Print / download for a party's statement and for the Ledger list. The
 // platform endings (browser print dialog, share sheet, file download) are the
-// ones exportHelpers already uses.
+// ones exportWorkRecord already uses.
 import * as XLSX from 'xlsx';
-import { deliver, escapeHtml, printHtml } from './exportHelpers';
+import { deliver, escapeHtml, printHtml } from './exportWorkRecord';
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -49,7 +49,8 @@ export interface StatementData {
   lines: StatementLine[];
 }
 
-function statementHtml(s: StatementData): string {
+/** The statement as a finished HTML page - what the print preview shows and Print prints. */
+export function statementHtml(s: StatementData): string {
   const rows = s.lines
     .map(
       (l) => `<tr>
@@ -78,11 +79,11 @@ function statementHtml(s: StatementData): string {
     .party b { font-size: 14px; }
     .cards { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
     .card { flex: 1; min-width: 120px; border: 1px solid #D1D5DB; border-radius: 6px; padding: 8px 10px; }
-    .k { color: #6B7280; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+    .k { color: #6B7280; font-size: 10px; text-transform: capitalize; letter-spacing: .04em; }
     .v { font-size: 15px; font-weight: 700; margin-top: 2px; }
     table { width: 100%; border-collapse: collapse; font-size: 11px; }
     th, td { border: 1px solid #D1D5DB; padding: 5px 8px; text-align: left; vertical-align: top; }
-    th { background: #F3F4F6; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+    th { background: #F3F4F6; font-size: 10px; text-transform: capitalize; letter-spacing: .04em; }
     td.num, th.num { text-align: right; white-space: nowrap; }
     tfoot td { font-weight: 700; background: #F9FAFB; }
     .note { margin-top: 10px; color: #6B7280; font-size: 10px; }

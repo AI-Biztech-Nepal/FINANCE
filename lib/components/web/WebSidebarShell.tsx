@@ -4,6 +4,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { router, usePathname, useGlobalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
+import { AppLogo } from '../AppLogo';
 
 export interface WebNavItem {
   href: string;
@@ -202,21 +203,17 @@ export function WebSidebarShell({
           paddingHorizontal: 14,
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, marginBottom: 20 }}>
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 9,
-              backgroundColor: '#2563EB',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Ionicons name="storefront" size={17} color="#fff" />
-          </View>
+        {/* The brand mark: the app's own logo and name. Pressing it goes back to the first page of the
+            side panel (the Dashboard). */}
+        <Pressable
+          onPress={() => items[0] && router.push(items[0].href as never)}
+          accessibilityRole="link"
+          accessibilityLabel="Go to the dashboard"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, marginBottom: 20 }}
+        >
+          <AppLogo size={34} />
           <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>Finance</Text>
-        </View>
+        </Pressable>
 
         {/* The nav list scrolls on its own (minHeight: 0 lets a flex child
             shrink below its content), so a long open submenu like Finance's

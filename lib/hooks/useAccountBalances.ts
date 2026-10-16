@@ -1,5 +1,6 @@
 // lib/hooks/useAccountBalances.ts
 import { useMemo } from 'react';
+import { journalOf } from '../utils/journalVoucher';
 import { useSupabaseQuery } from './useSupabase';
 import { useBankAccounts } from './useBankAccounts';
 
@@ -103,12 +104,13 @@ export function useAccountBalances(userId: string | undefined) {
           nav: { kind: 'transactions', type: isSale ? 'sale' : 'purchase' },
         });
       }
-      if (t.type === 'expense') {
+      // An expense posted through a journal voucher was never paid in cash: it is owed to a person.
+      if (t.type === 'expense' && !journalOf(t.note)) {
         const partyLabel = t.party_name ?? '';
         add(t.bank_account_id, -t.amount, {
           id: t.id,
           date: t.bill_date ?? t.created_at,
-          label: partyLabel ? `Expense · ${partyLabel}` : 'Expense',
+          label: partyLabel ? `Expenses · ${partyLabel}` : 'Expenses',
           sub: t.note ?? '',
           isInflow: false,
           nav: { kind: 'transactions', type: 'expense' },
@@ -116,6 +118,8 @@ export function useAccountBalances(userId: string | undefined) {
       }
     }
     for (const e of customerEntries ?? []) {
+      // A journal voucher moves no cash: its two halves are not in the account's activity.
+      if (journalOf(e.note)) continue;
       const name = nameById.get(e.customer_id) ?? 'Unknown customer';
       if (e.entry_type === 'credit') {
         add(e.bank_account_id, e.amount, {
@@ -130,7 +134,7 @@ export function useAccountBalances(userId: string | undefined) {
         add(e.bank_account_id, -e.amount, {
           id: e.id,
           date: e.entry_date ?? e.created_at,
-          label: `Payment Out · ${name}`,
+          label: `Paid · ${name}`,
           sub: e.note ?? '',
           isInflow: false,
           nav: { kind: 'party', partyId: e.customer_id },
@@ -138,12 +142,13 @@ export function useAccountBalances(userId: string | undefined) {
       }
     }
     for (const e of vendorEntries ?? []) {
+      if (journalOf(e.note)) continue;
       if (e.entry_type === 'credit') {
         const name = nameById.get(e.vendor_id) ?? 'Unknown vendor';
         add(e.bank_account_id, -e.amount, {
           id: e.id,
           date: e.entry_date ?? e.created_at,
-          label: `Payment Out · ${name}`,
+          label: `Paid · ${name}`,
           sub: e.note ?? '',
           isInflow: false,
           nav: { kind: 'party', partyId: e.vendor_id },

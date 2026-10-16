@@ -1,15 +1,18 @@
 // lib/components/finance/FinanceDashboardScreen.tsx
 import { useMemo, useState } from 'react';
+import { journalOf } from '../../utils/journalVoucher';
 import { View, Text, Pressable, ScrollView, useWindowDimensions, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle } from 'react-native-svg';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useSupabaseQuery } from '../../hooks/useSupabase';
 import { useAccountBalances, isSettledOnTheSpot } from '../../hooks/useAccountBalances';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../web/WebSidebarShell';
 import { MONEY, type MoneyTone } from './moneyColors';
 import { CARD_SHADOW, Card, RecentActivityCard, SalesTrendCard } from './dashboard/FinanceDashboard';
+import { ENTRY_KINDS } from './entryKinds';
 
 const BLUE = '#2563EB';
 
@@ -33,6 +36,30 @@ function dayTime(date: string): number {
   return new Date(date).getTime();
 }
 
+/** The Finance pages that use the wider content column on the web (see
+ * WebSidebarShell's `wideRoutes`) - tables and ledgers that use the room. */
+export const FINANCE_WIDE_ROUTES = [
+  '/finance',
+  '/daybook',
+  '/transactions',
+  '/customers',
+  '/customer',
+  '/quick-payment',
+  '/received',
+  '/paid',
+  '/sales-report',
+  '/purchase-report',
+  '/expense-report',
+  '/party-report',
+  '/to-receive',
+  '/to-give',
+  '/bank-accounts',
+  '/bank-balances',
+  '/import-statement',
+  '/inventory',
+  '/report',
+];
+
 export function shortcuts(basePath: string): {
   key: string;
   label: string;
@@ -41,16 +68,25 @@ export function shortcuts(basePath: string): {
 }[] {
   return [
     { key: 'daybook', label: 'Day Book', icon: 'book', href: `${basePath}/daybook` },
-    { key: 'sales', label: 'Sales', icon: 'trending-up', href: `${basePath}/transactions?type=sale&add=1` },
-    { key: 'purchase', label: 'Purchase', icon: 'cart', href: `${basePath}/transactions?type=purchase&add=1` },
-    { key: 'payment-in', label: 'Received', icon: 'arrow-down-circle', href: `${basePath}/quick-payment?type=in` },
-    { key: 'payment-out', label: 'Payment', icon: 'arrow-up-circle', href: `${basePath}/quick-payment?type=out` },
-    { key: 'expenses', label: 'Expenses', icon: 'receipt', href: `${basePath}/transactions?type=expense&add=1` },
-    { key: 'customers', label: 'Ledger', icon: 'people', href: `${basePath}/customers` },
     { key: 'transactions', label: 'Statement', icon: 'document-text', href: `${basePath}/transactions` },
-    { key: 'inventory', label: 'Inventory / Stock', icon: 'cube', href: `${basePath}/inventory` },
+    { key: 'customers', label: 'Ledger', icon: 'people', href: `${basePath}/customers` },
+    ...ENTRY_KINDS.map((kind) => ({
+      key: kind.key,
+      label: kind.label,
+      icon: kind.icon as keyof typeof Ionicons.glyphMap,
+      href: `${basePath}${kind.path}`,
+    })),
     { key: 'bank-accounts', label: 'Bank Accounts', icon: 'business', href: `${basePath}/bank-accounts` },
+    // Import Statement is not a page of its own in the menu any more: it is the Import button in the
+    // Statement page's header, which opens the same import flow (the /import-statement route).
+    { key: 'inventory', label: 'Stock and Inventory', icon: 'cube', href: `${basePath}/inventory` },
     { key: 'report', label: 'Report', icon: 'bar-chart', href: `${basePath}/report` },
+    // Quotation only exists under (reseller) for now - a wholesaler basePath has no matching
+    // route, so it would be a dead link there. Buying stock is not a page of its own here any more:
+    // it is the Buy Stock button on Stock and Inventory.
+    ...(basePath === '/(reseller)'
+      ? [{ key: 'quotation', label: 'Quotation', icon: 'document-text' as const, href: `${basePath}/quotation/new` }]
+      : []),
   ];
 }
 
@@ -71,6 +107,37 @@ const SHORTCUT_COLORS: Record<string, { bg: string; fg: string }> = {
   report: { bg: '#EFF6FF', fg: '#2563EB' },
   quotation: { bg: '#FDF4FF', fg: '#A21CAF' },
 };
+
+function CircularProgress({
+  percent,
+  size = 44,
+  strokeWidth = 4,
+}: {
+  percent: number;
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference * (1 - percent / 100);
+  return (
+    <Svg width={size} height={size}>
+      <Circle cx={size / 2} cy={size / 2} r={radius} stroke="rgba(255,255,255,0.3)" strokeWidth={strokeWidth} fill="none" />
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        stroke="white"
+        strokeWidth={strokeWidth}
+        fill="none"
+        strokeDasharray={`${circumference} ${circumference}`}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+    </Svg>
+  );
+}
 
 /** The largest font size (down to `min`) at which `text` still fits `width`
  * px on one line. Bold digits run about 0.62em wide, so this is a safe
@@ -192,6 +259,8 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
   const metricWidth = Math.floor((zoneRight - METRIC_GAP * (metricCols - 1)) / metricCols);
 
   const userId = useAuthStore((state) => state.session?.user.id);
+  const profile = useAuthStore((state) => state.profile);
+  // `all`: every tile below is a sum over these rows; a plain read stops at 1000.
   const { data: allEntries } = useSupabaseQuery('customer_ledger_entries', {
     filters: userId ? { owner_id: userId } : {},
     all: true,
@@ -269,16 +338,25 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
       }
     }
     for (const e of allEntries ?? []) {
+      // A journal voucher's halves are not money received or paid.
+      if (journalOf(e.note)) continue;
       if (!inYear(e.entry_date ?? e.created_at)) continue;
       if (e.entry_type === 'credit') received += e.amount;
       if (e.entry_type === 'debit' && e.source === 'manual') paid += e.amount;
     }
     for (const e of vendorEntries ?? []) {
+      if (journalOf(e.note)) continue;
       if (!inYear(e.entry_date ?? e.created_at)) continue;
       if (e.entry_type === 'credit') paid += e.amount;
     }
     return { yearReceived: received, yearPaid: paid };
   }, [transactions, allEntries, vendorEntries]);
+
+  const profileCompletion = useMemo(() => {
+    const fields = [profile?.full_name, profile?.phone, profile?.avatar_url, profile?.city];
+    const filled = fields.filter(Boolean).length;
+    return Math.round((filled / fields.length) * 100);
+  }, [profile]);
 
   const go = (path: string) => () => router.push(`${basePath}${path}` as never);
   const netProfit = totals.sale - totals.purchase - totals.expense;
@@ -307,7 +385,7 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
   const metrics = [
     { label: 'Sales', value: totals.sale, caption: 'All time', icon: 'trending-up' as const, color: MONEY.in.base, path: '/transactions?type=sale' },
     { label: 'Purchase', value: totals.purchase, caption: 'All time', icon: 'cart' as const, color: MONEY.out.base, path: '/transactions?type=purchase' },
-    { label: 'Expense', value: totals.expense, caption: 'All time', icon: 'receipt' as const, color: MONEY.out.base, path: '/transactions?type=expense' },
+    { label: 'Expenses', value: totals.expense, caption: 'All time', icon: 'receipt' as const, color: MONEY.out.base, path: '/transactions?type=expense' },
     { label: 'Total received', value: yearReceived, caption: 'This year', icon: 'arrow-down-circle' as const, color: MONEY.in.base, path: '/received' },
     { label: 'Total paid', value: yearPaid, caption: 'This year', icon: 'arrow-up-circle' as const, color: MONEY.out.base, path: '/paid' },
     {
@@ -418,6 +496,32 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
     </View>
   );
 
+  const profileCompletionCard = profileCompletion < 100 && (
+    <Pressable onPress={go('/profile')} accessibilityRole="button" accessibilityLabel="Complete your profile" className="overflow-hidden rounded-2xl">
+      <LinearGradient
+        colors={['#2563EB', '#1D4ED8']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: fit ? 12 : 14, padding: fit ? 10 : 16 }}
+      >
+        <View style={{ width: fit ? 30 : 44, height: fit ? 30 : 44 }} className="items-center justify-center">
+          <View style={{ position: 'absolute' }}>
+            <CircularProgress percent={profileCompletion} size={fit ? 30 : 44} strokeWidth={fit ? 3 : 4} />
+          </View>
+          <Text className={`${fit ? 'text-[9px]' : 'text-xs'} font-extrabold text-white`}>{profileCompletion}%</Text>
+        </View>
+        {/* One line when the page is fitted to the screen; two otherwise. */}
+        <View className="flex-1" style={fit ? { flexDirection: 'row', alignItems: 'center', gap: 10 } : undefined}>
+          <Text className="text-sm font-bold text-white">Complete your profile</Text>
+          <Text className={`${fit ? 'flex-1' : 'mt-0.5'} text-xs text-white/80`} numberOfLines={fit ? 1 : undefined}>
+            Add your remaining details so customers and technicians trust your business.
+          </Text>
+        </View>
+        <Ionicons name="arrow-forward" size={18} color="white" />
+      </LinearGradient>
+    </Pressable>
+  );
+
   return (
     <ScrollView
       className="flex-1 bg-gray-50"
@@ -435,6 +539,7 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
           <>
             {overview}
             {shortcutGrid}
+            {profileCompletionCard}
 
             {/* Stacked on a phone, the trend leads and the activity list follows. */}
             <View

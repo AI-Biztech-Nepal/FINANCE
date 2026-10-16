@@ -6,8 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../../hooks/useAuth';
 import { useSupabaseQuery } from '../../../hooks/useSupabase';
 import { toBsHistoryLabel } from '../../../utils/nepaliDate';
+import { useCalendarMode } from '../../../hooks/useCalendarMode';
 import { LineChart } from './LineChart';
 import { MONEY } from '../moneyColors';
+import { tidyName } from '../../../utils/nameCaps';
 import { PERIODS, buildRange, npr, seriesByBucket, sumType, txTime, type PeriodKey } from './dashboardData';
 
 const SALES = MONEY.in.base;
@@ -58,7 +60,7 @@ export function Card({
 const TYPE_STYLE = {
   sale: { icon: 'trending-up', color: SALES, label: 'Sale' },
   purchase: { icon: 'cart', color: PURCHASE, label: 'Purchase' },
-  expense: { icon: 'receipt', color: EXPENSE, label: 'Expense' },
+  expense: { icon: 'receipt', color: EXPENSE, label: 'Expenses' },
 } as const;
 
 function useTransactions() {
@@ -81,7 +83,8 @@ export function SalesTrendCard({ fill }: { fill?: boolean }) {
   const [period, setPeriod] = useState<PeriodKey>('1m');
   const [bodyHeight, setBodyHeight] = useState(0);
 
-  const range = useMemo(() => buildRange(period), [period]);
+  const [calendarMode] = useCalendarMode();
+  const range = useMemo(() => buildRange(period), [period, calendarMode]);
   const labels = useMemo(() => range.buckets.map((b) => b.label), [range]);
   const periodMeta = PERIODS.find((p) => p.key === period)!;
   // Today by the hour stops at the current hour rather than running down to zero.
@@ -142,6 +145,7 @@ const MIN_ACTIVITY_ROWS = 2;
 /** The latest sales, purchases and expenses, newest first. With `fill` it shows as
  * many as fit the height the card has (2 to 10); otherwise the latest 6. */
 export function RecentActivityCard({ basePath, fill }: { basePath: string; fill?: boolean }) {
+  useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const txs = useTransactions();
   const [bodyHeight, setBodyHeight] = useState(0);
   const limit = fill && bodyHeight > 0 ? Math.min(10, Math.max(MIN_ACTIVITY_ROWS, Math.floor(bodyHeight / ACTIVITY_ROW_HEIGHT))) : 6;
@@ -173,7 +177,7 @@ export function RecentActivityCard({ basePath, fill }: { basePath: string; fill?
                 </View>
                 <View className="flex-1" style={{ minWidth: 0 }}>
                   <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
-                    {t.party_name || meta.label}
+                    {tidyName(t.party_name) || meta.label}
                   </Text>
                   <Text className="text-[11px] text-gray-400" numberOfLines={1}>
                     {toBsHistoryLabel(t.bill_date ?? t.created_at)}

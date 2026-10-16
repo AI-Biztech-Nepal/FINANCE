@@ -5,13 +5,16 @@ import { KeyboardAwareSectionList } from 'react-native-keyboard-aware-scroll-vie
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useRole } from '../../hooks/useAuth';
-import { useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate, useSupabaseDelete } from '../../hooks/useSupabase';
+import { useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate, useSupabaseUpsert, useSupabaseDelete } from '../../hooks/useSupabase';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { useScreenHeader } from '../../hooks/useScreenHeader';
 import { useIsWideWeb } from '../../hooks/useWideGrid';
 import { usePhoneContacts } from '../../hooks/usePhoneContacts';
 import { useScanBill } from '../../hooks/useScanBill';
 import { DateField } from '../DateTimeFields';
+import { Field, FieldRow, FormActions, INPUT, PopupCard, Segmented } from './FormKit';
+import { EntryWhenFields, PartyMoveField, PaymentMethodButton, stampOf, timeOf, useEntryParty, useEntryWhen } from './EntryEditParts';
+import { MONEY } from './moneyColors';
 import { TrendChartCard } from './TrendChartCard';
 import { BankAccountPickerModal } from './BankAccountPickerModal';
 import { ContactPickerModal } from '../ContactPickerModal';
@@ -20,12 +23,14 @@ import { FormSection } from './FormSection';
 import { BillItemsTable, type BillItemsTableHandle } from './BillItemsTable';
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { KeyboardSelect } from './KeyboardSelect';
-import { useAvailableAmounts, optionLabel } from '../../hooks/useAvailableAmounts';
+import { optionLabel } from '../../hooks/useAvailableAmounts';
+import { useAccountBalances } from '../../hooks/useAccountBalances';
 import { ExpenseEntryTable, type ExpenseEntryRow as ExpenseRow, type ExpenseEntryTableHandle } from './ExpenseEntryTable';
 import { KeyInput } from './KeyInput';
 import { useConfirmSave } from './ConfirmSave';
 import { AddStockItemDialog } from './AddStockItemDialog';
 import { TransactionsBook } from './TransactionsBook';
+import { tidyName } from '../../utils/nameCaps';
 import { BookTable, type BookColumn } from './BookKit';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
@@ -33,6 +38,8 @@ import { buildCustomerSuggestions, type CustomerSuggestion } from '../../utils/c
 import { readKey } from '../../utils/webKeys';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { toBsLabel, toBsHistoryLabel } from '../../utils/nepaliDate';
+import { dateLabels, useCalendarMode } from '../../hooks/useCalendarMode';
+import { entryDay } from '../../utils/ledgerStatement';
 import type {
   AccountTransfer,
   BusinessTransaction,
@@ -49,11 +56,132 @@ import { localTodayIso } from '../../utils/localDate';
 // Local date, not UTC - see localTodayIso.
 const todayIso = localTodayIso;
 
+const SERVICE_SUGGESTIONS = ['Installation', 'Repair', 'Delivery', 'Packing', 'Service charge'];
+
+interface ServiceRowState {
+  name: string;
+  amount: string;
+}
+
+/** The Services table of a Sale, a second table under the Items one and as wide as it: one line per
+ * service (every installation and repair service you offer can be picked, or any name typed), each
+ * with its own amount. Optional, and direct income - no item or stock behind it. Lines left empty
+ * are not saved. */
+function ServiceChargesTable({
+  rows,
+  onChange,
+  accent,
+  serviceNames,
+}: {
+  rows: ServiceRowState[];
+  onChange: (rows: ServiceRowState[]) => void;
+  accent: string;
+  /** Every service that can be picked ("CCTV & Surveillance - Installation", "... - Repair" ...). */
+  serviceNames: string[];
+}) {
+  const [focusedRow, setFocusedRow] = useState<number | null>(null);
+  const total = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  const filled = rows.filter((r) => Number(r.amount) > 0).length;
+  const update = (index: number, patch: Partial<ServiceRowState>) =>
+    onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  const head = 'px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500';
+  const optionsFor = (text: string): SuggestOption[] => {
+    const q = text.trim().toLowerCase();
+    return serviceNames
+      .filter((n) => !q || n.toLowerCase().includes(q))
+      .map((n) => ({ key: n, label: n }));
+  };
+  return (
+    <View className="bg-white" style={{ zIndex: focusedRow != null ? 30 : 0 }}>
+      <View className="flex-row items-center border-y border-gray-200 bg-gray-50 px-2 py-2">
+        <Text className="text-center text-[11px] font-bold tracking-wider text-gray-500" style={{ width: 36 }}>
+          #
+        </Text>
+        <Text className={head} style={{ flex: 1 }}>
+          Service{filled > 0 ? ` · ${filled} ${filled === 1 ? 'line' : 'lines'}` : ' (optional)'}
+        </Text>
+        {/* The Qty and Rate columns of the Items table above are left empty so Amount lines up with it. */}
+        <View style={{ width: 210 }} />
+        <Text className={`${head} text-right`} style={{ width: 130 }}>
+          {total > 0 ? total.toLocaleString() : 'Amount'}
+        </Text>
+        <View style={{ width: 36 }} />
+      </View>
+      {rows.map((row, index) => (
+        <View
+          key={index}
+          className="flex-row items-center border-b border-gray-100 px-2 py-0.5"
+          style={{ zIndex: focusedRow === index ? 5 : 0 }}
+        >
+          <Text className="text-center text-[13px] font-semibold text-gray-400" style={{ width: 36 }}>
+            {index + 1}
+          </Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <SuggestInput
+              value={row.name}
+              onChangeText={(v) => update(index, { name: v })}
+              options={focusedRow === index ? optionsFor(row.name) : []}
+              onSelectOption={(opt) => update(index, { name: opt.label })}
+              onFocus={() => setFocusedRow(index)}
+              onBlur={() => setFocusedRow((cur) => (cur === index ? null : cur))}
+              showWhenEmpty
+              placeholder="Pick or type a service - installation, repair, wiring ..."
+              accessibilityLabel={`Service name, row ${index + 1}`}
+              accent={accent}
+              inputClassName="rounded-lg px-2.5 py-2.5 text-sm text-gray-900"
+              inputStyle={{ borderWidth: 1.5, borderColor: '#F1F2F4', outlineStyle: 'none' } as object}
+            />
+          </View>
+          <View style={{ width: 210 }} />
+          <View style={{ width: 130 }}>
+            <TextInput
+              value={row.amount}
+              onChangeText={(v) => update(index, { amount: v.replace(/[^0-9.]/g, '') })}
+              placeholder="0"
+              placeholderTextColor="#B2B8C1"
+              keyboardType="numeric"
+              selectTextOnFocus
+              accessibilityLabel={`Service amount, row ${index + 1}`}
+              className="rounded-lg px-2.5 py-2.5 text-right text-sm font-semibold text-gray-900"
+              style={{ borderWidth: 1.5, borderColor: '#F1F2F4', outlineStyle: 'none' } as object}
+            />
+          </View>
+          <View style={{ width: 36, alignItems: 'center' }}>
+            {(rows.length > 1 || !!row.name.trim() || !!row.amount.trim()) && (
+              <Pressable
+                onPress={() => {
+                  const next = rows.filter((_, i) => i !== index);
+                  onChange(next.length > 0 ? next : [{ name: '', amount: '' }]);
+                }}
+                hitSlop={6}
+                accessibilityLabel={`Remove service row ${index + 1}`}
+                style={{ opacity: 0.6 }}
+              >
+                <Ionicons name="close-circle" size={18} color="#DC2626" />
+              </Pressable>
+            )}
+          </View>
+        </View>
+      ))}
+      <Pressable
+        onPress={() => onChange([...rows, { name: '', amount: '' }])}
+        className="flex-row items-center px-4 py-2"
+        style={{ gap: 6 }}
+      >
+        <Ionicons name="add-circle" size={16} color={accent} />
+        <Text className="text-xs font-semibold" style={{ color: accent }}>
+          Add service
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 interface ItemRowState {
+  hs_code?: string;
   description: string;
   qty: string;
   rate: string;
-  hsCode?: string;
 }
 
 let expenseRowSeq = 0;
@@ -329,7 +457,7 @@ const FILTERS: { key: 'all' | BusinessTransactionType; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'sale', label: 'Sales' },
   { key: 'purchase', label: 'Purchase' },
-  { key: 'expense', label: 'Expense' },
+  { key: 'expense', label: 'Expenses' },
 ];
 
 
@@ -357,6 +485,7 @@ function RecentEntriesCard({
   activeId?: string;
   onOpen?: (tx: BusinessTransaction) => void;
 }) {
+  useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const { data } = useSupabaseQuery('business_transactions', {
     filters: { owner_id: userId, type },
     orderBy: { column: 'created_at', ascending: false },
@@ -371,7 +500,7 @@ function RecentEntriesCard({
       render: (tx) => (
         <View style={{ minWidth: 0 }}>
           <Text numberOfLines={1} className="text-xs font-semibold text-gray-800">
-            {tx.party_name || 'Unnamed'}
+            {tidyName(tx.party_name) || 'Unnamed'}
           </Text>
           <Text className="text-[10px] text-gray-400">
             {toBsHistoryLabel(tx.bill_date ?? tx.created_at)}
@@ -395,7 +524,7 @@ function RecentEntriesCard({
 
   return (
     <View className="mt-4">
-      <Text className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Recent {TYPE_META[type].label}s</Text>
+      <Text className="text-[11px] font-bold capitalize tracking-wide text-gray-400">Recent {TYPE_META[type].label}s</Text>
       {!!onOpen && recent.length > 0 && (
         <Text className="mb-2 mt-0.5 text-[10.5px] text-gray-400">Tap an entry to view, edit or delete it</Text>
       )}
@@ -431,11 +560,14 @@ function CategoryPickerModal({
   selectedId: string | null;
   onSelect: (id: string) => void;
   onClose: () => void;
-  onCreate: (name: string) => Promise<void>;
+  onCreate: (name: string, group: 'direct' | 'indirect') => Promise<void>;
   onRename: (id: string, name: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
   const [newName, setNewName] = useState('');
+  // The Add popup: the name and whether it is a Direct or an Indirect expense, then Save or Cancel.
+  const [adding, setAdding] = useState(false);
+  const [newGroup, setNewGroup] = useState<'direct' | 'indirect'>('indirect');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -444,8 +576,10 @@ function CategoryPickerModal({
     if (!newName.trim()) return;
     setSaving(true);
     try {
-      await onCreate(newName.trim());
+      await onCreate(newName.trim(), newGroup);
       setNewName('');
+      setNewGroup('indirect');
+      setAdding(false);
     } catch (err) {
       showAlert('Could not add category', getErrorMessage(err));
     } finally {
@@ -478,22 +612,70 @@ function CategoryPickerModal({
             </Pressable>
           </View>
 
-          <View className="mb-3 flex-row gap-2">
-            <TextInput
-              value={newName}
-              onChangeText={setNewName}
-              placeholder="New category name"
-              placeholderTextColor="#9CA3AF"
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
-            />
-            <Pressable
-              onPress={handleCreate}
-              disabled={saving || !newName.trim()}
-              className="items-center justify-center rounded-lg bg-orange-500 px-3 disabled:opacity-50"
-            >
-              <Ionicons name="add" size={18} color="white" />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => setAdding(true)}
+            className="mb-3 flex-row items-center justify-center rounded-lg bg-orange-500 py-2.5"
+            style={{ gap: 6 }}
+          >
+            <Ionicons name="add" size={18} color="white" />
+            <Text className="text-sm font-semibold text-white">Add expense head</Text>
+          </Pressable>
+
+          {adding && (
+            <View className="absolute inset-0 items-center justify-center rounded-xl bg-black/30 px-3" style={{ zIndex: 20 }}>
+              <View className="w-full rounded-xl bg-white p-4" style={{ gap: 10 }}>
+                <Text className="text-base font-semibold text-gray-900">New expense head</Text>
+                <View>
+                  <Text className="mb-1 text-xs font-semibold text-gray-600">Name *</Text>
+                  <TextInput
+                    value={newName}
+                    onChangeText={setNewName}
+                    autoFocus
+                    placeholder="e.g. Salary Advance"
+                    placeholderTextColor="#9CA3AF"
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                  />
+                </View>
+                <View>
+                  <Text className="mb-1 text-xs font-semibold text-gray-600">Category</Text>
+                  <View className="flex-row" style={{ gap: 8 }}>
+                    {([['indirect', 'Indirect expense'], ['direct', 'Direct expense']] as const).map(([k, label]) => (
+                      <Pressable
+                        key={k}
+                        onPress={() => setNewGroup(k)}
+                        className="flex-1 items-center rounded-lg border py-2"
+                        style={{ borderColor: newGroup === k ? '#2563EB' : '#D1D5DB', backgroundColor: newGroup === k ? '#EFF6FF' : '#FFFFFF' }}
+                      >
+                        <Text className="text-[13px] font-semibold" style={{ color: newGroup === k ? '#1D4ED8' : '#374151' }}>{label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text className="mt-1 text-[11.5px] text-gray-500">
+                    Direct costs (freight, repairs, labour) are taken off sales before gross profit; indirect ones (salary, rent, phone) after it.
+                  </Text>
+                </View>
+                <View className="flex-row justify-end" style={{ gap: 10 }}>
+                  <Pressable
+                    onPress={() => {
+                      setAdding(false);
+                      setNewName('');
+                      setNewGroup('indirect');
+                    }}
+                    className="rounded-lg border border-gray-300 px-4 py-2"
+                  >
+                    <Text className="text-sm font-semibold text-gray-700">Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleCreate}
+                    disabled={saving || !newName.trim()}
+                    className="rounded-lg bg-blue-600 px-4 py-2 disabled:opacity-50"
+                  >
+                    <Text className="text-sm font-semibold text-white">{saving ? 'Saving...' : 'Save'}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          )}
 
           {categories.length === 0 ? (
             <Text className="px-2 py-3 text-center text-sm text-gray-400">No categories yet — add one above.</Text>
@@ -618,8 +800,14 @@ function TransactionForm({
   // Expense: date + addable name + a managed category + amount + remark.
   const [amount, setAmount] = useState(initial && initial.type === 'expense' ? String(initial.amount) : '');
   const [expenseDate, setExpenseDate] = useState(initial?.bill_date ?? todayIso());
-  // Money in each place, shown in the Payment method dropdown of a new expense.
-  const available = useAvailableAmounts(type === 'expense' && !initial ? userId : undefined);
+  // Money in each bank / wallet account, shown beside it in an expense's Payment method dropdown - new
+  // or being edited: the books' own figures, as every list of accounts shows them. Cash has none. (The
+  // other kinds of entry read them when their list of accounts is opened.)
+  const balances = useAccountBalances(type === 'expense' ? userId : undefined);
+  const available = useMemo(
+    () => (balances.ready ? { byId: Object.fromEntries(balances.perAccount.map((a) => [a.id, Math.round(a.balance)])) } : null),
+    [balances]
+  );
   const [categoryId, setCategoryId] = useState<string | null>(initial?.expense_category_id ?? null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
@@ -628,7 +816,7 @@ function TransactionForm({
   const [billDate, setBillDate] = useState(initial?.bill_date ?? todayIso());
   const [items, setItems] = useState<ItemRowState[]>(
     initial
-      ? initial.items.map((i) => ({ description: i.description, qty: String(i.qty), rate: String(i.rate), hsCode: i.hs_code ?? '' }))
+      ? initial.items.map((i) => ({ hs_code: i.hs_code ?? '', description: i.description, qty: String(i.qty), rate: String(i.rate) }))
       : []
   );
   const [showItemPicker, setShowItemPicker] = useState(false);
@@ -664,6 +852,15 @@ function TransactionForm({
       ? String(Math.round(((initial.vat_amount / (initialSubtotal - initial.discount_amount)) * 100) * 100) / 100)
       : '0'
   );
+  // Installation: a service charged to the customer on a Sale - direct income, no item or stock behind it.
+  // The services on offer, to pick from in the Services table (any other name can be typed).
+  const serviceNames = SERVICE_SUGGESTIONS;
+  const [serviceRows, setServiceRows] = useState<ServiceRowState[]>(() => {
+    if (initial?.service_charges?.length) return initial.service_charges.map((s) => ({ name: s.name, amount: String(s.amount) }));
+    // A bill saved before the table existed carried one lump installation charge.
+    if (initial?.installation_charge) return [{ name: 'Installation', amount: String(initial.installation_charge) }];
+    return [{ name: '', amount: '' }];
+  });
   const [showDiscount, setShowDiscount] = useState(!!initial && initial.discount_amount > 0);
   const [showVat, setShowVat] = useState(!!initial && initial.vat_amount > 0);
 
@@ -699,7 +896,9 @@ function TransactionForm({
   }
   const discountInputValue = discountMode === 'percent' ? discountPercentInput : discountAmountInput;
   const vatAmount = Math.round(((subtotal - discountAmount) * (Number(vatPercent) || 0)) / 100);
-  const grandTotal = subtotal - discountAmount + vatAmount;
+  const installationAmount =
+    type === 'sale' ? serviceRows.reduce((sum, r) => sum + Math.max(0, Number(r.amount) || 0), 0) : 0;
+  const grandTotal = subtotal - discountAmount + vatAmount + installationAmount;
   const selectedCategory = (categories ?? []).find((c) => c.id === categoryId) ?? null;
   const selectedAccountName = bankAccountId
     ? bankAccounts.accounts.find((a) => a.id === bankAccountId)?.name ?? 'Cash'
@@ -767,8 +966,8 @@ function TransactionForm({
     }
   }
 
-  async function handleCreateCategory(name: string) {
-    const created = await createCategory.mutateAsync({ owner_id: userId, name });
+  async function handleCreateCategory(name: string, group: 'direct' | 'indirect' = 'indirect') {
+    const created = await createCategory.mutateAsync({ owner_id: userId, name, ...(group === 'direct' ? { expense_group: 'direct' } : {}) } as never);
     setCategoryId(created.id);
   }
   async function handleRenameCategory(id: string, name: string) {
@@ -898,6 +1097,7 @@ function TransactionForm({
           ...(billNo.trim() ? [{ label: 'Bill no.', value: billNo.trim() }] : []),
           ...(discountAmount > 0 ? [{ label: 'Discount', value: `− NPR ${discountAmount.toLocaleString()}` }] : []),
           ...(vatAmount > 0 ? [{ label: 'VAT', value: `+ NPR ${vatAmount.toLocaleString()}` }] : []),
+          ...(installationAmount > 0 ? [{ label: 'Service charges', value: `+ NPR ${installationAmount.toLocaleString()}` }] : []),
         ],
         total: { label: 'Grand total', value: `NPR ${grandTotal.toLocaleString()}`, color: TYPE_META[type].color },
       });
@@ -934,22 +1134,34 @@ function TransactionForm({
         const values = {
           type,
           amount: grandTotal,
-          party_name: partyName.trim() || null,
+          party_name: tidyName(partyName.trim()) || null,
           customer_id: resolvedCustomerId,
           note: note.trim() || null,
           bill_no: billNo.trim() || null,
           bill_date: billDate || null,
           items: validItems.map((r) => ({
+            ...(r.hs_code?.trim() ? { hs_code: r.hs_code.trim() } : {}),
             description: r.description.trim(),
             qty: Number(r.qty),
             rate: Number(r.rate),
             amount: Number(r.qty) * Number(r.rate),
-            ...(r.hsCode?.trim() ? { hs_code: r.hsCode.trim() } : {}),
           })),
           discount_amount: Math.round(discountAmount),
           vat_amount: vatAmount,
-          payment_mode: 'cash' as const,
-          bank_account_id: null,
+          // Only sent when there is a service charge (or one is being cleared on an edit), so a bill
+          // without services saves the same as it always did, whether or not the columns exist yet.
+          ...(installationAmount > 0 || (initial && (initial.installation_charge ?? 0) > 0)
+            ? {
+                installation_charge: installationAmount,
+                service_charges: serviceRows
+                  .filter((r) => Number(r.amount) > 0)
+                  .map((r) => ({ name: r.name.trim() || 'Service', amount: Number(r.amount) })),
+              }
+            : null),
+          // A new bill is saved as cash. Editing one keeps the method it already has - that is changed
+          // from the bill's card (tap Payment Method) - instead of putting it back to cash on every save.
+          payment_mode: initial?.payment_mode ?? ('cash' as const),
+          bank_account_id: initial?.bank_account_id ?? null,
         };
         if (initial) {
           await updateTx.mutateAsync({ id: initial.id, values });
@@ -985,7 +1197,7 @@ function TransactionForm({
       const values = {
         type,
         amount: value,
-        party_name: partyName.trim() || null,
+        party_name: tidyName(partyName.trim()) || null,
         customer_id: customerId,
         note: note.trim() || null,
         bill_date: expenseDate || null,
@@ -1229,7 +1441,7 @@ function TransactionForm({
           values: {
             type,
             amount: value,
-            party_name: row.partyName.trim() || null,
+            party_name: tidyName(row.partyName.trim()) || null,
             customer_id: row.customerId,
             note: row.note.trim() || null,
             bill_date: expenseDate || null,
@@ -1257,7 +1469,7 @@ function TransactionForm({
       rows: [
         ...validRows.slice(0, 5).map((r) => {
           const cat = (categories ?? []).find((c) => c.id === r.categoryId)?.name;
-          return { label: `${r.partyName.trim() || 'Expense'}${cat ? ' · ' + cat : ''}`, value: `NPR ${Number(r.amount).toLocaleString()}` };
+          return { label: `${r.partyName.trim() || 'Expenses'}${cat ? ' · ' + cat : ''}`, value: `NPR ${Number(r.amount).toLocaleString()}` };
         }),
         ...(validRows.length > 5 ? [{ label: `+ ${validRows.length - 5} more` }] : []),
         { label: 'Paid via', value: selectedAccountName },
@@ -1272,7 +1484,7 @@ function TransactionForm({
           owner_id: userId,
           type: 'expense',
           amount: Number(row.amount),
-          party_name: row.partyName.trim() || null,
+          party_name: tidyName(row.partyName.trim()) || null,
           customer_id: row.customerId,
           note: row.note.trim() || null,
           bill_date: expenseDate || null,
@@ -1331,7 +1543,7 @@ function TransactionForm({
   useEffect(() => {
     if (!desktopWeb || !isBill) return;
     const last = items[items.length - 1];
-    if (!last || last.description.trim() || last.qty.trim() || last.rate.trim() || last.hsCode?.trim()) {
+    if (!last || last.description.trim() || last.qty.trim() || last.rate.trim() || last.hs_code?.trim()) {
       setItems((prev) => [...prev, { description: '', qty: '', rate: '' }]);
     }
   }, [items, isBill, desktopWeb]);
@@ -1380,7 +1592,7 @@ function TransactionForm({
             >
               <View className="mb-3 flex-row items-center gap-2">
                 <Ionicons name="document-text-outline" size={14} color="#6B7280" />
-                <Text className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Details</Text>
+                <Text className="text-[11px] font-bold capitalize tracking-wider text-gray-500">Details</Text>
               </View>
               <View className="flex-row" style={{ gap: 14 }}>
                 <View style={{ flex: 1.3, minWidth: 0 }}>
@@ -1578,7 +1790,7 @@ function TransactionForm({
                       customerId ? (
                         <Ionicons name="checkmark-circle" size={16} color={accent} />
                       ) : partyName.trim() ? (
-                        <Text className="text-[10px] font-bold uppercase text-gray-400">New</Text>
+                        <Text className="text-[10px] font-bold capitalize text-gray-400">New</Text>
                       ) : null
                     }
                   />
@@ -1604,7 +1816,7 @@ function TransactionForm({
                     onChange={setBillDate}
                     inputRef={billDateRef}
                     accent={accent}
-                    onEnter={() => itemsTableRef.current?.focusRow(0, 0)}
+                    onEnter={() => itemsTableRef.current?.focusRow(0)}
                     onRequestSave={handleSave}
                     compact
                   />
@@ -1652,6 +1864,10 @@ function TransactionForm({
               onAddStockItem={(name, rate, index) => setAddStockFor({ index, name, rate })}
               onExit={() => discountRef.current?.focus()}
               footer={
+                <>
+                {type === 'sale' && (
+                  <ServiceChargesTable rows={serviceRows} onChange={setServiceRows} accent={accent} serviceNames={serviceNames} />
+                )}
                 <View
                   className="flex-row flex-wrap border-t border-gray-200 bg-gray-50 px-5 py-4"
                   style={{ columnGap: 28, rowGap: 14, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
@@ -1811,6 +2027,7 @@ function TransactionForm({
                     </View>
                   </View>
                 </View>
+                </>
               }
             />
 
@@ -2051,6 +2268,11 @@ function TransactionForm({
               <Text className="text-sm font-bold text-gray-900">G. Total</Text>
               <Text className="text-base font-extrabold text-gray-900">NPR {grandTotal.toLocaleString()}</Text>
             </View>
+            {type === 'sale' && (
+              <View className="mt-3">
+                <ServiceChargesTable rows={serviceRows} onChange={setServiceRows} accent="#EA580C" serviceNames={serviceNames} />
+              </View>
+            )}
             <TextInput
               value={note}
               onChangeText={setNote}
@@ -2239,6 +2461,7 @@ function TransactionRow({
   onPress: () => void;
   onDelete: () => void;
 }) {
+  useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const meta = TYPE_META[tx.type];
   const accountLabel = tx.bank_account_id ? bankAccountName ?? 'Bank' : 'Cash';
   return (
@@ -2249,7 +2472,7 @@ function TransactionRow({
       <View className="flex-1">
         <Text className="text-sm font-semibold text-gray-900">
           {meta.label}
-          {tx.party_name ? ` · ${tx.party_name}` : ''}
+          {tx.party_name ? ` · ${tidyName(tx.party_name)}` : ''}
           {tx.bill_no ? ` · Bill #${tx.bill_no}` : ''}
           {categoryName ? ` · ${categoryName}` : ''}
         </Text>
@@ -2350,12 +2573,293 @@ function BillTotal({ label, value, tint, color, strong }: { label: string; value
   );
 }
 
-// A read-only receipt view - tapping a past transaction should let you see
-// what's in it without immediately dropping into an editable form. Edit is
-// an explicit action from here, not the default, and so is Delete (beside it,
-// only where the caller passes `onDelete`). Exported so a customer/vendor's
-// own page (CustomerDetailScreen) can reuse the same organized detail view
-// for a linked bill instead of building a second one.
+/** A Sale / Purchase's quick edit, laid out like a ledger entry's popup: Sale or Purchase, who it is
+ * with, its date and time, bill number, amount and remarks - and, under them, the bill's items. A
+ * bill with items keeps its amount worked out from them - those are changed in the full form
+ * (`onEditItems`).
+ *
+ * Whatever is changed is saved on the bill; its ledger entry follows (a Sale is what the party owes
+ * you, a Purchase what you owe them), so switching Sale / Purchase or the person moves it there. */
+function BillEditPopup({
+  tx,
+  onClose,
+  onEditItems,
+  onDelete,
+}: {
+  tx: BusinessTransaction;
+  onClose: () => void;
+  onEditItems: () => void;
+  /** Shown as Remove, left of Cancel / Save, only where the caller can remove the bill. */
+  onDelete?: () => void;
+}) {
+  const updateTx = useSupabaseUpdate('business_transactions');
+  const bankAccounts = useBankAccounts(tx.owner_id);
+  const [bankAccountId, setBankAccountId] = useState<string | null>(tx.bank_account_id);
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const accountName = bankAccountId ? bankAccounts.accounts.find((a) => a.id === bankAccountId)?.name ?? 'Cash' : 'Cash';
+  const [type, setType] = useState<'sale' | 'purchase'>(tx.type === 'purchase' ? 'purchase' : 'sale');
+  const { partyId, movedTo, setParty } = useEntryParty(tx.customer_id ?? '');
+  const when = useEntryWhen({ entry_date: tx.bill_date, created_at: tx.created_at });
+  const [billNo, setBillNo] = useState(tx.bill_no ?? '');
+  const [amount, setAmount] = useState(String(tx.amount));
+  const [note, setNote] = useState(tx.note ?? '');
+  const [saving, setSaving] = useState(false);
+  const hasItems = tx.items.length > 0;
+
+  async function handleSave() {
+    const value = Number(amount);
+    if (!hasItems && (!amount.trim() || Number.isNaN(value) || value <= 0)) {
+      showAlert('Enter an amount', 'Add a valid amount in NPR.');
+      return;
+    }
+    if (!when.date) {
+      showAlert('Pick a date', 'Choose the date of this bill.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateTx.mutateAsync({
+        id: tx.id,
+        values: {
+          ...(type !== tx.type ? { type } : {}),
+          // Another person: the bill is theirs now, so what was written for the old one (address,
+          // VAT / PAN) goes rather than staying on the wrong person.
+          ...(movedTo ? { customer_id: movedTo.id, party_name: movedTo.name, party_address: null, vat_pan_no: null } : {}),
+          bill_no: billNo.trim() || null,
+          note: note.trim() || null,
+          // A bill with items has its amount from them; only one without can be typed.
+          ...(hasItems ? {} : { amount: value }),
+          // Only once the date or time was touched, so a plain edit leaves both as they were.
+          ...(when.changed ? { bill_date: when.date, created_at: stampOf(when.date, when.time) } : {}),
+          // Likewise the payment method: only when another was picked.
+          ...(bankAccountId !== tx.bank_account_id
+            ? { bank_account_id: bankAccountId, payment_mode: bankAccountId ? ('bank' as const) : ('cash' as const) }
+            : {}),
+        },
+      });
+      if (type !== tx.type) {
+        showAlert(
+          `Changed to a ${TYPE_META[type].label.toLowerCase()}`,
+          'Payments already recorded for them are not changed - check that they are Paid / Received the right way round.'
+        );
+      }
+      onClose();
+    } catch (err) {
+      showAlert('Could not save', getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <PopupCard title="Edit Entry" onClose={onClose}>
+      <Segmented
+        value={type}
+        onChange={setType}
+        options={[
+          { key: 'sale' as const, label: 'Sale', color: MONEY.in.text, bg: MONEY.in.bg, border: MONEY.in.base },
+          { key: 'purchase' as const, label: 'Purchase', color: MONEY.out.text, bg: MONEY.out.bg, border: MONEY.out.base },
+        ]}
+      />
+      <PartyMoveField
+        ownerId={tx.owner_id}
+        partyId={partyId}
+        pickedName={movedTo?.name ?? tx.party_name ?? undefined}
+        onPick={setParty}
+        hint="Entered on the wrong person? Pick the right one and save - this bill moves to their ledger."
+        pickerTitle="Move this bill to"
+      />
+      <EntryWhenFields date={when.date} time={when.time} onDate={when.setDate} onTime={when.setTime} />
+      <FieldRow>
+        <Field label="Bill No." basis={110}>
+          <TextInput
+            value={billNo}
+            onChangeText={setBillNo}
+            placeholder="e.g. 0234"
+            placeholderTextColor="#9CA3AF"
+            className={INPUT}
+          />
+        </Field>
+        <Field label="Amount (NPR)" basis={160}>
+          {hasItems ? (
+            <View className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+              <Text className="text-sm font-semibold text-gray-700">{tx.amount.toLocaleString()}</Text>
+            </View>
+          ) : (
+            <TextInput
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="e.g. 1000"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+              className={INPUT}
+            />
+          )}
+        </Field>
+        <Field label="Payment Method" basis={200}>
+          <PaymentMethodButton name={accountName} isBank={!!bankAccountId} onPress={() => setShowAccountPicker(true)} />
+        </Field>
+        <Field label="Remarks" basis={260}>
+          <TextInput value={note} onChangeText={setNote} placeholder="Optional" placeholderTextColor="#9CA3AF" className={INPUT} />
+        </Field>
+      </FieldRow>
+      {hasItems && (
+        <View style={{ gap: 8 }}>
+          {/* The bill's items, ruled like the printed bill: what the amount above is made of. */}
+          <BillItemsReadOnly tx={tx} />
+          <Pressable onPress={onEditItems} accessibilityRole="button" className="flex-row items-center self-start" style={{ gap: 6 }}>
+            <Ionicons name="create-outline" size={14} color="#1D4ED8" />
+            <Text className="text-[12px] font-semibold text-blue-700">Edit the items</Text>
+          </Pressable>
+        </View>
+      )}
+      <FormActions onCancel={onClose} onSave={handleSave} saving={saving} onRemove={onDelete} />
+      <BankAccountPickerModal
+        visible={showAccountPicker}
+        accounts={bankAccounts.accounts}
+        selectedId={bankAccountId}
+        onSelect={setBankAccountId}
+        onClose={() => setShowAccountPicker(false)}
+        onRename={bankAccounts.rename}
+        onDelete={bankAccounts.remove}
+      />
+    </PopupCard>
+  );
+}
+
+/** A bill's items ruled like the printed bill: what its amount is made of, with the sums under it. */
+function BillItemsReadOnly({ tx }: { tx: BusinessTransaction }) {
+  return (
+    <View className="overflow-hidden rounded-lg border border-gray-300 bg-white">
+      <View className="flex-row bg-gray-50">
+        <BillCell head align="center" width={BILL_COL.sn}>
+          S.N.
+        </BillCell>
+        <BillCell head>Item</BillCell>
+        <BillCell head align="right" width={BILL_COL.qty}>
+          Qty
+        </BillCell>
+        <BillCell head align="right" width={BILL_COL.rate}>
+          Rate
+        </BillCell>
+        <BillCell head ruled={false} align="right" width={BILL_COL.amount}>
+          Amount
+        </BillCell>
+      </View>
+      {tx.items.map((item, idx) => (
+        <View key={idx} className="flex-row border-t border-gray-200">
+          <BillCell align="center" width={BILL_COL.sn} textClass="text-gray-500">
+            {idx + 1}
+          </BillCell>
+          <BillCell textClass="text-gray-900">{item.description}</BillCell>
+          <BillCell align="right" width={BILL_COL.qty}>
+            {item.qty}
+          </BillCell>
+          <BillCell align="right" width={BILL_COL.rate}>
+            {item.rate.toLocaleString()}
+          </BillCell>
+          <BillCell ruled={false} align="right" width={BILL_COL.amount} textClass="font-semibold text-gray-900">
+            {item.amount.toLocaleString()}
+          </BillCell>
+        </View>
+      ))}
+      {(tx.discount_amount > 0 || tx.vat_amount > 0) && (
+        <BillTotal label="Sub-total" value={tx.items.reduce((sum, item) => sum + item.amount, 0).toLocaleString()} />
+      )}
+      {tx.discount_amount > 0 && <BillTotal label="Discount" value={`− ${tx.discount_amount.toLocaleString()}`} />}
+      {tx.vat_amount > 0 && <BillTotal label="VAT" value={`+ ${tx.vat_amount.toLocaleString()}`} />}
+      <BillTotal
+        label="Total (NPR)"
+        value={tx.amount.toLocaleString()}
+        tint={TYPE_META[tx.type].bg}
+        color={TYPE_META[tx.type].color}
+        strong
+      />
+    </View>
+  );
+}
+
+/** One read-only box of a bill's card - what a typed box of BillEditPopup shows, as plain text. */
+function ReadBox({ children, icon }: { children: ReactNode; icon?: keyof typeof Ionicons.glyphMap }) {
+  return (
+    <View className="flex-row items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5" style={{ gap: 8 }}>
+      {!!icon && <Ionicons name={icon} size={16} color="#6B7280" />}
+      <Text className="flex-1 text-sm text-gray-900" numberOfLines={1}>
+        {children}
+      </Text>
+    </View>
+  );
+}
+
+/** A Sale / Purchase laid out like BillEditPopup, but to read - nothing in it is typed. Edit, where
+ * Save would be, goes to the bill's own edit page (the one New is) with the bill loaded. It is the
+ * bill as a document - who, when, how much, what was on it - so it has no payment method: how the
+ * money moved is in the payment entries, not on the bill. */
+function BillViewPopup({
+  tx,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  tx: BusinessTransaction;
+  onClose: () => void;
+  onEdit: () => void;
+  /** Shown as Remove, left of Cancel / Edit, only where the caller can remove the bill. */
+  onDelete?: () => void;
+}) {
+  const [calendarMode] = useCalendarMode();
+  const [dateMain, dateOther] = dateLabels(entryDay(tx.bill_date, tx.created_at), calendarMode);
+  const meta = TYPE_META[tx.type];
+  const tone = tx.type === 'purchase' ? MONEY.out : MONEY.in;
+  return (
+    <PopupCard title={`${meta.label} bill`} onClose={onClose} closeOnOutside>
+      <View className="self-start rounded-lg border px-4 py-2" style={{ borderColor: tone.base, backgroundColor: tone.bg }}>
+        <Text className="text-xs font-bold" style={{ color: tone.text }}>
+          {meta.label}
+        </Text>
+      </View>
+      <FieldRow>
+        <Field label="Person" basis={300}>
+          <ReadBox icon="person-outline">{tidyName(tx.party_name) || '—'}</ReadBox>
+        </Field>
+      </FieldRow>
+      <FieldRow>
+        <Field label="Date" basis={220}>
+          <View className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+            <Text className="text-sm font-bold text-gray-900">{dateMain}</Text>
+            <Text className="text-[11px] text-gray-500">{dateOther}</Text>
+          </View>
+        </Field>
+        <Field label="Time" basis={140}>
+          <ReadBox>{timeOf(tx.created_at)}</ReadBox>
+        </Field>
+      </FieldRow>
+      <FieldRow>
+        <Field label="Bill No." basis={110}>
+          <ReadBox>{tx.bill_no || '—'}</ReadBox>
+        </Field>
+        <Field label="Amount (NPR)" basis={160}>
+          <ReadBox>{tx.amount.toLocaleString()}</ReadBox>
+        </Field>
+        <Field label="Remarks" basis={260}>
+          <ReadBox>{tx.note || '—'}</ReadBox>
+        </Field>
+      </FieldRow>
+      {tx.items.length > 0 && <BillItemsReadOnly tx={tx} />}
+      <FormActions onCancel={onClose} onSave={onEdit} saveLabel="Edit" onRemove={onDelete} />
+    </PopupCard>
+  );
+}
+
+// What opens when a past transaction is tapped. A Sale / Purchase opens straight into its edit popup
+// (BillEditPopup, laid out like a ledger entry's); an Expense is a read-only receipt - you can see
+// what's in it without immediately dropping into an editable form. Edit is an explicit action from
+// there, not the default, and so is Delete (beside it, only where the caller passes `onDelete`).
+// Exported so a customer/vendor's own page (CustomerDetailScreen) can reuse the same one for a
+// linked bill instead of building a second.
+// With `editOnPage` (the Statement, the Day Book, the reports and a person's ledger) a Sale / Purchase
+// opens as a card to read (BillViewPopup) whose Edit button goes to the bill's edit page, rather than
+// as BillEditPopup, which saves in place.
 export function TransactionDetailModal({
   tx,
   categoryName,
@@ -2363,6 +2867,7 @@ export function TransactionDetailModal({
   onClose,
   onEdit,
   onDelete,
+  editOnPage,
 }: {
   tx: BusinessTransaction | null;
   categoryName: string | null;
@@ -2370,8 +2875,19 @@ export function TransactionDetailModal({
   onClose: () => void;
   onEdit: () => void;
   onDelete?: () => void;
+  /** A Sale / Purchase opens to read, with Edit (-> `onEdit`) in place of Save. */
+  editOnPage?: boolean;
 }) {
   if (!tx) return null;
+  // A Sale / Purchase opens straight into its edit popup (see BillEditPopup), laid out like a ledger
+  // entry's - there is no read-only sheet in front of it. The full form, with the items, is one step
+  // on from there. An Expense keeps the sheet.
+  if (tx.type !== 'expense') {
+    if (editOnPage) {
+      return <BillViewPopup key={tx.id} tx={tx} onClose={onClose} onEdit={onEdit} onDelete={onDelete} />;
+    }
+    return <BillEditPopup key={tx.id} tx={tx} onClose={onClose} onEditItems={onEdit} onDelete={onDelete} />;
+  }
   const meta = TYPE_META[tx.type];
   const accountLabel = tx.bank_account_id ? bankAccountName ?? 'Bank' : 'Cash';
   const isBill = tx.type !== 'expense';
@@ -2394,8 +2910,8 @@ export function TransactionDetailModal({
               <View className={`flex-row items-center justify-between px-3 py-2.5 ${meta.bg}`}>
                 <View className="flex-row items-center gap-2">
                   <Ionicons name={meta.icon} size={16} color={meta.color} />
-                  <Text className="text-sm font-extrabold uppercase tracking-wide" style={{ color: meta.color }}>
-                    {isBill ? `${meta.label} bill` : meta.label}
+                  <Text className="text-sm font-extrabold capitalize tracking-wide" style={{ color: meta.color }}>
+                    {isBill ? `${meta.label} bill` : 'Expenses'}
                   </Text>
                 </View>
                 <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
@@ -2422,8 +2938,8 @@ export function TransactionDetailModal({
               )}
 
               {!!tx.party_name && (
-                <BillLine label={tx.type === 'purchase' ? 'Vendor' : tx.type === 'expense' ? 'Paid to' : 'Party'}>
-                  <Text className="text-sm font-bold text-gray-900">{tx.party_name}</Text>
+                <BillLine label="Paid to">
+                  <Text className="text-sm font-bold text-gray-900">{tidyName(tx.party_name)}</Text>
                 </BillLine>
               )}
               {!!tx.party_address && (
@@ -2554,6 +3070,7 @@ function dayLabel(dateStr: string): string {
 }
 
 function LedgerRow({ item, customerName, basePath }: { item: CustomerLedgerEntry; customerName: string | null; basePath?: string }) {
+  useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const isDebit = item.entry_type === 'debit';
   // Money we gave the customer (Payment Out) is red; money they paid, or that is still receivable, is green.
   const isOut = isDebit && item.source === 'manual';
@@ -2567,7 +3084,7 @@ function LedgerRow({ item, customerName, basePath }: { item: CustomerLedgerEntry
       </View>
       <View className="flex-1">
         <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
-          {!isDebit ? 'Received' : isOut ? 'Payment Out' : 'Receivable'} · {customerName ?? 'Unknown customer'}
+          {!isDebit ? 'Received' : isOut ? 'Paid' : 'Receivable'} · {customerName ?? 'Unknown customer'}
         </Text>
         <Text className="text-xs text-gray-400" numberOfLines={1}>
           {item.note ?? (item.source === 'booking' ? 'From a booked job' : 'Manual entry')} ·{' '}
@@ -2582,6 +3099,7 @@ function LedgerRow({ item, customerName, basePath }: { item: CustomerLedgerEntry
 }
 
 function VendorFeedRow({ item, vendorName, basePath }: { item: VendorLedgerEntry; vendorName: string | null; basePath?: string }) {
+  useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const isDebit = item.entry_type === 'debit';
   return (
     <Pressable
@@ -2593,7 +3111,7 @@ function VendorFeedRow({ item, vendorName, basePath }: { item: VendorLedgerEntry
       </View>
       <View className="flex-1">
         <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
-          {isDebit ? 'Bought on credit' : 'Payment Out'} · {vendorName ?? 'Unknown vendor'}
+          {isDebit ? 'Bought on credit' : 'Paid'} · {vendorName ?? 'Unknown vendor'}
         </Text>
         <Text className="text-xs text-gray-400" numberOfLines={1}>
           {item.note ?? (item.source === 'booking' ? 'From a credit purchase' : 'Manual entry')} ·{' '}
@@ -2620,6 +3138,7 @@ function TransferFeedRow({
   accountName: (id: string | null) => string;
   onDelete: () => void;
 }) {
+  useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   return (
     <Pressable
       onPress={() =>
@@ -2772,6 +3291,14 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
   const editLinkTx = editParam && editRow && editRow.id === editParam ? editRow : null;
   const editingTx = editLinkTx ?? editingTxState;
   const showForm = showFormState || !!editLinkTx;
+  // A bill entered as the wrong kind (a Sale that was really a Purchase) can be switched while it
+  // is being edited; the bill's own ledger entry follows when it is saved.
+  const [typeOverride, setTypeOverride] = useState<{ id: string; type: BusinessTransactionType } | null>(null);
+  const editType: BusinessTransactionType | undefined = editingTx
+    ? typeOverride && typeOverride.id === editingTx.id && editingTx.type !== 'expense'
+      ? typeOverride.type
+      : editingTx.type
+    : undefined;
   const [viewingTx, setViewingTx] = useState<BusinessTransaction | null>(null);
   // The form renders inside the list's own header, so opening it while
   // scrolled down through history (which is exactly when someone taps Edit
@@ -2940,7 +3467,7 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
     const label = TYPE_META[tx.type].label.toLowerCase();
     showAlert(
       `Delete this ${label}?`,
-      `${tx.party_name || 'Unnamed'} · NPR ${tx.amount.toLocaleString()}${tx.customer_id ? '. It is also taken off their ledger.' : ''}`,
+      `${tidyName(tx.party_name) || 'Unnamed'} · NPR ${tx.amount.toLocaleString()}${tx.customer_id ? '. It is also taken off their ledger.' : ''}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -2997,6 +3524,7 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
             setViewingTx(null);
             editBill(viewingTx);
           }}
+          editOnPage
           onDelete={viewingTx ? () => handleDeleteFromReceipt(viewingTx) : undefined}
         />
       </>
@@ -3034,7 +3562,7 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
                   >
                     <Ionicons name="chevron-back" size={20} color="#374151" />
                   </Pressable>
-                  <Text className="text-base font-bold text-gray-900">{TYPE_META[initialFilter].label}</Text>
+                  <Text className="text-base font-bold text-gray-900">{initialFilter === 'expense' ? 'Expenses' : TYPE_META[initialFilter].label}</Text>
                 </View>
               ) : (
                 <View className="flex-row gap-2">
@@ -3055,15 +3583,30 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
                 </View>
               )}
               {!isLockedToType && (
-                <Pressable
-                  onPress={() => {
-                    setEditingTx(null);
-                    setShowForm((v) => !v);
-                  }}
-                  className="h-10 w-10 items-center justify-center rounded-2xl bg-orange-500"
-                >
-                  <Ionicons name={showForm ? 'close' : 'add'} size={20} color="white" />
-                </Pressable>
+                <View className="flex-row items-center" style={{ gap: 8 }}>
+                  {/* Import (a bank / wallet statement file) - it used to be its own menu page. */}
+                  {!!basePath && (
+                    <Pressable
+                      onPress={() => router.push(`${basePath}/import-statement` as any)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Import a statement"
+                      className="h-10 flex-row items-center justify-center rounded-2xl border border-gray-300 bg-white px-3"
+                      style={{ gap: 6 }}
+                    >
+                      <Ionicons name="cloud-upload-outline" size={17} color="#1D4ED8" />
+                      <Text className="text-[13px] font-semibold text-gray-700">Import</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={() => {
+                      setEditingTx(null);
+                      setShowForm((v) => !v);
+                    }}
+                    className="h-10 w-10 items-center justify-center rounded-2xl bg-orange-500"
+                  >
+                    <Ionicons name={showForm ? 'close' : 'add'} size={20} color="white" />
+                  </Pressable>
+                </View>
               )}
             </View>
             )}
@@ -3072,12 +3615,34 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
               <TrendChartCard key={filter} transactions={transactions ?? []} metrics={[filter]} />
             )}
 
+            {showForm && userId && editingTx && editingTx.type !== 'expense' && (
+              <View className="mb-3 flex-row items-center rounded-xl border border-gray-200 bg-white px-3 py-2" style={{ gap: 8 }}>
+                <Text className="text-xs font-semibold text-gray-500">Entered as</Text>
+                {(['sale', 'purchase'] as const).map((k) => {
+                  const on = editType === k;
+                  return (
+                    <Pressable
+                      key={k}
+                      onPress={() => setTypeOverride({ id: editingTx.id, type: k })}
+                      className="rounded-lg border px-3 py-1.5"
+                      style={{ borderColor: on ? TYPE_META[k].color : '#D1D5DB', backgroundColor: on ? TYPE_META[k].bg : '#FFFFFF' }}
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text className="text-[13px] font-semibold" style={{ color: on ? TYPE_META[k].color : '#6B7280' }}>
+                        {TYPE_META[k].label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
             {showForm && userId && (
               <TransactionForm
                 key={`${editingTx?.id ?? (filter === 'all' ? 'sale' : filter)}-${formKey}`}
                 userId={userId}
                 initial={editingTx ?? undefined}
-                type={editingTx?.type ?? (filter === 'all' ? 'sale' : filter)}
+                type={editType ?? (filter === 'all' ? 'sale' : filter)}
                 existingNames={existingExpenseNames}
                 customers={customers ?? []}
                 products={products ?? []}
@@ -3126,7 +3691,7 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
           </>
         }
         renderSectionHeader={({ section }) => (
-          <Text className="mb-2 mt-3 text-xs font-bold uppercase tracking-wide text-gray-400">{section.title}</Text>
+          <Text className="mb-2 mt-3 text-xs font-bold capitalize tracking-wide text-gray-400">{section.title}</Text>
         )}
         renderItem={({ item }) =>
           item.kind === 'business' ? (
@@ -3174,6 +3739,7 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
           setViewingTx(null);
           editBill(viewingTx);
         }}
+        editOnPage
         onDelete={viewingTx ? () => handleDeleteFromReceipt(viewingTx) : undefined}
       />
     </View>

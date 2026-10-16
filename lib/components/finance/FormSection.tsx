@@ -27,7 +27,7 @@ export function FormSection({
     <View className={first ? 'mb-4' : tight ? '-mt-2 mb-4' : 'mb-4 mt-1 border-t border-gray-100 pt-4'}>
       <View className="mb-3 flex-row items-center gap-1.5">
         <Ionicons name={icon} size={13} color="#9CA3AF" />
-        <Text className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{title}</Text>
+        <Text className="text-[11px] font-bold capitalize tracking-wide text-gray-400">{title}</Text>
       </View>
       {children}
     </View>

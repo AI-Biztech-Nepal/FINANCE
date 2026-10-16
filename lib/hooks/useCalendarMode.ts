@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { toAdLabel, toBsLabel } from '../utils/nepaliDate';
+import { setLabelCalendarMode, toAdLabel, toBsLabel } from '../utils/nepaliDate';
 
 export type CalendarMode = 'bs' | 'ad';
 
@@ -25,6 +25,11 @@ export const useCalendarModeStore = create<CalendarModeState>()(
   )
 );
 
+// The date labels that are plain functions (not hooks) read the choice from nepaliDate: keep it in
+// step with the store - now, when it has been loaded from storage, and whenever it is changed.
+setLabelCalendarMode(useCalendarModeStore.getState().mode);
+useCalendarModeStore.subscribe((state) => setLabelCalendarMode(state.mode));
+
 export function useCalendarMode(): [CalendarMode, (mode: CalendarMode) => void] {
   const mode = useCalendarModeStore((state) => state.mode);
   const setMode = useCalendarModeStore((state) => state.setMode);
@@ -32,8 +37,8 @@ export function useCalendarMode(): [CalendarMode, (mode: CalendarMode) => void] 
 }
 
 /** Main and secondary label for an AD 'YYYY-MM-DD' in the chosen calendar,
- * e.g. BS -> ["Bhadra 14, 2083 BS", "Sun, Aug 30, 2026"],
- *      AD -> ["Sun, Aug 30, 2026", "Bhadra 14, 2083 BS"]. */
+ * e.g. BS -> ["Bhadra 14, 2083", "Sun, Aug 30, 2026"],
+ *      AD -> ["Sun, Aug 30, 2026", "Bhadra 14, 2083"]. */
 export function dateLabels(value: string, mode: CalendarMode): [string, string] {
   const bs = toBsLabel(value);
   const ad = toAdLabel(value);

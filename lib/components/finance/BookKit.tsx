@@ -207,7 +207,7 @@ export function BookStat({
       className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5"
       style={{ flexGrow: 1, flexBasis: 140 }}
     >
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</Text>
+      <Text className="text-[11px] font-semibold capitalize tracking-wide text-gray-400">{label}</Text>
       <Text className="mt-0.5 text-[16px] font-extrabold" style={{ color }}>
         {value}
       </Text>
@@ -245,29 +245,45 @@ export function BookTable<T>({
   rows,
   rowKey,
   onRowPress,
+  rowPressable,
   groupOf,
   highlight,
   expanded,
   footer,
+  stickyHeader,
+  bare,
+  hideHeader,
 }: {
   columns: BookColumn<T>[];
   rows: T[];
   rowKey: (row: T) => string;
   onRowPress?: (row: T) => void;
+  /** Return false for a row that should not respond to `onRowPress` (it then has no tap/hover affordance). */
+  rowPressable?: (row: T) => boolean;
   groupOf?: (row: T) => string;
   /** Rows to tint, e.g. the one currently open for editing. */
   highlight?: (row: T) => boolean;
   /** Content shown directly under a row, e.g. its edit form; return null for a row with none. */
   expanded?: (row: T) => ReactNode;
   footer?: { label: string; cells: Record<string, ReactNode> };
+  /** Keep the header row pinned to the top of the page's scroll area (web only). */
+  stickyHeader?: boolean;
+  /** No border or rounded corners of its own - for a table that sits inside a card that has them. */
+  bare?: boolean;
+  /** No column-title row - for a table whose titles are shown by the header above it. */
+  hideHeader?: boolean;
 }) {
+  const sticky = stickyHeader && Platform.OS === 'web';
   const cellStyle = (c: BookColumn<T>) => (c.width ? { width: c.width } : { flex: 1, minWidth: 0 });
   const lastIndex = columns.length - 1;
   const footerStart = footer ? columns.findIndex((c) => c.key in footer.cells) : -1;
 
   return (
-    <View className="overflow-hidden rounded-xl border border-gray-300 bg-white">
-      <View className="flex-row border-b border-gray-300 bg-gray-50">
+    <View className={`bg-white ${bare ? '' : 'rounded-xl border border-gray-300'} ${sticky ? '' : 'overflow-hidden'}`}>
+      {!hideHeader && <View
+        className={`flex-row border-b border-gray-300 bg-gray-50 ${sticky ? 'rounded-t-xl' : ''}`}
+        style={sticky ? ({ position: 'sticky', top: 0, zIndex: 10 } as any) : undefined}
+      >
         {columns.map((c, i) => (
           <Text
             key={c.key}
@@ -277,7 +293,7 @@ export function BookTable<T>({
             {c.label}
           </Text>
         ))}
-      </View>
+      </View>}
 
       {rows.map((row, index) => {
         const group = groupOf?.(row);
@@ -286,12 +302,12 @@ export function BookTable<T>({
           <View key={rowKey(row)}>
             {showGroup && (
               <View className="border-b border-gray-200 bg-gray-50 px-2.5 py-1.5">
-                <Text className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{group}</Text>
+                <Text className="text-[11px] font-bold capitalize tracking-wide text-gray-500">{group}</Text>
               </View>
             )}
             <Pressable
               onPress={onRowPress ? () => onRowPress(row) : undefined}
-              disabled={!onRowPress}
+              disabled={!onRowPress || rowPressable?.(row) === false}
               className="flex-row border-b border-gray-200"
               style={highlight?.(row) ? { backgroundColor: '#EFF6FF' } : undefined}
             >
@@ -311,7 +327,7 @@ export function BookTable<T>({
       })}
 
       {footer && footerStart >= 0 && (
-        <View className="flex-row bg-gray-50">
+        <View className={`flex-row bg-gray-50 ${sticky ? 'rounded-b-xl' : ''}`}>
           <Text className={`${CELL} flex-1 text-right text-[12.5px] font-bold text-gray-700`}>{footer.label}</Text>
           {columns.slice(footerStart).map((c, i, arr) => (
             <View

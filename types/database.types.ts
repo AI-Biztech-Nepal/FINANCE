@@ -152,6 +152,8 @@ export interface ExpenseCategory {
   id: string;
   owner_id: string;
   name: string;
+  /** 'direct' costs sit above gross profit in the Profit & Loss; 'indirect' (the default) below it. */
+  expense_group?: 'direct' | 'indirect' | null;
   created_at: string;
   updated_at: string;
 }
@@ -185,6 +187,10 @@ export interface BusinessTransaction {
   items: BillItem[];
   discount_amount: number;
   vat_amount: number;
+  /** A Sale's service charges (installation, repair ...): direct income on top of the items; the total. */
+  installation_charge?: number;
+  /** The service lines behind it: [{ name, amount }]. */
+  service_charges?: { name: string; amount: number }[];
   expense_category_id: string | null;
   payment_mode: PaymentMode;
   bank_account_id: string | null;

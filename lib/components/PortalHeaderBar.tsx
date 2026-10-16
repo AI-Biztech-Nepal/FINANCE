@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../hooks/useAuth';
+import { CalendarToggle } from './CalendarToggle';
 
 function initialsOf(name: string | null | undefined) {
   if (!name) return '?';
@@ -62,6 +63,8 @@ export function PortalHeaderBar({
       <Text className="flex-1 text-xl font-bold text-gray-900" numberOfLines={1}>
         {title ?? ''}
       </Text>
+      {/* On every page: dates in English (AD) or Nepali (BS). */}
+      <CalendarToggle />
       {!!right && (
         <View className="flex-row items-center" style={{ gap: 8 }}>
           {right}

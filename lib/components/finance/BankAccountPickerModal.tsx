@@ -5,11 +5,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import type { BankAccount } from '../../../types/database.types';
 import type { AvailableAmounts } from '../../hooks/useAvailableAmounts';
+import { useAccountBalances } from '../../hooks/useAccountBalances';
 
 /** The money available in an account, shown at the right of its row. */
 function Available({ amount }: { amount: number | undefined }) {
   if (amount === undefined) return null;
-  return <Text className="text-xs font-bold text-gray-700">NPR {amount.toLocaleString()}</Text>;
+  return (
+    <Text className="text-xs font-bold" style={{ color: amount < 0 ? '#DC2626' : '#374151' }}>
+      NPR {amount.toLocaleString()}
+    </Text>
+  );
 }
 
 // null selectedId/onSelect(null) means "Cash" - the one payment account that
@@ -26,6 +31,7 @@ export function BankAccountPickerModal({
   onRename,
   onDelete,
   available,
+  totalAmount,
 }: {
   visible: boolean;
   accounts: BankAccount[];
@@ -34,12 +40,24 @@ export function BankAccountPickerModal({
   onClose: () => void;
   onRename: (id: string, name: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  /** When given, each choice shows how much money is in it. */
+  /** How much money is in each choice. Left out, the list works it out from the books itself, so every
+   * list of accounts shows what each holds; a form passes its own only to show something else (the
+   * spendable figure, never below zero). */
   available?: AvailableAmounts | null;
+  /** The bank and wallet accounts together, shown above the choices. Cash is not in it, and has no
+   * amount of its own: the books do not track cash in hand. */
+  totalAmount?: number;
 }) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Read only while the list is open (nothing is fetched for a closed one). Cash has no amount - cash in
+  // hand is not tracked - and "All accounts" is the bank and wallet accounts together.
+  const books = useAccountBalances(visible && !available ? accounts[0]?.owner_id : undefined);
+  const amounts: AvailableAmounts | null =
+    available ?? (books.ready ? { byId: Object.fromEntries(books.perAccount.map((a) => [a.id, Math.round(a.balance)])) } : null);
+  const total = totalAmount ?? (amounts ? Object.values(amounts.byId).reduce((sum, n) => sum + n, 0) : undefined);
 
   async function handleRename(id: string) {
     if (!renameValue.trim()) return;
@@ -65,6 +83,16 @@ export function BankAccountPickerModal({
               <Text className="text-sm font-semibold text-blue-700">Close</Text>
             </Pressable>
           </View>
+
+          {total !== undefined && accounts.length > 0 && (
+            <View className="mb-2 flex-row items-center gap-2 rounded-lg bg-blue-50 px-2.5 py-2">
+              <Ionicons name="wallet-outline" size={16} color="#1D4ED8" />
+              <Text className="flex-1 text-sm font-semibold text-blue-800">All accounts · without cash</Text>
+              <Text className="text-xs font-bold" style={{ color: total < 0 ? '#DC2626' : '#047857' }}>
+                NPR {total.toLocaleString()}
+              </Text>
+            </View>
+          )}
 
           <ScrollView>
             <Pressable
@@ -115,7 +143,7 @@ export function BankAccountPickerModal({
                         <Text className="flex-1 text-sm font-medium text-gray-900" numberOfLines={1}>
                           {acc.name}
                         </Text>
-                        <Available amount={available?.byId[acc.id]} />
+                        <Available amount={amounts?.byId[acc.id]} />
                       </Pressable>
                       <Pressable
                         onPress={() => {

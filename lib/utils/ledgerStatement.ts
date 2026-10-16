@@ -33,6 +33,8 @@ export interface LedgerItem {
   /** 'YYYY-MM-DD': the entry's own date, else the day it was entered. */
   day: string;
   createdAt: string;
+  /** The remark written on it, when there is one. */
+  note?: string | null;
 }
 
 /** Both ends optional: '' means no limit on that side. 'YYYY-MM-DD'. */

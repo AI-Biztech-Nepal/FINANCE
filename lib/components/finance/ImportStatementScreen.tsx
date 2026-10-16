@@ -13,8 +13,8 @@ import { DEBIT_TYPES, CREDIT_TYPES, type StatementAction } from '../../utils/par
 import type { Customer } from '../../../types/database.types';
 
 const TYPE_META: Record<StatementAction, { label: string; color: string; bg: string }> = {
-  payment_out: { label: 'Payment Out', color: '#DC2626', bg: '#FEF2F2' },
-  expense: { label: 'Expense', color: '#DC2626', bg: '#FEF2F2' },
+  payment_out: { label: 'Paid', color: '#DC2626', bg: '#FEF2F2' },
+  expense: { label: 'Expenses', color: '#DC2626', bg: '#FEF2F2' },
   withdraw: { label: 'Withdraw', color: '#4B5563', bg: '#F3F4F6' },
   payment_in: { label: 'Received', color: '#059669', bg: '#ECFDF5' },
   deposit: { label: 'Deposit', color: '#059669', bg: '#ECFDF5' },
@@ -79,7 +79,7 @@ export function ImportStatementScreen() {
       (r) => r.selected && (r.type === 'payment_in' || r.type === 'payment_out') && !r.party.trim()
     );
     if (missingParty) {
-      showAlert('Add a name', 'Every checked Received / Payment Out row needs a customer or vendor name before it can be imported.');
+      showAlert('Add a name', 'Every checked Received / Paid row needs a customer or vendor name before it can be imported.');
       return;
     }
     const { imported, failed } = await importSelected(rows, customers ?? []);

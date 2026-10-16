@@ -1,6 +1,6 @@
 // lib/components/finance/SuggestInput.tsx
 import { useState, type ReactNode } from 'react';
-import { Pressable, Text, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { readKey } from '../../utils/webKeys';
 
@@ -36,6 +36,8 @@ interface Props {
   adornmentWidth?: number;
   /** One text size down in the suggestion list (the box's own size comes from `inputClassName`). */
   compact?: boolean;
+  /** Show the list as soon as the box is focused, even before anything is typed (a pick-from-all box). */
+  showWhenEmpty?: boolean;
 }
 
 /** A text box with a typeahead list that is fully driven from the keyboard:
@@ -60,11 +62,12 @@ export function SuggestInput({
   adornment,
   adornmentWidth = 0,
   compact,
+  showWhenEmpty,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(-1);
 
-  const visible = open && value.trim().length > 0 && options.length > 0;
+  const visible = open && (showWhenEmpty || value.trim().length > 0) && options.length > 0;
   const activeIndex = Math.min(index, options.length - 1);
 
   function choose(option: SuggestOption, via: PickVia) {
@@ -157,33 +160,35 @@ export function SuggestInput({
             boxShadow: '0 10px 28px rgba(16,24,40,0.14)',
           }}
         >
-          {options.map((o, i) => (
-            <Pressable
-              key={o.key}
-              tabIndex={-1}
-              onPress={() => choose(o, 'click')}
-              className={`flex-row items-center justify-between px-3 py-2 ${o.kind === 'add' && i > 0 ? 'mt-1 border-t border-gray-100' : ''}`}
-              style={{ backgroundColor: i === activeIndex ? `${accent}14` : 'transparent' }}
-            >
-              {o.kind === 'add' ? (
-                <>
-                  <Ionicons name="add-circle" size={16} color={accent} />
-                  <Text
-                    className={`ml-2 flex-1 font-semibold ${compact ? 'text-xs' : 'text-sm'}`}
-                    style={{ color: accent }}
-                    numberOfLines={1}
-                  >
+          <ScrollView style={{ maxHeight: 280 }} keyboardShouldPersistTaps="handled">
+            {options.map((o, i) => (
+              <Pressable
+                key={o.key}
+                tabIndex={-1}
+                onPress={() => choose(o, 'click')}
+                className={`flex-row items-center justify-between px-3 py-2 ${o.kind === 'add' && i > 0 ? 'mt-1 border-t border-gray-100' : ''}`}
+                style={{ backgroundColor: i === activeIndex ? `${accent}14` : 'transparent' }}
+              >
+                {o.kind === 'add' ? (
+                  <>
+                    <Ionicons name="add-circle" size={16} color={accent} />
+                    <Text
+                      className={`ml-2 flex-1 font-semibold ${compact ? 'text-xs' : 'text-sm'}`}
+                      style={{ color: accent }}
+                      numberOfLines={1}
+                    >
+                      {o.label}
+                    </Text>
+                  </>
+                ) : (
+                  <Text className={`flex-1 text-gray-900 ${compact ? 'text-xs' : 'text-sm'}`} numberOfLines={1}>
                     {o.label}
                   </Text>
-                </>
-              ) : (
-                <Text className={`flex-1 text-gray-900 ${compact ? 'text-xs' : 'text-sm'}`} numberOfLines={1}>
-                  {o.label}
-                </Text>
-              )}
-              {!!o.hint && <Text className={`ml-2 text-gray-400 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{o.hint}</Text>}
-            </Pressable>
-          ))}
+                )}
+                {!!o.hint && <Text className={`ml-2 text-gray-400 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{o.hint}</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>

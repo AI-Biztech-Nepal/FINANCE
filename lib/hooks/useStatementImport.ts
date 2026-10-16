@@ -7,6 +7,7 @@ import { File } from 'expo-file-system';
 import { supabase } from '../supabase';
 import { parseStatementWorkbook, type ParsedStatementRow, type StatementAction } from '../utils/parseStatement';
 import { showAlert, getErrorMessage } from '../utils/alert';
+import { tidyName } from '../utils/nameCaps';
 import type { Customer } from '../../types/database.types';
 
 export interface ReviewRow extends Omit<ParsedStatementRow, 'suggestedType' | 'suggestedParty'> {
@@ -106,7 +107,7 @@ export function useStatementImport(ownerId: string | undefined) {
       const cached = customerCache.get(key);
       if (cached) return cached;
       const { data, error } = await (supabase.from('customers') as any)
-        .insert({ owner_id: ownerId, name: name.trim(), phone: null })
+        .insert({ owner_id: ownerId, name: tidyName(name.trim()), phone: null })
         .select()
         .single();
       if (error) throw error;
@@ -123,7 +124,7 @@ export function useStatementImport(ownerId: string | undefined) {
             type: 'expense',
             amount,
             note: row.description,
-            party_name: row.party.trim() || null,
+            party_name: tidyName(row.party.trim()) || null,
             bill_date: row.date,
             expense_category_id: row.expenseCategoryId,
           });

@@ -10,9 +10,12 @@ import { useAccountBalances, type AccountActivityItem } from '../../hooks/useAcc
 import { BankAccountPickerModal } from './BankAccountPickerModal';
 import { DateField } from '../DateTimeFields';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
+import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { ToolbarButton, useBarActions, useBookLayout } from './BookKit';
 import { localTodayIso } from '../../utils/localDate';
+import { useReportActions } from './PrintButton';
+import type { PrintReport, PrintSection } from '../../utils/printReport';
 
 // Local date, not UTC - see localTodayIso.
 const todayIso = localTodayIso;
@@ -31,6 +34,7 @@ function ActivityRow({
   basePath: string;
   onDeleteTransfer: (id: string) => void;
 }) {
+  useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   return (
     <Pressable
       onPress={() => {
@@ -72,8 +76,9 @@ function ActivityRow({
 /** Move money between the business's own accounts (e.g. withdrawing cash
  * from a bank, or moving Esewa funds into a bank account) - not a Sale,
  * Purchase, Expense, or party payment, so it gets its own small form
- * instead of overloading one of those. */
-function TransferForm({ userId, onDone }: { userId: string; onDone: () => void }) {
+ * instead of overloading one of those. `bare` is for a form that is already in a card of its own
+ * (the Day Book's Contra popup): no border and no title of its own. */
+export function TransferForm({ userId, onDone, bare = false }: { userId: string; onDone: () => void; bare?: boolean }) {
   const { accounts, rename, remove } = useBankAccounts(userId);
   const insertTransfer = useSupabaseInsert('account_transfers');
   const [fromAccountId, setFromAccountId] = useState<string | null>(null);
@@ -115,8 +120,26 @@ function TransferForm({ userId, onDone }: { userId: string; onDone: () => void }
   }
 
   return (
-    <View className="mb-4 rounded-2xl border border-gray-200 bg-white p-4">
-      <Text className="mb-3 text-sm font-semibold text-gray-900">Transfer money</Text>
+    <View className={bare ? '' : 'mb-4 rounded-2xl border border-gray-200 bg-white p-4'}>
+      {!bare && <Text className="mb-3 text-sm font-semibold text-gray-900">Transfer money</Text>}
+
+      <View className="mb-2.5 flex-row" style={{ gap: 10 }}>
+        <View style={{ flex: 1.3, minWidth: 0 }}>
+          <Text className="mb-1 text-xs font-medium text-gray-500">Date</Text>
+          <DateField value={date} onChange={setDate} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text className="mb-1 text-xs font-medium text-gray-500">Amount (NPR)</Text>
+          <TextInput
+            value={amount}
+            onChangeText={setAmount}
+            placeholder="e.g. 5000"
+            placeholderTextColor="#9CA3AF"
+            keyboardType="numeric"
+            className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900"
+          />
+        </View>
+      </View>
 
       <Text className="mb-1 text-xs font-medium text-gray-500">From</Text>
       <Pressable
@@ -135,21 +158,6 @@ function TransferForm({ userId, onDone }: { userId: string; onDone: () => void }
         <Text className="text-sm text-gray-900">{nameFor(toAccountId)}</Text>
         <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
       </Pressable>
-
-      <Text className="mb-1 text-xs font-medium text-gray-500">Amount (NPR)</Text>
-      <TextInput
-        value={amount}
-        onChangeText={setAmount}
-        placeholder="e.g. 5000"
-        placeholderTextColor="#9CA3AF"
-        keyboardType="numeric"
-        className="mb-2.5 rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900"
-      />
-
-      <Text className="mb-1 text-xs font-medium text-gray-500">Date</Text>
-      <View className="mb-2.5">
-        <DateField value={date} onChange={setDate} />
-      </View>
 
       <Text className="mb-1 text-xs font-medium text-gray-500">Remarks (optional)</Text>
       <TextInput
@@ -190,6 +198,7 @@ function TransferForm({ userId, onDone }: { userId: string; onDone: () => void }
 export function BankBalancesScreen({ basePath }: { basePath: string }) {
   const layout = useBookLayout();
   const userId = useAuthStore((state) => state.session?.user.id);
+  const profile = useAuthStore((state) => state.profile);
   const balances = useAccountBalances(userId);
   const deleteTransfer = useSupabaseDelete('account_transfers');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -204,11 +213,57 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
     });
   }
 
-  // The name, the back button (phones) and Transfer live in the top bar.
+  // Print and Excel: what each account holds, and - for the one opened - what makes up its balance.
+  const reportButtons = useReportActions((): PrintReport => {
+    const activityOf = (name: string, items: AccountActivityItem[]): PrintSection => ({
+      heading: `${name} - activity`,
+      columns: [{ label: 'Date' }, { label: 'Details' }, { label: 'Amount (NPR)', align: 'right' }],
+      rows: items.map((item) => [
+        toBsHistoryLabel(item.date),
+        [item.label, item.sub].filter(Boolean).join(' · '),
+        `${item.isInflow ? '+' : '-'}${item.amount.toLocaleString()}`,
+      ]),
+      emptyText: 'No activity yet.',
+    });
+    const opened =
+      expandedKey === 'cash'
+        ? activityOf('Cash', balances.cashActivity)
+        : balances.perAccount.filter((a) => a.id === expandedKey).map((a) => activityOf(a.name, a.activity))[0];
+    return {
+      title: 'Bank Balances',
+      businessName: profile?.business_name ?? profile?.full_name ?? '',
+      printedOn: toBsHistoryLabel(localTodayIso()),
+      summary: [
+        { label: 'Available balance (Cash + Banks)', value: `NPR ${balances.total.toLocaleString()}` },
+        { label: 'Bank total', value: `NPR ${bankTotal.toLocaleString()}` },
+        { label: 'Cash', value: `NPR ${balances.cash.toLocaleString()}` },
+      ],
+      sections: [
+        {
+          columns: [{ label: 'SN' }, { label: 'Account' }, { label: 'Balance (NPR)', align: 'right' }],
+          rows: [
+            ['1', 'Cash', balances.cash.toLocaleString()],
+            ...balances.perAccount.map((a, i) => [String(i + 2), a.name, a.balance.toLocaleString()]),
+          ],
+          footer: ['', 'Total', balances.total.toLocaleString()],
+        },
+        ...(opened ? [opened] : []),
+      ],
+    };
+  });
+
+  // The name, the back button (phones), Print / Excel and Transfer live in the top bar.
   useBarActions(
     {
       wide: layout.wide,
-      right: !showTransfer && userId ? () => <ToolbarButton icon="swap-horizontal" label="Transfer" onPress={() => setShowTransfer(true)} /> : undefined,
+      right: userId
+        ? () => (
+            <>
+              {reportButtons}
+              {!showTransfer && <ToolbarButton icon="swap-horizontal" label="Transfer" onPress={() => setShowTransfer(true)} />}
+            </>
+          )
+        : undefined,
     },
     [showTransfer, userId]
   );

@@ -1,6 +1,6 @@
 // lib/components/AppAlertHost.tsx
 import { useEffect, useRef } from 'react';
-import { View, Text, Pressable, Platform, useWindowDimensions, PanResponder, Animated } from 'react-native';
+import { View, Text, Pressable, Platform, Modal, useWindowDimensions, PanResponder, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAlertStore, type AlertButton } from '../utils/alert';
 
@@ -15,6 +15,10 @@ const SWIPE_DISMISS_VELOCITY = 0.5;
 // mobile), instead of a full-screen OS dialog or browser alert/confirm.
 // It never blocks the rest of the screen, clears itself on its own after
 // a timeout, and can be swiped away early.
+//
+// A message that asks a question (more than one button: Cancel / Delete, Cancel / Change ...) is not a
+// toast: it is a dialog in the middle of the screen, above whatever popup is open, that waits for an
+// answer. A toast in the corner sat behind an open popup's dimmed overlay, where it could not be pressed.
 export function AppAlertHost() {
   const queue = useAlertStore((state) => state.queue);
   const dismissCurrent = useAlertStore((state) => state.dismissCurrent);
@@ -37,7 +41,8 @@ export function AppAlertHost() {
   }, [current?.id, pan]);
 
   useEffect(() => {
-    if (!current) return;
+    // A question waits for its answer; only a lone acknowledgement clears itself.
+    if (!current || current.buttons.length > 1) return;
     const timer = setTimeout(() => {
       // Treat an unattended timeout like a cancel, not silence, so callers
       // awaiting a button choice (e.g. login.tsx's offerBiometricSignIn)
@@ -85,6 +90,46 @@ export function AppAlertHost() {
   function handlePress(button: AlertButton) {
     dismissCurrent();
     button.onPress?.();
+  }
+
+  if (isMultiButton) {
+    // Esc, the back button and a click outside are a Cancel.
+    const cancel = () => {
+      const cancelButton = current.buttons.find((button) => button.style === 'cancel');
+      dismissCurrent();
+      cancelButton?.onPress?.();
+    };
+    return (
+      <Modal visible transparent animationType="fade" onRequestClose={cancel}>
+        <Pressable className="flex-1 items-center justify-center bg-black/40 px-5" onPress={cancel}>
+          <Pressable
+            onPress={() => {}}
+            className="w-full rounded-2xl bg-white p-5"
+            style={{ maxWidth: 420, boxShadow: '0 20px 48px rgba(16,24,40,0.28)' }}
+          >
+            <Text className="text-base font-bold text-gray-900">{current.title}</Text>
+            {current.message ? <Text className="mt-1.5 text-sm leading-5 text-gray-600">{current.message}</Text> : null}
+            <View className="mt-5 flex-row flex-wrap justify-end" style={{ gap: 8 }}>
+              {current.buttons.map((button, index) => {
+                const isCancel = button.style === 'cancel';
+                const isDestructive = button.style === 'destructive';
+                return (
+                  <Pressable
+                    key={index}
+                    onPress={() => handlePress(button)}
+                    className={`min-w-[88px] items-center rounded-xl px-4 py-2.5 ${
+                      isCancel ? 'border border-gray-300 bg-white' : isDestructive ? 'bg-red-600' : 'bg-orange-600'
+                    }`}
+                  >
+                    <Text className={`text-sm font-bold ${isCancel ? 'text-gray-600' : 'text-white'}`}>{button.text}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
   }
 
   return (

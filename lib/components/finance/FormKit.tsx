@@ -40,7 +40,7 @@ export function FormCard({ icon, title, children }: { icon: keyof typeof Ionicon
     >
       <View className="flex-row items-center gap-2">
         <Ionicons name={icon} size={14} color="#6B7280" />
-        <Text className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{title}</Text>
+        <Text className="text-[11px] font-bold capitalize tracking-wider text-gray-500">{title}</Text>
       </View>
       {children}
     </View>
@@ -128,25 +128,44 @@ export function FormActions({
  * open it and unmount it to close it, so every opening starts blank.
  *
  * Clicking the dimmed area does not close it (what has been typed would be
- * lost by a stray click); the close button, Cancel and Esc do. */
+ * lost by a stray click); the close button, Cancel and Esc do. A card that only
+ * shows something - nothing typed in it - can set `closeOnOutside`, and then the
+ * dimmed area closes it too. */
 export function PopupCard({
   title,
   onClose,
   maxWidth = 560,
+  headerRight,
+  closeOnOutside = false,
   children,
 }: {
   title: string;
   onClose: () => void;
   maxWidth?: number;
+  /** Buttons in the blue bar, left of the close button - so they take no room from the form below. */
+  headerRight?: ReactNode;
+  /** A click on the dimmed area closes the card - for one with nothing typed in it. */
+  closeOnOutside?: boolean;
   children: ReactNode;
 }) {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View className="flex-1 items-center justify-center bg-black/50 px-4">
+          {/* Behind the card, so a click on the card never reaches it. */}
+          {closeOnOutside && (
+            <Pressable
+              onPress={onClose}
+              accessibilityLabel="Close"
+              style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+            />
+          )}
           <View className="w-full overflow-hidden rounded-2xl bg-white" style={{ maxWidth, maxHeight: '92%' }}>
             <View className="flex-row items-center gap-2.5 px-5 py-4" style={{ backgroundColor: '#1D4ED8' }}>
-              <Text className="flex-1 text-[16px] font-bold text-white">{title}</Text>
+              <Text className="flex-1 text-[16px] font-bold text-white" numberOfLines={1}>
+                {title}
+              </Text>
+              {headerRight}
               <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
                 <Ionicons name="close" size={22} color="#FFFFFF" />
               </Pressable>

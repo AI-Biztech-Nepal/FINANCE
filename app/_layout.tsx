@@ -1,4 +1,5 @@
 // app/_layout.tsx
+import '../lib/utils/titleCaseText';
 import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, View } from 'react-native';

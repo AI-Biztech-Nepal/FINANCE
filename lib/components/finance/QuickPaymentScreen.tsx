@@ -19,12 +19,14 @@ import { PaymentEntryTable, type PaymentEntryTableHandle, type PaymentRow } from
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { KeyboardSelect } from './KeyboardSelect';
 import { useConfirmSave } from './ConfirmSave';
-import { useAvailableAmounts, optionLabel } from '../../hooks/useAvailableAmounts';
+import { optionLabel } from '../../hooks/useAvailableAmounts';
+import { useAccountBalances } from '../../hooks/useAccountBalances';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { MONEY } from './moneyColors';
 import { readKey } from '../../utils/webKeys';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { toBsLabel, toBsHistoryLabel } from '../../utils/nepaliDate';
+import { useCalendarMode } from '../../hooks/useCalendarMode';
 import type { Customer } from '../../../types/database.types';
 import { localTodayIso } from '../../utils/localDate';
 
@@ -50,6 +52,7 @@ export function QuickPaymentScreen() {
 }
 
 function QuickPaymentForm() {
+  useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   // The keyboard-driven desk layout is for a wide web screen; a phone (or a
   // phone browser) gets the same touch form the native app does.
   const desktopWeb = useIsWideWeb();
@@ -94,8 +97,13 @@ function QuickPaymentForm() {
   const createCustomer = useSupabaseInsert('customers');
   const updateCustomer = useSupabaseUpdate('customers');
   const bankAccounts = useBankAccounts(userId);
-  // Money in each place, shown in the Payment method dropdown - only when paying out.
-  const available = useAvailableAmounts(isOut ? userId : undefined);
+  // Money in each bank / wallet account, shown beside it in the Payment method dropdown - receiving and
+  // paying alike: the books' own figures (the same as the account lists show). Cash has none.
+  const balances = useAccountBalances(userId);
+  const available = useMemo(
+    () => (balances.ready ? { byId: Object.fromEntries(balances.perAccount.map((a) => [a.id, Math.round(a.balance)])) } : null),
+    [balances]
+  );
   const phoneContacts = usePhoneContacts();
   const { scanning, pickAndScan } = useScanBill();
   const { confirm: confirmSave, dialog: confirmDialog } = useConfirmSave();
@@ -204,7 +212,7 @@ function QuickPaymentForm() {
       return;
     }
     const ok = await confirmSave({
-      title: `Save this ${isOut ? 'Payment Out' : 'Received'} entry?`,
+      title: `Save this ${isOut ? 'Paid' : 'Received'} entry?`,
       rows: [
         { label: payTarget === 'vendor' ? 'Vendor' : 'Customer', value: trimmedName },
         ...(receiptNo.trim() ? [{ label: isOut ? 'Payment no.' : 'Receipt no.', value: receiptNo.trim() }] : []),
@@ -231,7 +239,7 @@ function QuickPaymentForm() {
         receipt_no: receiptNo.trim() || null,
       } as any);
       showAlert(
-        isOut ? 'Payment Out saved' : 'Received saved',
+        isOut ? 'Paid saved' : 'Received saved',
         `NPR ${value.toLocaleString()} for ${customer.name}.`
       );
       setAmount('');
@@ -397,7 +405,7 @@ function QuickPaymentForm() {
     }
     const sum = validRows.reduce((s, r) => s + Number(r.amount), 0);
     const ok = await confirmSave({
-      title: `Save ${validRows.length === 1 ? 'this' : `these ${validRows.length}`} ${isOut ? 'Payment Out' : 'Received'} ${validRows.length === 1 ? 'entry' : 'entries'}?`,
+      title: `Save ${validRows.length === 1 ? 'this' : `these ${validRows.length}`} ${isOut ? 'Paid' : 'Received'} ${validRows.length === 1 ? 'entry' : 'entries'}?`,
       rows: [
         ...validRows.slice(0, 5).map((r) => ({ label: r.customerName.trim(), value: `NPR ${Number(r.amount).toLocaleString()}` })),
         ...(validRows.length > 5 ? [{ label: `+ ${validRows.length - 5} more` }] : []),
@@ -444,7 +452,7 @@ function QuickPaymentForm() {
         });
       }
       showAlert(
-        isOut ? 'Payment Out saved' : 'Received saved',
+        isOut ? 'Paid saved' : 'Received saved',
         `${validRows.length} ${validRows.length === 1 ? 'entry' : 'entries'} saved, NPR ${validRows
           .reduce((sum, r) => sum + Number(r.amount), 0)
           .toLocaleString()} total.`
@@ -464,7 +472,7 @@ function QuickPaymentForm() {
   }
 
   const meta = isOut
-    ? { label: 'Payment Out', color: '#DC2626', gradient: ['#DC2626', '#B91C1C'] as const, bg: 'bg-red-50', icon: 'arrow-up-circle' as const }
+    ? { label: 'Paid', color: '#DC2626', gradient: ['#DC2626', '#B91C1C'] as const, bg: 'bg-red-50', icon: 'arrow-up-circle' as const }
     : { label: 'Received', color: '#059669', gradient: ['#059669', '#047857'] as const, bg: 'bg-emerald-50', icon: 'arrow-down-circle' as const };
 
   const scanBillButton = (
@@ -628,7 +636,7 @@ function QuickPaymentForm() {
               >
                 <View className="mb-3 flex-row items-center gap-2">
                   <Ionicons name="document-text-outline" size={14} color="#6B7280" />
-                  <Text className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Details</Text>
+                  <Text className="text-[11px] font-bold capitalize tracking-wider text-gray-500">Details</Text>
                 </View>
                 <View className="flex-row" style={{ gap: 14 }}>
                   <View style={{ flex: 1.3, minWidth: 0 }}>
@@ -695,7 +703,7 @@ function QuickPaymentForm() {
                 accent={accent}
                 partyLabel={payTarget === 'vendor' ? 'Vendor' : 'Customer'}
                 addLabel={`Add ${payTarget === 'vendor' ? 'vendor' : 'person'}`}
-                totalLabel={isOut ? 'Total Payment Out' : 'Total Received'}
+                totalLabel={isOut ? 'Total Paid' : 'Total Received'}
                 totalColor={meta.color}
                 onUpdateRow={updateRow}
                 onAddRow={addRow}
@@ -728,8 +736,8 @@ function QuickPaymentForm() {
 
             <View style={{ width: 320 }}>
               <View className="rounded-2xl border border-gray-200 bg-white p-4">
-                <Text className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                  Recent {isOut ? 'Payment Out' : 'Received'}
+                <Text className="mb-2 text-[11px] font-bold capitalize tracking-wide text-gray-400">
+                  Recent {isOut ? 'Paid' : 'Received'}
                 </Text>
                 {recentEntries.length === 0 ? (
                   <Text className="text-xs text-gray-400">No entries yet.</Text>
@@ -855,7 +863,7 @@ function QuickPaymentForm() {
           style={{ backgroundColor: meta.color }}
         >
           <Text className="text-base font-semibold text-white">
-            {saving ? 'Saving…' : isOut ? 'Save Payment Out' : 'Save Received'}
+            {saving ? 'Saving…' : isOut ? 'Save Paid' : 'Save Received'}
           </Text>
         </Pressable>
       </View>

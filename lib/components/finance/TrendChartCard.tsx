@@ -4,6 +4,7 @@ import { View, Text, Pressable } from 'react-native';
 import { BarChart } from '../BarChart';
 import { NetTrendChart } from '../NetTrendChart';
 import { toBsDayChartLabel, toBsMonthChartLabel } from '../../utils/nepaliDate';
+import { useCalendarMode } from '../../hooks/useCalendarMode';
 import type { BusinessTransaction, BusinessTransactionType } from '../../../types/database.types';
 
 export type TrendMetric = 'all' | BusinessTransactionType;
@@ -15,7 +16,7 @@ const METRIC_META: Record<TrendMetric, { label: string; color: string }> = {
   all: { label: 'Available Balance', color: '#2563EB' },
   sale: { label: 'Sales', color: '#059669' },
   purchase: { label: 'Purchase', color: '#dc2626' },
-  expense: { label: 'Expense', color: '#dc2626' },
+  expense: { label: 'Expenses', color: '#dc2626' },
 };
 
 function startOfDay(d: Date) {
@@ -75,7 +76,8 @@ export function TrendChartCard({
 }) {
   const [metric, setMetric] = useState<TrendMetric>(initialMetric ?? metrics[0]);
   const [granularity, setGranularity] = useState<Granularity>('month');
-  const buckets = useMemo(() => periodBuckets(granularity), [granularity]);
+  const [calendarMode] = useCalendarMode();
+  const buckets = useMemo(() => periodBuckets(granularity), [granularity, calendarMode]);
 
   const typeChartData = useMemo(() => {
     if (metric === 'all') return [];

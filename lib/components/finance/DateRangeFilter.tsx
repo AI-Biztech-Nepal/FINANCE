@@ -4,7 +4,7 @@ import { Modal, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DateField } from '../DateTimeFields';
 import { useCalendarMode, type CalendarMode } from '../../hooks/useCalendarMode';
-import { BS_MONTHS, adStringToBs } from '../../utils/nepaliDate';
+import { BS_MONTHS, adStringToBs, bsDaysInMonth, bsToAdString } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import { DropdownPanel, useDropdown } from './DropdownMenu';
 
@@ -26,8 +26,63 @@ function shortLabel(ymd: string, mode: CalendarMode): string {
   return bs ? `${BS_MONTHS[bs.month]} ${bs.date}` : ymd;
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const ymdOf = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+/** The first and last day ('YYYY-MM-DD') of the calendar month `delta` months from the one `ymd` is
+ * in - a Bikram Sambat month when the app is read in BS (the calendar Nepal runs on), a Gregorian
+ * one otherwise. A date outside the BS range the library supports is read as Gregorian. */
+export function monthRange(ymd: string, delta: number, mode: CalendarMode): { start: string; end: string } {
+  if (mode === 'bs') {
+    const bs = adStringToBs(ymd);
+    if (bs) {
+      const index = bs.year * 12 + bs.month + delta;
+      const year = Math.floor(index / 12);
+      const month = index - year * 12;
+      try {
+        return { start: bsToAdString(year, month, 1), end: bsToAdString(year, month, bsDaysInMonth(year, month)) };
+      } catch {
+        // outside the supported years - fall through to the Gregorian month
+      }
+    }
+  }
+  const [y, m] = ymd.split('-').map(Number);
+  return { start: ymdOf(new Date(y, m - 1 + delta, 1)), end: ymdOf(new Date(y, m + delta, 0)) };
+}
+
+/** "Aswin 2083" (BS) or "Oct 2026" when `from`..`to` is exactly one whole calendar month, else null. */
+export function monthLabelOf(from: string, to: string, mode: CalendarMode): string | null {
+  if (!from || !to) return null;
+  const bounds = monthRange(from, 0, mode);
+  if (bounds.start !== from || bounds.end !== to) return null;
+  if (mode === 'bs') {
+    const bs = adStringToBs(from);
+    return bs ? `${BS_MONTHS[bs.month]} ${bs.year}` : null;
+  }
+  const [y, m] = from.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
 function rangeLabel(from: string, to: string, mode: CalendarMode): string {
-  if (from && to) return from === to ? shortLabel(from, mode) : `${shortLabel(from, mode)} – ${shortLabel(to, mode)}`;
+  // A whole month reads as the month - "Aswin 2083" - not as its first and last day.
+  const month = monthLabelOf(from, to, mode);
+  if (month) return month;
+  if (from && to && from === to) {
+    // Today and yesterday by name - they are the days stepped to most, and the arrows beside the
+    // button would otherwise leave it saying a date.
+    const today = localTodayIso();
+    if (from === today) return 'Today';
+    if (from === shiftDay(today, -1)) return 'Yesterday';
+    return shortLabel(from, mode);
+  }
+  if (from && to) {
+    // Two days of one month read "Aswin 14 – 28", not "Aswin 14 – Aswin 28": it is shorter, so a
+    // button of one fixed size can hold it.
+    const a = shortLabel(from, mode);
+    const b = shortLabel(to, mode);
+    const month = (label: string) => label.slice(0, label.lastIndexOf(' '));
+    return month(a) === month(b) ? `${a} – ${b.slice(b.lastIndexOf(' ') + 1)}` : `${a} – ${b}`;
+  }
   return from ? `From ${shortLabel(from, mode)}` : `Until ${shortLabel(to, mode)}`;
 }
 
@@ -122,7 +177,7 @@ function DateFilterPopup({ from, to, onApply, idleLabel = 'Filter' }: {
 
             <View className="my-5 flex-row items-center" style={{ gap: 10 }}>
               <View className="h-px flex-1 bg-gray-200" />
-              <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">or pick dates</Text>
+              <Text className="text-[11px] font-semibold capitalize tracking-wide text-gray-400">or pick dates</Text>
               <View className="h-px flex-1 bg-gray-200" />
             </View>
 
@@ -164,13 +219,17 @@ const PRESETS = [
 ] as const;
 
 const PANEL_WIDTH = 270;
+/** The dropdown's button is always this wide - about what it was when it held a date ("Aswin 25"),
+ * with room for "Yesterday" and a month's range ("Aswin 14 – 28"). A longer label is cut short
+ * rather than making the button, and the arrows beside it, move. */
+const BUTTON_WIDTH = 140;
 
 /** The Filter button. It shows the range that is on (or just "Filter" - or what the page calls
  * its resting range) and drops a menu down from itself: the page's own `shortcuts` first
  * (Today, All time ...), then "the last 7 / 14 / 30 days" (counting today as the last day), each
  * applying with one tap, and Custom range, which opens From and To dates on the calendar right
  * there in the menu and applies when you press Apply. Tapping anywhere else closes it. */
-function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts = [] }: {
+function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts = [], presets = true }: {
   from: string;
   to: string;
   onApply: (from: string, to: string) => void;
@@ -178,6 +237,8 @@ function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts
   idleLabel?: string;
   /** Ranges only the page knows how to set (its resting day, "all time"), listed first. */
   shortcuts?: { label: string; on: boolean; onSelect: () => void }[];
+  /** The last 7 / 14 / 30 days, between the shortcuts and Custom range. */
+  presets?: boolean;
 }) {
   const [mode] = useCalendarMode();
   const dropdown = useDropdown(PANEL_WIDTH);
@@ -205,7 +266,7 @@ function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts
   };
 
   const presetStart = (days: number) => shiftDay(today, -(days - 1));
-  const matchesPreset = PRESETS.some((p) => from === presetStart(p.days) && to === today);
+  const matchesPreset = presets && PRESETS.some((p) => from === presetStart(p.days) && to === today);
   const matchesShortcut = shortcuts.some((x) => x.on);
   // Custom range is the one in use when the range on is none of the ready-made ones.
   const customOn = active && !matchesPreset && !matchesShortcut;
@@ -236,19 +297,16 @@ function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts
           accessibilityLabel="Filter by date"
           accessibilityState={{ expanded: dropdown.open }}
           className="h-9 flex-row items-center rounded-lg border px-3"
-          style={{ gap: 6, borderColor: active ? '#2563EB' : '#D1D5DB', backgroundColor: active ? '#EFF6FF' : '#FFFFFF' }}
+          // One size whatever it says ("Today", "Aswin 25", a range): the arrows beside it would
+          // otherwise shift about every time the day changes.
+          style={{ gap: 6, width: BUTTON_WIDTH, borderColor: active ? '#2563EB' : '#D1D5DB', backgroundColor: active ? '#EFF6FF' : '#FFFFFF' }}
         >
           <Ionicons name="funnel-outline" size={14} color={active ? '#1D4ED8' : '#4B5563'} />
-          <Text className={`text-[13px] font-semibold ${active ? 'text-blue-700' : 'text-gray-700'}`} numberOfLines={1} style={{ maxWidth: 170 }}>
+          <Text className={`flex-1 text-[13px] font-semibold ${active ? 'text-blue-700' : 'text-gray-700'}`} numberOfLines={1}>
             {active ? rangeLabel(from, to, mode) : idleLabel}
           </Text>
           <Ionicons name="chevron-down" size={13} color={active ? '#1D4ED8' : '#6B7280'} />
         </Pressable>
-        {active && (
-          <Pressable onPress={() => onApply('', '')} hitSlop={8} accessibilityLabel="Clear dates">
-            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-          </Pressable>
-        )}
       </View>
 
       <DropdownPanel dropdown={dropdown}>
@@ -258,10 +316,11 @@ function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts
             x.onSelect();
           })
         )}
-        {PRESETS.map((p) => {
-          const start = presetStart(p.days);
-          return option(String(p.days), p.label, from === start && to === today, () => applyRange(start, today));
-        })}
+        {presets &&
+          PRESETS.map((p) => {
+            const start = presetStart(p.days);
+            return option(String(p.days), p.label, from === start && to === today, () => applyRange(start, today));
+          })}
         <View className="border-t border-gray-100" />
         {option('custom', 'Custom range', customOn, () => setCustom((c) => !c), custom ? 'chevron-up' : 'chevron-down')}
 
@@ -297,7 +356,7 @@ function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts
 /** The date Filter button. By default it opens a popup (the Statement's); with `dropdown` the
  * choices hang from the button as a menu instead (the Day Book's), where the page can add its
  * own `shortcuts` (Today ...) at the top of it. */
-export function DateFilterButton({ dropdown, shortcuts, ...rest }: {
+export function DateFilterButton({ dropdown, shortcuts, presets, ...rest }: {
   from: string;
   to: string;
   onApply: (from: string, to: string) => void;
@@ -307,6 +366,96 @@ export function DateFilterButton({ dropdown, shortcuts, ...rest }: {
   dropdown?: boolean;
   /** Ranges only the page knows how to set (its resting day ...), listed first in the menu. */
   shortcuts?: { label: string; on: boolean; onSelect: () => void }[];
+  /** In the menu: whether the last 7 / 14 / 30 days are listed (they are by default). */
+  presets?: boolean;
 }) {
-  return dropdown ? <DateFilterDropdown {...rest} shortcuts={shortcuts} /> : <DateFilterPopup {...rest} />;
+  return dropdown ? <DateFilterDropdown {...rest} shortcuts={shortcuts} presets={presets} /> : <DateFilterPopup {...rest} />;
+}
+
+/** The arrow beside the date button: one day back, or one day forward. */
+export function DayStepButton({
+  direction,
+  disabled,
+  onPress,
+  unit = 'day',
+}: {
+  direction: 'back' | 'forward';
+  disabled?: boolean;
+  onPress: () => void;
+  /** What one press moves by (for the screen reader). */
+  unit?: 'day' | 'month';
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={direction === 'back' ? `Previous ${unit}` : `Next ${unit}`}
+      className="h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white"
+      style={{ opacity: disabled ? 0.4 : 1 }}
+    >
+      <Ionicons name={direction === 'back' ? 'chevron-back' : 'chevron-forward'} size={17} color="#374151" />
+    </Pressable>
+  );
+}
+
+/** The date control for a report page: an arrow back, the date button with its menu (the page's own
+ * shortcuts, This month and a custom range), and an arrow forward.
+ *
+ * `from` / `to` are 'YYYY-MM-DD'; both '' is the page's resting view (named by `idleLabel` - "This
+ * year", "All dates"). The arrows page by calendar month - a Bikram Sambat month when the app is read
+ * in BS: the first press from anywhere lands on the month the period ends in (this month, from the
+ * resting view), then each press is one month earlier, or later as far as the current month. */
+export function DateStepFilter({
+  from,
+  to,
+  onChange,
+  idleLabel,
+  shortcuts = [],
+}: {
+  from: string;
+  to: string;
+  onChange: (from: string, to: string) => void;
+  /** What the button says while neither date is set. */
+  idleLabel: string;
+  /** The page's own ready-made ranges, listed first in the menu. */
+  shortcuts?: { label: string; on: boolean; onSelect: () => void }[];
+}) {
+  const [mode] = useCalendarMode();
+  const today = localTodayIso();
+  const resting = !from && !to;
+  const thisMonth = monthRange(today, 0, mode);
+
+  /** The month a press lands on, or null when there is none (nothing after the current month). */
+  function target(delta: -1 | 1): { start: string; end: string } | null {
+    if (resting) return delta < 0 ? thisMonth : null;
+    const anchor = to || today;
+    const current = monthRange(anchor, 0, mode);
+    const whole = from === current.start && anchor === current.end;
+    // On a whole month the arrows move a month; on anything else (a day, a week, a custom range) the
+    // first press goes to the month the period ends in.
+    const next = whole ? monthRange(current.start, delta, mode) : delta < 0 ? current : monthRange(anchor, 1, mode);
+    return delta > 0 && next.start > today ? null : next;
+  }
+  const back = target(-1);
+  const forward = target(1);
+
+  return (
+    <View className="flex-row items-center" style={{ gap: 6 }}>
+      <DayStepButton direction="back" unit="month" disabled={!back} onPress={() => back && onChange(back.start, back.end)} />
+      <DateFilterButton
+        dropdown
+        presets={false}
+        from={from}
+        to={to}
+        idleLabel={idleLabel}
+        onApply={onChange}
+        shortcuts={[
+          ...shortcuts,
+          { label: 'This month', on: from === thisMonth.start && to === thisMonth.end, onSelect: () => onChange(thisMonth.start, thisMonth.end) },
+        ]}
+      />
+      <DayStepButton direction="forward" unit="month" disabled={!forward} onPress={() => forward && onChange(forward.start, forward.end)} />
+    </View>
+  );
 }

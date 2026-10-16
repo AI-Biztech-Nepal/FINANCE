@@ -133,7 +133,7 @@ export function PartyTypeField({
 
   // The browser's black outline on a text box is switched off where the box has a
   // border of its own to show focus with.
-  const typing = { outlineStyle: 'none', ...(caps ? { textTransform: 'uppercase' } : null) } as object;
+  const typing = { outlineStyle: 'none', ...(caps ? { textTransform: 'capitalize' } : null) } as object;
 
   const addRow = (
     <Pressable
@@ -141,7 +141,7 @@ export function PartyTypeField({
       disabled={saving}
       {...rowPress}
       accessibilityRole="button"
-      className="flex-row items-center px-1 py-2.5"
+      className="flex-row items-center px-3 py-2.5"
       style={{ gap: 8, opacity: saving ? 0.5 : 1 }}
     >
       <Ionicons name="add-circle-outline" size={15} color="#EA580C" />
@@ -152,64 +152,68 @@ export function PartyTypeField({
   );
 
   return (
-    <View className="mb-2.5">
+    <View className="mb-2.5" style={{ zIndex: open ? 50 : 0 }}>
       <Text className="mb-1.5 text-xs font-semibold text-gray-600">{required ? 'Ledger type *' : 'Ledger type'}</Text>
 
-      <TextInput
-        value={shown}
-        onChangeText={handleType}
-        onSubmitEditing={handleSubmit}
-        onFocus={() => {
-          if (closeTimer.current) clearTimeout(closeTimer.current);
-          setFocused(true);
-          setOpen(true);
-        }}
-        onBlur={() => {
-          setFocused(false);
-          closeSoon();
-        }}
-        placeholder={caps ? 'TYPE A LEDGER TYPE' : 'Type a ledger type'}
-        placeholderTextColor="#9CA3AF"
-        // Editing a party opens with its type already in the box: select it on tap so typing
-        // replaces it (the way the empty New party box starts) instead of adding on to it.
-        selectTextOnFocus
-        maxLength={MAX_NAME_LENGTH}
-        accessibilityLabel="Ledger type"
-        className="rounded-lg border bg-white px-3 py-2.5 text-sm text-gray-900"
-        style={[{ borderColor: focused ? '#2563EB' : '#D1D5DB' }, typing]}
-      />
+      {/* The list hangs from the box (absolute, above what follows) so it is always in view, never pushed below the fold of the popup. */}
+      <View style={{ position: 'relative', zIndex: open ? 50 : 0 } as object}>
+        <TextInput
+          value={shown}
+          onChangeText={handleType}
+          onSubmitEditing={handleSubmit}
+          onFocus={() => {
+            if (closeTimer.current) clearTimeout(closeTimer.current);
+            setFocused(true);
+            setOpen(true);
+          }}
+          onBlur={() => {
+            setFocused(false);
+            closeSoon();
+          }}
+          placeholder="Type a ledger type"
+          placeholderTextColor="#9CA3AF"
+          // Editing a party opens with its type already in the box: select it on tap so typing
+          // replaces it (the way the empty New party box starts) instead of adding on to it.
+          selectTextOnFocus
+          maxLength={MAX_NAME_LENGTH}
+          accessibilityLabel="Ledger type"
+          className="rounded-lg border bg-white px-3 py-2.5 text-sm text-gray-900"
+          style={[{ borderColor: focused ? '#2563EB' : '#D1D5DB' }, typing]}
+        />
 
-      {open ? (
-        // Straight under the box, the way "Pick a customer" lists under its search box: just
-        // the rows and their dividers, with no second bordered box around them.
-        <View className="mt-2">
-          <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
-            {matches.length === 0 && !canAdd && <Text className="px-1 py-3 text-center text-sm text-gray-400">No ledger types yet.</Text>}
-            {matches.map((t) => {
-              const selected = t.id === value;
-              return (
-                <Pressable
-                  key={t.id}
-                  onPress={() => choose(t.id)}
-                  {...rowPress}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  className="flex-row items-center justify-between border-b border-gray-100 px-1 py-2.5"
-                >
-                  <Text className={`text-sm font-semibold ${selected ? 'text-blue-700' : 'text-gray-900'}`} numberOfLines={1}>
-                    {t.name}
-                  </Text>
-                  {selected && <Ionicons name="checkmark-circle" size={16} color="#2563EB" />}
-                </Pressable>
-              );
-            })}
-            {canAdd && addRow}
-          </ScrollView>
-        </View>
-      ) : (
-        // Typed but not chosen, and the list has closed: the way to add it stays in sight.
-        canAdd && <View className="mt-2">{addRow}</View>
-      )}
+        {open ? (
+          <View
+            className="rounded-lg border border-gray-200 bg-white"
+            style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, boxShadow: '0 8px 24px rgba(16,24,40,0.18)' } as object}
+          >
+            <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
+              {matches.length === 0 && !canAdd && <Text className="px-3 py-3 text-center text-sm text-gray-400">No ledger types yet.</Text>}
+              {matches.map((t) => {
+                const selected = t.id === value;
+                return (
+                  <Pressable
+                    key={t.id}
+                    onPress={() => choose(t.id)}
+                    {...rowPress}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    className="flex-row items-center justify-between border-b border-gray-100 px-3 py-2.5"
+                  >
+                    <Text className={`text-sm font-semibold ${selected ? 'text-blue-700' : 'text-gray-900'}`} numberOfLines={1}>
+                      {t.name}
+                    </Text>
+                    {selected && <Ionicons name="checkmark-circle" size={16} color="#2563EB" />}
+                  </Pressable>
+                );
+              })}
+              {canAdd && addRow}
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Typed but not chosen, and the list has closed: the way to add it stays in sight. */}
+      {!open && canAdd && <View className="mt-2">{addRow}</View>}
     </View>
   );
 }

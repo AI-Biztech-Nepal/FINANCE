@@ -26,5 +26,5 @@ export function Text({ style, heading, ...props }: TextProps & {
   heading?: boolean;
 }) {
   const caps = useContext(CapsContext);
-  return <NativeText {...props} style={caps ? [style, { textTransform: heading ? 'capitalize' : 'uppercase' }] : style} />;
+  return <NativeText {...props} style={caps ? [style, { textTransform: 'capitalize' }] : style} />;
 }

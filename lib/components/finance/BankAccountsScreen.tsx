@@ -7,6 +7,9 @@ import { useBankAccounts, type BankAccountDetails } from '../../hooks/useBankAcc
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { BookPage, BookTable, ToolbarButton, useBarActions, useBookLayout, type BookColumn } from './BookKit';
 import { Field, FieldRow, FormActions, FormCard, INPUT } from './FormKit';
+import { useReportActions } from './PrintButton';
+import { toBsHistoryLabel } from '../../utils/nepaliDate';
+import { localTodayIso } from '../../utils/localDate';
 import type { BankAccount } from '../../../types/database.types';
 
 const EMPTY_DETAILS: BankAccountDetails = { name: '', bank_name: null, account_number: null, account_holder_name: null, address: null };
@@ -153,14 +156,46 @@ export function BankAccountsScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // The name, the back button (phones) and "Add account" live in the top bar.
+  // Print and Excel: the accounts and their details.
+  const profile = useAuthStore((state) => state.profile);
+  const reportButtons = useReportActions(() => ({
+    title: 'Bank Accounts',
+    businessName: profile?.business_name ?? profile?.full_name ?? '',
+    printedOn: toBsHistoryLabel(localTodayIso()),
+    sections: [
+      {
+        columns: [
+          { label: 'SN' },
+          { label: 'Account' },
+          { label: 'Bank' },
+          { label: 'Account number' },
+          { label: 'Account holder' },
+          { label: 'Branch / Address' },
+        ],
+        rows: [
+          ['1', 'Cash', '', '', '', ''],
+          ...accounts.map((acc, i) => [
+            String(i + 2),
+            acc.name,
+            acc.bank_name ?? '',
+            acc.account_number ?? '',
+            acc.account_holder_name ?? '',
+            acc.address ?? '',
+          ]),
+        ],
+      },
+    ],
+  }));
+
+  // The name, the back button (phones), Print / Excel and "Add account" live in the top bar.
   const layout = useBookLayout();
   useBarActions(
     {
       wide: layout.wide,
-      right: showAdd
-        ? undefined
-        : () => (
+      right: () => (
+        <>
+          {reportButtons}
+          {!showAdd && (
             <ToolbarButton
               icon="add"
               label={layout.wide ? 'Add account' : 'Add'}
@@ -169,7 +204,9 @@ export function BankAccountsScreen() {
                 setShowAdd(true);
               }}
             />
-          ),
+          )}
+        </>
+      ),
     },
     [showAdd]
   );

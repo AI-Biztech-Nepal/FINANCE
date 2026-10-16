@@ -132,7 +132,7 @@ export function ContactPickerModal({
                 placeholder={placeholder}
                 autoFocus
                 className="mb-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                style={caps ? { textTransform: 'uppercase' } : undefined}
+                style={caps ? { textTransform: 'capitalize' } : undefined}
               />
               <FlatList
                 data={suggestions}

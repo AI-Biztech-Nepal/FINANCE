@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import { useSupabaseQuery } from './useSupabase';
 import { isSettledOnTheSpot } from './useAccountBalances';
+import { journalOf } from '../utils/journalVoucher';
 
 /** Epoch ms for a bill/entry date. A bare 'YYYY-MM-DD' is read as local
  * midnight (new Date() would read it as UTC midnight); a full timestamp
@@ -53,11 +54,14 @@ export function useYearCashTotals(userId: string | undefined) {
       }
     }
     for (const e of customerEntries ?? []) {
+      // A journal voucher's halves are not money received or paid.
+      if (journalOf(e.note)) continue;
       if (!inYear(e.entry_date ?? e.created_at)) continue;
       if (e.entry_type === 'credit') received += e.amount;
       if (e.entry_type === 'debit' && e.source === 'manual') paid += e.amount;
     }
     for (const e of vendorEntries ?? []) {
+      if (journalOf(e.note)) continue;
       if (!inYear(e.entry_date ?? e.created_at)) continue;
       if (e.entry_type === 'credit') paid += e.amount;
     }

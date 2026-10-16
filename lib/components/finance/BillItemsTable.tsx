@@ -7,6 +7,8 @@ import { readKey } from '../../utils/webKeys';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
 
 export interface BillItemRow {
+  /** Optional HS code of the item (customs / tariff classification). */
+  hs_code?: string;
   description: string;
   qty: string;
   rate: string;
@@ -17,11 +19,12 @@ export interface BillItemsTableHandle {
   focusRow: (index: number, col?: 0 | 1 | 2 | 3) => void;
 }
 
-// 0 Item, 1 Qty, 2 Rate, 3 HS code. HS code sits left of Item on screen but is
-// left out of the Enter walk (Item > Qty > Rate > next row), so entering a bill
-// is as fast as before; click it, or Shift+Tab from Item, to fill it in.
+/** 0 Item, 1 Qty, 2 Rate, 3 HS code. */
 type Col = 0 | 1 | 2 | 3;
-const HS_COL_WIDTH = 110;
+/** The order the keyboard walks a row in - the order the cells are drawn: HS code, Item, Qty, Rate. Enter
+ * goes forward through it (and from the Rate to the next row's HS code), Shift+Enter goes back. The HS
+ * code is optional, but it is always in the way: Enter on an empty one just moves on. */
+const WALK: Col[] = [3, 0, 1, 2];
 const MAX_SUGGESTIONS = 6;
 const ADD_STOCK_ITEM_KEY = '__add-stock-item__';
 
@@ -72,7 +75,8 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
   const [focusedCell, setFocusedCell] = useState<{ index: number; col: Col } | null>(null);
 
   useImperativeHandle(ref, () => ({
-    focusRow: (index, col = 0) => {
+    // Starts at the first cell drawn - the HS code.
+    focusRow: (index, col = 3) => {
       inputRefs.current[`${index}:${col}`]?.focus();
     },
   }));
@@ -135,11 +139,17 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
     if (k.key === 'Enter' && k.ctrl) {
       k.prevent();
       onRequestSave();
+    } else if (k.key === 'Enter' && k.shift) {
+      // Back one cell - and from a row's first cell to the Rate of the row above.
+      k.prevent();
+      const at = WALK.indexOf(col);
+      if (at > 0) focusCell(index, WALK[at - 1]);
+      else if (index > 0) focusCell(index - 1, WALK[WALK.length - 1]);
     } else if (k.key === 'Enter') {
       k.prevent();
-      if (col === 3) focusCell(index, 0);
-      else if (col < 2) focusCell(index, (col + 1) as Col);
-      else if (index < items.length - 1) focusCell(index + 1, 0);
+      const at = WALK.indexOf(col);
+      if (at < WALK.length - 1) focusCell(index, WALK[at + 1]);
+      else if (index < items.length - 1) focusCell(index + 1, WALK[0]);
       else onExit();
     } else if (k.key === 'ArrowDown' && index < items.length - 1) {
       k.prevent();
@@ -163,8 +173,8 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
     ];
   }
 
-  const cellClass = 'rounded-lg px-2.5 py-2.5 text-xs text-gray-900';
-  const headClass = 'px-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-500';
+  const cellClass = 'rounded-lg px-2.5 py-2.5 text-sm text-gray-900';
+  const headClass = 'px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500';
   const filled = items.filter((r) => !isBlank(r)).length;
 
   return (
@@ -177,7 +187,7 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
       <View className="flex-row items-center justify-between px-5 pb-3 pt-4">
         <View className="flex-row items-center gap-2">
           <Ionicons name="cube-outline" size={14} color="#6B7280" />
-          <Text className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Items</Text>
+          <Text className="text-[11px] font-bold capitalize tracking-wider text-gray-500">Items</Text>
         </View>
         <Text className="text-[11px] text-gray-400">
           {filled} {filled === 1 ? 'item' : 'items'}
@@ -185,10 +195,10 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
       </View>
 
       <View className="flex-row items-center border-y border-gray-200 bg-gray-50 px-2 py-2">
-        <Text className="text-center text-[10px] font-bold uppercase tracking-wider text-gray-500" style={{ width: 36 }}>
+        <Text className="text-center text-[11px] font-bold capitalize tracking-wider text-gray-500" style={{ width: 36 }}>
           #
         </Text>
-        <Text className={headClass} style={{ width: HS_COL_WIDTH }}>
+        <Text className={headClass} style={{ width: 110 }}>
           HS Code
         </Text>
         <Text className={headClass} style={{ flex: 1 }}>
@@ -220,19 +230,18 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
               {index + 1}
             </Text>
 
-            <View style={{ width: HS_COL_WIDTH }}>
+            <View style={{ width: 110 }}>
               <TextInput
                 ref={(el) => {
                   inputRefs.current[`${index}:3`] = el;
                 }}
-                value={row.hsCode ?? ''}
-                onChangeText={(v) => onUpdate(index, { ...row, hsCode: cleanNumber(v) })}
+                value={row.hs_code ?? ''}
+                onChangeText={(v) => onUpdate(index, { ...row, hs_code: v.replace(/[^0-9.]/g, '') })}
                 onFocus={() => setFocusedCell({ index, col: 3 })}
                 onBlur={() => setFocusedCell((cur) => (cur?.index === index && cur.col === 3 ? null : cur))}
                 onKeyPress={(e) => handleKeyPress(e, index, 3)}
                 placeholder="HS code"
                 placeholderTextColor="#B2B8C1"
-                keyboardType="numeric"
                 accessibilityLabel={`HS code, row ${index + 1}`}
                 selectTextOnFocus
                 className={cellClass}
@@ -253,7 +262,7 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
                   const s = suggestions.find((x) => x.key === opt.key);
                   if (!s) return;
                   onUpdate(index, {
-                    ...row,
+                    hs_code: row.hs_code,
                     description: s.name,
                     qty: row.qty.trim() ? row.qty : '1',
                     rate: s.rate != null ? String(s.rate) : row.rate,

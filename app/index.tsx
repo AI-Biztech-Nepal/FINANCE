@@ -24,5 +24,5 @@ export default function Index() {
     );
   }
 
-  return <Redirect href="/(store)/finance" />;
+  return <Redirect href="/(store)/company-dashboard" />;
 }
