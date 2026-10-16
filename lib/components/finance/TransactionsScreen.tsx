@@ -56,126 +56,6 @@ import { localTodayIso } from '../../utils/localDate';
 // Local date, not UTC - see localTodayIso.
 const todayIso = localTodayIso;
 
-const SERVICE_SUGGESTIONS = ['Installation', 'Repair', 'Delivery', 'Packing', 'Service charge'];
-
-interface ServiceRowState {
-  name: string;
-  amount: string;
-}
-
-/** The Services table of a Sale, a second table under the Items one and as wide as it: one line per
- * service (every installation and repair service you offer can be picked, or any name typed), each
- * with its own amount. Optional, and direct income - no item or stock behind it. Lines left empty
- * are not saved. */
-function ServiceChargesTable({
-  rows,
-  onChange,
-  accent,
-  serviceNames,
-}: {
-  rows: ServiceRowState[];
-  onChange: (rows: ServiceRowState[]) => void;
-  accent: string;
-  /** Every service that can be picked ("CCTV & Surveillance - Installation", "... - Repair" ...). */
-  serviceNames: string[];
-}) {
-  const [focusedRow, setFocusedRow] = useState<number | null>(null);
-  const total = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-  const filled = rows.filter((r) => Number(r.amount) > 0).length;
-  const update = (index: number, patch: Partial<ServiceRowState>) =>
-    onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-  const head = 'px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500';
-  const optionsFor = (text: string): SuggestOption[] => {
-    const q = text.trim().toLowerCase();
-    return serviceNames
-      .filter((n) => !q || n.toLowerCase().includes(q))
-      .map((n) => ({ key: n, label: n }));
-  };
-  return (
-    <View className="bg-white" style={{ zIndex: focusedRow != null ? 30 : 0 }}>
-      <View className="flex-row items-center border-y border-gray-200 bg-gray-50 px-2 py-2">
-        <Text className="text-center text-[11px] font-bold tracking-wider text-gray-500" style={{ width: 36 }}>
-          #
-        </Text>
-        <Text className={head} style={{ flex: 1 }}>
-          Service{filled > 0 ? ` · ${filled} ${filled === 1 ? 'line' : 'lines'}` : ' (optional)'}
-        </Text>
-        {/* The Qty and Rate columns of the Items table above are left empty so Amount lines up with it. */}
-        <View style={{ width: 210 }} />
-        <Text className={`${head} text-right`} style={{ width: 130 }}>
-          {total > 0 ? total.toLocaleString() : 'Amount'}
-        </Text>
-        <View style={{ width: 36 }} />
-      </View>
-      {rows.map((row, index) => (
-        <View
-          key={index}
-          className="flex-row items-center border-b border-gray-100 px-2 py-0.5"
-          style={{ zIndex: focusedRow === index ? 5 : 0 }}
-        >
-          <Text className="text-center text-[13px] font-semibold text-gray-400" style={{ width: 36 }}>
-            {index + 1}
-          </Text>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <SuggestInput
-              value={row.name}
-              onChangeText={(v) => update(index, { name: v })}
-              options={focusedRow === index ? optionsFor(row.name) : []}
-              onSelectOption={(opt) => update(index, { name: opt.label })}
-              onFocus={() => setFocusedRow(index)}
-              onBlur={() => setFocusedRow((cur) => (cur === index ? null : cur))}
-              showWhenEmpty
-              placeholder="Pick or type a service - installation, repair, wiring ..."
-              accessibilityLabel={`Service name, row ${index + 1}`}
-              accent={accent}
-              inputClassName="rounded-lg px-2.5 py-2.5 text-sm text-gray-900"
-              inputStyle={{ borderWidth: 1.5, borderColor: '#F1F2F4', outlineStyle: 'none' } as object}
-            />
-          </View>
-          <View style={{ width: 210 }} />
-          <View style={{ width: 130 }}>
-            <TextInput
-              value={row.amount}
-              onChangeText={(v) => update(index, { amount: v.replace(/[^0-9.]/g, '') })}
-              placeholder="0"
-              placeholderTextColor="#B2B8C1"
-              keyboardType="numeric"
-              selectTextOnFocus
-              accessibilityLabel={`Service amount, row ${index + 1}`}
-              className="rounded-lg px-2.5 py-2.5 text-right text-sm font-semibold text-gray-900"
-              style={{ borderWidth: 1.5, borderColor: '#F1F2F4', outlineStyle: 'none' } as object}
-            />
-          </View>
-          <View style={{ width: 36, alignItems: 'center' }}>
-            {(rows.length > 1 || !!row.name.trim() || !!row.amount.trim()) && (
-              <Pressable
-                onPress={() => {
-                  const next = rows.filter((_, i) => i !== index);
-                  onChange(next.length > 0 ? next : [{ name: '', amount: '' }]);
-                }}
-                hitSlop={6}
-                accessibilityLabel={`Remove service row ${index + 1}`}
-                style={{ opacity: 0.6 }}
-              >
-                <Ionicons name="close-circle" size={18} color="#DC2626" />
-              </Pressable>
-            )}
-          </View>
-        </View>
-      ))}
-      <Pressable
-        onPress={() => onChange([...rows, { name: '', amount: '' }])}
-        className="flex-row items-center px-4 py-2"
-        style={{ gap: 6 }}
-      >
-        <Ionicons name="add-circle" size={16} color={accent} />
-        <Text className="text-xs font-semibold" style={{ color: accent }}>
-          Add service
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
 
 interface ItemRowState {
   hs_code?: string;
@@ -852,15 +732,6 @@ function TransactionForm({
       ? String(Math.round(((initial.vat_amount / (initialSubtotal - initial.discount_amount)) * 100) * 100) / 100)
       : '0'
   );
-  // Installation: a service charged to the customer on a Sale - direct income, no item or stock behind it.
-  // The services on offer, to pick from in the Services table (any other name can be typed).
-  const serviceNames = SERVICE_SUGGESTIONS;
-  const [serviceRows, setServiceRows] = useState<ServiceRowState[]>(() => {
-    if (initial?.service_charges?.length) return initial.service_charges.map((s) => ({ name: s.name, amount: String(s.amount) }));
-    // A bill saved before the table existed carried one lump installation charge.
-    if (initial?.installation_charge) return [{ name: 'Installation', amount: String(initial.installation_charge) }];
-    return [{ name: '', amount: '' }];
-  });
   const [showDiscount, setShowDiscount] = useState(!!initial && initial.discount_amount > 0);
   const [showVat, setShowVat] = useState(!!initial && initial.vat_amount > 0);
 
@@ -896,9 +767,7 @@ function TransactionForm({
   }
   const discountInputValue = discountMode === 'percent' ? discountPercentInput : discountAmountInput;
   const vatAmount = Math.round(((subtotal - discountAmount) * (Number(vatPercent) || 0)) / 100);
-  const installationAmount =
-    type === 'sale' ? serviceRows.reduce((sum, r) => sum + Math.max(0, Number(r.amount) || 0), 0) : 0;
-  const grandTotal = subtotal - discountAmount + vatAmount + installationAmount;
+  const grandTotal = subtotal - discountAmount + vatAmount;
   const selectedCategory = (categories ?? []).find((c) => c.id === categoryId) ?? null;
   const selectedAccountName = bankAccountId
     ? bankAccounts.accounts.find((a) => a.id === bankAccountId)?.name ?? 'Cash'
@@ -1097,7 +966,6 @@ function TransactionForm({
           ...(billNo.trim() ? [{ label: 'Bill no.', value: billNo.trim() }] : []),
           ...(discountAmount > 0 ? [{ label: 'Discount', value: `− NPR ${discountAmount.toLocaleString()}` }] : []),
           ...(vatAmount > 0 ? [{ label: 'VAT', value: `+ NPR ${vatAmount.toLocaleString()}` }] : []),
-          ...(installationAmount > 0 ? [{ label: 'Service charges', value: `+ NPR ${installationAmount.toLocaleString()}` }] : []),
         ],
         total: { label: 'Grand total', value: `NPR ${grandTotal.toLocaleString()}`, color: TYPE_META[type].color },
       });
@@ -1148,16 +1016,6 @@ function TransactionForm({
           })),
           discount_amount: Math.round(discountAmount),
           vat_amount: vatAmount,
-          // Only sent when there is a service charge (or one is being cleared on an edit), so a bill
-          // without services saves the same as it always did, whether or not the columns exist yet.
-          ...(installationAmount > 0 || (initial && (initial.installation_charge ?? 0) > 0)
-            ? {
-                installation_charge: installationAmount,
-                service_charges: serviceRows
-                  .filter((r) => Number(r.amount) > 0)
-                  .map((r) => ({ name: r.name.trim() || 'Service', amount: Number(r.amount) })),
-              }
-            : null),
           // A new bill is saved as cash. Editing one keeps the method it already has - that is changed
           // from the bill's card (tap Payment Method) - instead of putting it back to cash on every save.
           payment_mode: initial?.payment_mode ?? ('cash' as const),
@@ -1865,9 +1723,6 @@ function TransactionForm({
               onExit={() => discountRef.current?.focus()}
               footer={
                 <>
-                {type === 'sale' && (
-                  <ServiceChargesTable rows={serviceRows} onChange={setServiceRows} accent={accent} serviceNames={serviceNames} />
-                )}
                 <View
                   className="flex-row flex-wrap border-t border-gray-200 bg-gray-50 px-5 py-4"
                   style={{ columnGap: 28, rowGap: 14, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
@@ -2268,11 +2123,6 @@ function TransactionForm({
               <Text className="text-sm font-bold text-gray-900">G. Total</Text>
               <Text className="text-base font-extrabold text-gray-900">NPR {grandTotal.toLocaleString()}</Text>
             </View>
-            {type === 'sale' && (
-              <View className="mt-3">
-                <ServiceChargesTable rows={serviceRows} onChange={setServiceRows} accent="#EA580C" serviceNames={serviceNames} />
-              </View>
-            )}
             <TextInput
               value={note}
               onChangeText={setNote}

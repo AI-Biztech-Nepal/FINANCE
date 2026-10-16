@@ -148,14 +148,11 @@ export function ReportScreen({ basePath }: { basePath: string }) {
     const names = new Map((categories ?? []).map((c) => [c.id, c.name]));
     const directNames = new Set((categories ?? []).filter((c) => c.expense_group === 'direct').map((c) => c.name));
     let items = 0;
-    let services = 0;
     let purchase = 0;
     const expenses = new Map<string, number>();
     for (const t of inRange) {
       if (t.type === 'sale') {
-        const svc = (t.service_charges ?? []).reduce((a, c) => a + (Number(c.amount) || 0), 0) + (Number(t.installation_charge) || 0);
-        services += svc;
-        items += t.amount - svc;
+        items += t.amount;
       } else if (t.type === 'purchase') purchase += t.amount;
       else {
         const name = (t.expense_category_id && names.get(t.expense_category_id)) || 'Uncategorised';
@@ -172,13 +169,13 @@ export function ReportScreen({ basePath }: { basePath: string }) {
     // same figure: stock moves through the purchase and sale bills themselves.
     const closing = (products ?? []).reduce((a, p) => a + (Number(p.stock_level) > 0 && p.purchase_price != null ? Number(p.stock_level) * Number(p.purchase_price) : 0), 0);
     const opening = closing;
-    const sales = items + services;
+    const sales = items;
     const directTotal = sum(direct);
     const indirectTotal = sum(indirect);
     const gross = sales + closing - opening - purchase - directTotal; // + profit, - loss
     const net = gross - indirectTotal;
     const bills = { sale: inRange.filter((t) => t.type === 'sale').length, purchase: inRange.filter((t) => t.type === 'purchase').length, expense: inRange.filter((t) => t.type === 'expense').length };
-    return { items, services, sales, purchase, direct, indirect, directTotal, indirectTotal, opening, closing, gross, net, bills };
+    return { items, sales, purchase, direct, indirect, directTotal, indirectTotal, opening, closing, gross, net, bills };
   }, [inRange, categories, products]);
   const grossProfit = pl.gross;
   const netProfit = pl.net;
@@ -217,7 +214,6 @@ export function ReportScreen({ basePath }: { basePath: string }) {
             [grossProfit >= 0 ? 'Gross profit c/o' : 'Gross loss c/o', n(Math.abs(grossProfit))],
             ['Sales accounts', n(pl.sales)],
             ['    Sales - items', n(pl.items)],
-            ['    Installation & repair services', n(pl.services)],
             ['Closing stock', n(pl.closing)],
             ['Indirect expenses', n(pl.indirectTotal)],
             ...pl.indirect.map(([k, v]) => ['    ' + k, n(v)]),
@@ -323,7 +319,7 @@ export function ReportScreen({ basePath }: { basePath: string }) {
           <View className="flex-1 p-5">
             <SideHead title="Particulars" />
             <Group id="sales" open={openGroups} onToggle={toggleGroup} label="Sales accounts" amount={pl.sales}
-              rows={[['Sales - items', pl.items], ['Installation & repair services', pl.services]]} onOpen={() => go('/sales-report')} />
+              rows={[['Sales - items', pl.items]]} onOpen={() => go('/sales-report')} />
             <Line label="Closing stock" amount={pl.closing} onPress={() => go('/inventory')} />
             {grossProfit < 0 ? <Line label="Gross loss c/o" amount={-grossProfit} tone="loss" bold /> : null}
             <TotalLine amount={tradingTotal} />

@@ -7,7 +7,7 @@ Nothing here reads or writes Jageer's database.
 
 ## Setup
 1. Create a new Supabase project. Copy `.env.example` to `.env`, fill in URL / anon key / DB URL.
-2. Run `supabase/migrations/0001_finance.sql`, then `0002` .. `0006` in order (SQL editor or psql).
+2. Run `supabase/migrations/0001_finance.sql`, then `0002` .. `0005` in order (SQL editor or psql).
    `0007_title_case_existing_names.sql` is an optional tidy of names already saved (it only touches
    names written in all capitals or all small letters), and `0008_sync_customer_rename.sql` keeps a
    renamed party's bills in step. Then the smoke test at the bottom of 0001 (see `finance-port/00_STEP_BY_STEP.md` 1.4-1.5).
