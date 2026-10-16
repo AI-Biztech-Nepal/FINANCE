@@ -78,6 +78,9 @@ function emptyExpenseRow(): ExpenseRow {
   return { key: makeExpenseRowKey(), partyName: '', customerId: null, categoryId: null, amount: '', note: '' };
 }
 
+/** The "Add ... as new customer / vendor" row in the bill's party box. */
+const ADD_PARTY_KEY = '__add-party__';
+
 function lineTotal(row: ItemRowState) {
   return round2((Number(row.qty) || 0) * (Number(row.rate) || 0));
 }
@@ -1389,15 +1392,20 @@ function TransactionForm({
     return buildCustomerSuggestions(customers, phoneContacts.contacts, q, 6);
   }, [vendorFocused, isBill, partyName, customerId, customers, phoneContacts.contacts]);
 
-  const vendorOptions = useMemo<SuggestOption[]>(
-    () =>
-      vendorSuggestions.map((s) => ({
-        key: s.key,
-        label: s.name,
-        hint: s.customer ? (s.phone ?? 'Saved') : 'From contacts',
-      })),
-    [vendorSuggestions]
-  );
+  const vendorOptions = useMemo<SuggestOption[]>(() => {
+    const options: SuggestOption[] = vendorSuggestions.map((s) => ({
+      key: s.key,
+      label: s.name,
+      hint: s.customer ? (s.phone ?? 'Saved') : 'From contacts',
+    }));
+    // Nobody saved goes by what was typed: offer to add them right here, like the stock item box does.
+    const typed = partyName.trim();
+    const linkedExact = !!customerId && customers.find((c) => c.id === customerId)?.name === partyName;
+    if (vendorFocused && isBill && typed && !linkedExact && !customers.some((c) => c.name.trim().toLowerCase() === typed.toLowerCase())) {
+      options.push({ key: ADD_PARTY_KEY, label: `Add "${typed}" as new ${type === 'purchase' ? 'vendor' : 'customer'}`, kind: 'add' });
+    }
+    return options;
+  }, [vendorSuggestions, vendorFocused, isBill, partyName, customerId, customers, type]);
 
   useEffect(() => {
     if (!desktopWeb || !isBill) return;
@@ -1495,6 +1503,14 @@ function TransactionForm({
               totalColor={TYPE_META.expense.color}
               single={editingExpense}
               onUpdateRow={updateExpenseRow}
+              onCreateParty={async (name) => {
+                try {
+                  return await createCustomer.mutateAsync({ owner_id: userId, name: tidyName(name), phone: null });
+                } catch (err) {
+                  showAlert('Could not add vendor', getErrorMessage(err));
+                  return null;
+                }
+              }}
               onAddRow={() => {
                 const row = emptyExpenseRow();
                 setExpenseRows((prev) => [...prev, row]);
@@ -1611,6 +1627,11 @@ function TransactionForm({
                     }}
                     options={vendorOptions}
                     onSelectOption={async (opt, via) => {
+                      if (opt.key === ADD_PARTY_KEY) {
+                        if (via !== 'tab') billNoRef.current?.focus();
+                        await handleSelectPartyNew(tidyName(partyName.trim()), null);
+                        return;
+                      }
                       const s = vendorSuggestions.find((x) => x.key === opt.key);
                       if (!s) return;
                       if (via !== 'tab') billNoRef.current?.focus();

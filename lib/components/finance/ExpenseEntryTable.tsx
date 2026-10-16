@@ -35,6 +35,7 @@ export interface ExpenseEntryTableHandle {
 }
 
 const MAX_SUGGESTIONS = 6;
+const ADD_PARTY_KEY = '__add-party__';
 const LAST_COL: ExpenseCol = 3;
 
 type Focusable = { focus: () => void };
@@ -60,6 +61,8 @@ interface Props {
   /** Enter on a blank last row: the list is finished, move on (to Save). */
   onExit: () => void;
   autoFocusFirst?: boolean;
+  /** Saves a typed "Paid to" name as a new vendor on the spot. The "Add ... as new vendor" row only shows when this is given. */
+  onCreateParty?: (name: string) => Promise<Customer | null>;
 }
 
 function rowHasContent(row: ExpenseEntryRow): boolean {
@@ -83,6 +86,7 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
     onRequestSave,
     onExit,
     autoFocusFirst,
+    onCreateParty,
   },
   ref
 ) {
@@ -126,15 +130,21 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
     return buildCustomerSuggestions(customers, phoneContacts, q, MAX_SUGGESTIONS);
   }, [focusedRowKey, rows, customers, phoneContacts]);
 
-  const suggestionOptions = useMemo<SuggestOption[]>(
-    () =>
-      suggestions.map((s) => ({
-        key: s.key,
-        label: s.name,
-        hint: s.customer ? (s.phone ?? 'Saved') : 'From contacts',
-      })),
-    [suggestions]
-  );
+  const suggestionOptions = useMemo<SuggestOption[]>(() => {
+    const options: SuggestOption[] = suggestions.map((s) => ({
+      key: s.key,
+      label: s.name,
+      hint: s.customer ? (s.phone ?? 'Saved') : 'From contacts',
+    }));
+    // Nobody saved goes by what was typed: offer to add them right here, like the stock item box does.
+    const row = focusedRowKey ? rows.find((r) => r.key === focusedRowKey) : null;
+    const typed = row?.partyName.trim() ?? '';
+    const linkedExact = !!row?.customerId && customers.find((c) => c.id === row.customerId)?.name === row.partyName;
+    if (onCreateParty && typed && !linkedExact && !customers.some((c) => c.name.trim().toLowerCase() === typed.toLowerCase())) {
+      options.push({ key: ADD_PARTY_KEY, label: `Add "${typed}" as new vendor`, kind: 'add' });
+    }
+    return options;
+  }, [suggestions, focusedRowKey, rows, customers, onCreateParty]);
 
   function focusCell(rowIndex: number, col: ExpenseCol) {
     const row = rows[rowIndex];
@@ -255,7 +265,13 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
                   onUpdateRow(row.key, { partyName: v, customerId: stillLinked ? row.customerId : null });
                 }}
                 options={focusedRowKey === row.key ? suggestionOptions : []}
-                onSelectOption={(opt, via) => {
+                onSelectOption={async (opt, via) => {
+                  if (opt.key === ADD_PARTY_KEY) {
+                    const created = await onCreateParty?.(row.partyName.trim());
+                    if (created) onUpdateRow(row.key, { partyName: created.name, customerId: created.id });
+                    if (via !== 'tab') inputRefs.current[`${row.key}:1`]?.focus();
+                    return;
+                  }
                   const s = suggestions.find((x) => x.key === opt.key);
                   if (!s) return;
                   if (s.customer) onUpdateRow(row.key, { partyName: s.name, customerId: s.customer.id });

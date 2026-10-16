@@ -707,6 +707,14 @@ function QuickPaymentForm() {
                 totalLabel={isOut ? 'Total Paid' : 'Total Received'}
                 totalColor={meta.color}
                 onUpdateRow={updateRow}
+                onCreateParty={async (name) => {
+                  try {
+                    return await createCustomer.mutateAsync({ owner_id: userId, name, phone: null });
+                  } catch (err) {
+                    showAlert('Could not add ' + (payTarget === 'vendor' ? 'vendor' : 'customer'), getErrorMessage(err));
+                    return null;
+                  }
+                }}
                 onAddRow={addRow}
                 onRemoveRow={removeRow}
                 onRequestSave={handleSaveAll}
