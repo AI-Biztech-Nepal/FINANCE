@@ -11,14 +11,14 @@ import { useSupabaseUpdate } from '../../lib/hooks/useSupabase';
 import { showAlert, getErrorMessage } from '../../lib/utils/alert';
 
 const FIELDS = [
-  ['full_name', 'Your name'],
-  ['phone', 'Your phone'],
-  ['city', 'City'],
-  ['business_name', 'Company name (printed on bills)'],
-  ['business_address', 'Company address'],
-  ['business_phone', 'Company phone'],
-  ['business_vat_no', 'VAT / PAN no.'],
-  ['business_reg_no', 'Registration no.'],
+  ['full_name', 'Your name', 'name'],
+  ['phone', 'Your phone', 'tel'],
+  ['city', 'City', 'off'],
+  ['business_name', 'Company name (printed on bills)', 'organization'],
+  ['business_address', 'Company address', 'street-address'],
+  ['business_phone', 'Company phone', 'off'],
+  ['business_vat_no', 'VAT / PAN no.', 'off'],
+  ['business_reg_no', 'Registration no.', 'off'],
 ] as const;
 // Asked for when the account is made (see register.tsx), and kept filled in.
 const REQUIRED: readonly string[] = ['full_name', 'business_name', 'business_address'];
@@ -28,11 +28,21 @@ export default function StoreProfile() {
   const setProfile = useAuthStore((state) => state.setProfile);
   const signOut = useAuthStore((state) => state.signOut);
   const email = useAuthStore((state) => state.session?.user.email);
+  // What was typed at sign-up: an account made before 0010_signup_company_details.sql ran has its company
+  // name and address only here, so the form starts from them until they are saved onto the profile.
+  const signupData = useAuthStore((state) => state.session?.user.user_metadata) as Record<string, unknown> | undefined;
   const update = useSupabaseUpdate('profiles');
   const [form, setForm] = useState<Record<string, string>>(() =>
-    Object.fromEntries(FIELDS.map(([k]) => [k, ((profile as any)?.[k] as string | null) ?? '']))
+    Object.fromEntries(
+      FIELDS.map(([k]) => {
+        const saved = ((profile as any)?.[k] as string | null) ?? '';
+        const typed = typeof signupData?.[k] === 'string' ? (signupData[k] as string) : '';
+        return [k, saved || typed];
+      })
+    )
   );
-  // The company logo, shown on the Dashboard (see 0011_business_assets_bucket.sql). Saved with the rest.
+  // The company logo, shown on the Dashboard (see 0011_business_assets_bucket.sql). It is put on the profile
+  // as soon as it is uploaded - not held back for Save, which waits on the required fields.
   const [logoPath, setLogoPath] = useState<string | null>(profile?.business_logo_path ?? null);
   const [uploading, setUploading] = useState(false);
   const logoUrl = logoPath ? supabase.storage.from('business-assets').getPublicUrl(logoPath).data.publicUrl : null;
@@ -54,6 +64,8 @@ export default function StoreProfile() {
       const path = `${profile.id}/logo-${Date.now()}.jpg`;
       const { error } = await supabase.storage.from('business-assets').upload(path, arraybuffer, { contentType: 'image/jpeg' });
       if (error) throw error;
+      const saved = await update.mutateAsync({ id: profile.id, values: { business_logo_path: path } });
+      setProfile(saved);
       setLogoPath(path);
     } catch (err) {
       showAlert('Could not upload logo', getErrorMessage(err));
@@ -96,11 +108,11 @@ export default function StoreProfile() {
         <View className="flex-1">
           <Text className="text-base font-bold text-gray-900">Company logo</Text>
           <Text className="mt-0.5 text-xs text-gray-400">
-            {uploading ? 'Uploading…' : logoUrl ? 'Tap the logo to replace it, then Save' : 'Tap to add - shown on your Dashboard'}
+            {uploading ? 'Uploading…' : logoUrl ? 'Tap the logo to replace it' : 'Tap to add - shown on your Dashboard'}
           </Text>
         </View>
       </View>
-      {FIELDS.map(([key, label]) => (
+      {FIELDS.map(([key, label, autoComplete]) => (
         <View key={key} className="mb-3">
           <Text className="mb-1 text-xs font-semibold text-gray-500">
             {label}
@@ -109,6 +121,8 @@ export default function StoreProfile() {
           <TextInput
             value={form[key]}
             onChangeText={(v) => setForm((f) => ({ ...f, [key]: v }))}
+            // What the browser may fill in: a saved email never lands in a company field.
+            autoComplete={autoComplete}
             className="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900"
           />
         </View>

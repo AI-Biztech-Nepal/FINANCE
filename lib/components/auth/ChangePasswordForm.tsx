@@ -1,6 +1,6 @@
 // lib/components/auth/ChangePasswordForm.tsx
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { supabase } from '../../supabase';
 import { authErrorMessage, passwordIssue } from '../../utils/authFlow';
 import { updateBiometricPasswordIfSaved } from '../../utils/biometricLogin';
@@ -69,6 +69,11 @@ export function ChangePasswordForm({ email }: { email: string }) {
 
   return (
     <View>
+      {/* The account the password belongs to, for the browser's password manager. Without it, the browser takes
+          the last text box above (Registration no. on Company Details) for the username and fills a saved email in. */}
+      {Platform.OS === 'web' && (
+        <TextInput value={email} editable={false} autoComplete="username" style={{ display: 'none' }} accessibilityElementsHidden />
+      )}
       <Text className="mb-1.5 text-xs font-semibold text-gray-500">Current password</Text>
       <PasswordInput
         value={current}
