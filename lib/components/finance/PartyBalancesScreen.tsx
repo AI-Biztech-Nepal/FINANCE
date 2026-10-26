@@ -17,7 +17,8 @@ import { entryDay } from '../../utils/ledgerStatement';
 import { reportHtml, type PrintReport, type PrintSection } from '../../utils/printReport';
 import { MONEY } from './moneyColors';
 import { journalOf } from '../../utils/journalVoucher';
-import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
+import { itemListOf, itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
+import { round2 } from '../../utils/money';
 import { PopupCard } from './FormKit';
 import { ExcelButton, PrintButton, exportReportDocument, printReportDocument } from './PrintButton';
 
@@ -35,6 +36,19 @@ interface LogEntry {
   color: string;
   bg: string;
   signed: number;
+  /** The car (item) this entry is about, on a vehicle account's Payable Report: what a bill of one car
+   * billed, or what a payment named in its remark. Its entries are read together as one line. */
+  car?: string;
+}
+
+/** One line of the Payable Report's popup on a vehicle account: a car with what it was billed, what has
+ * been paid on it and what is left - or an entry that belongs to no car, on a line of its own. */
+interface CarLine {
+  id: string;
+  day: string;
+  label: string;
+  billed: number;
+  paid: number;
 }
 
 /** One heading: a customer who owes you / a vendor you owe, what they come to, and the entries behind it. */
@@ -128,6 +142,8 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
     all: true,
     enabled: !!userId && showItems,
   });
+  // What the vendors are owed, car by car: each car's bill, what was paid on it and what is left, on one line.
+  const carView = showItems && direction === 'give';
   const { nameById: partyTypeName } = usePartyTypes(userId);
   // Where a heading's ledger opens: the report for their Ledger type, else their ledger.
   const hrefFor = usePartyDestination(userId, basePath);
@@ -171,6 +187,31 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
         });
       }
     } else {
+      // A bill of one car is that car's; a payment whose remark starts with a car the vendor billed is on
+      // that car (the Paid page writes it so: "Ba2-Ja-1050 · 2015 · remark").
+      const soleCarOf = (e: (typeof vendorEntries & {})[number]) =>
+        e.entry_type === 'debit' && e.source === 'booking' && e.source_type === 'business_transaction' && e.source_id
+          ? (() => {
+              const cars = itemListOf(itemsByBill.get(e.source_id));
+              return cars.length === 1 ? cars[0] : undefined;
+            })()
+          : undefined;
+      const billedCars = new Map<string, Map<string, string>>();
+      if (carView) {
+        for (const e of vendorEntries ?? []) {
+          const car = soleCarOf(e);
+          if (!car) continue;
+          const cars = billedCars.get(e.vendor_id) ?? new Map<string, string>();
+          cars.set(car.toLowerCase(), car);
+          billedCars.set(e.vendor_id, cars);
+        }
+      }
+      const carOf = (e: (typeof vendorEntries & {})[number]) => {
+        if (!carView) return undefined;
+        if (e.entry_type === 'debit') return soleCarOf(e);
+        if (journalOf(e.note) || !e.note) return undefined;
+        return billedCars.get(e.vendor_id)?.get(e.note.split(' · ')[0].trim().toLowerCase());
+      };
       for (const e of vendorEntries ?? []) {
         const credit = e.entry_type === 'credit';
         const voucher = journalOf(e.note);
@@ -182,6 +223,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
           detail: voucher ? [voucher.code, voucher.narration].filter(Boolean).join(' · ') : detailOf(e.receipt_no, noteOf(e), kind.label),
           ...kind,
           signed: credit ? -Number(e.amount) : Number(e.amount),
+          car: carOf(e),
         });
       }
     }
@@ -195,7 +237,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
       out.push({ partyId, name: person?.name ?? 'Unknown', ledgerType: person?.ledgerType ?? '', balance, entries });
     }
     return out.sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name));
-  }, [direction, customerEntries, vendorEntries, personById, itemBills, showItems]);
+  }, [direction, customerEntries, vendorEntries, personById, itemBills, showItems, carView]);
 
   // The name typed in the search bar narrows the headings, the tiles and what prints.
   const [search, setSearch] = useState('');
@@ -214,6 +256,29 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
   const [view, setView] = useState<Heading | null>(null);
 
   const entryWord = (n: number) => `${n} ${n === 1 ? 'entry' : 'entries'}`;
+
+  // A heading's entries as lines, car by car (see `carView`): a car's bill and the payments on it are one
+  // line - billed, paid, and what is left - and an entry that belongs to no car keeps a line of its own.
+  // Newest first, as the entries run.
+  const carLines = (h: Heading): CarLine[] => {
+    const byCar = new Map<string, CarLine>();
+    const lines: CarLine[] = [];
+    for (const e of h.entries) {
+      const billed = e.signed > 0 ? e.signed : 0;
+      const paid = e.signed < 0 ? -e.signed : 0;
+      const key = e.car?.trim().toLowerCase();
+      const line = key ? byCar.get(key) : undefined;
+      if (line) {
+        line.billed = round2(line.billed + billed);
+        line.paid = round2(line.paid + paid);
+        continue;
+      }
+      const next: CarLine = { id: key ? `car-${key}` : e.id, day: e.day, label: e.car ?? e.detail, billed, paid };
+      if (key) byCar.set(key, next);
+      lines.push(next);
+    }
+    return lines;
+  };
 
   // Print and Excel carry the page - the headings and what each comes to - or, from inside the popup,
   // that one heading's entries alone (`only`).
@@ -235,17 +300,46 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
               emptyText: meta.empty,
             },
           ]
-        : opened.map((h) => ({
-            heading: `${nameCaps(h.name)} - NPR ${money(h.balance)} - ${entryWord(h.entries.length)}`,
-            columns: [{ label: 'Date' }, { label: 'Details' }, { label: 'Type' }, { label: 'Amount (NPR)', align: 'right' as const }],
-            rows: h.entries.map((e) => [
-              toBsHistoryLabel(e.day),
-              e.detail,
-              e.label,
-              `${e.signed < 0 ? '-' : '+'}${money(Math.abs(e.signed))}`,
-            ]),
-            footer: ['', '', 'Balance', money(h.balance)],
-          }));
+        : opened.map((h) => {
+            if (carView) {
+              const lines = carLines(h);
+              return {
+                heading: `${nameCaps(h.name)} - NPR ${money(h.balance)} - ${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`,
+                columns: [
+                  { label: 'Date' },
+                  { label: 'Item' },
+                  { label: 'Billed', align: 'right' as const },
+                  { label: 'Paid', align: 'right' as const },
+                  { label: 'Remaining (NPR)', align: 'right' as const },
+                ],
+                rows: lines.map((l) => [
+                  toBsHistoryLabel(l.day),
+                  l.label,
+                  l.billed ? money(l.billed) : '',
+                  l.paid ? money(l.paid) : '',
+                  money(round2(l.billed - l.paid)),
+                ]),
+                footer: [
+                  '',
+                  'Total',
+                  money(lines.reduce((s, l) => s + l.billed, 0)),
+                  money(lines.reduce((s, l) => s + l.paid, 0)),
+                  money(h.balance),
+                ],
+              };
+            }
+            return {
+              heading: `${nameCaps(h.name)} - NPR ${money(h.balance)} - ${entryWord(h.entries.length)}`,
+              columns: [{ label: 'Date' }, { label: 'Details' }, { label: 'Type' }, { label: 'Amount (NPR)', align: 'right' as const }],
+              rows: h.entries.map((e) => [
+                toBsHistoryLabel(e.day),
+                e.detail,
+                e.label,
+                `${e.signed < 0 ? '-' : '+'}${money(Math.abs(e.signed))}`,
+              ]),
+              footer: ['', '', 'Balance', money(h.balance)],
+            };
+          });
     return {
       title: `${meta.title} Report`,
       businessName: profile?.business_name ?? profile?.full_name ?? '',
@@ -325,6 +419,56 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
         { key: 'amount', label: 'Amount', width: 96, align: 'right', render: signed },
       ];
 
+  // The car-by-car table: Billed, Paid and what is Remaining side by side, one line for each car.
+  const figure = (value: number, color: string) =>
+    value ? (
+      <Text className="text-[12.5px] font-bold" style={{ color }} numberOfLines={1}>
+        {money(value)}
+      </Text>
+    ) : (
+      <Text className="text-[12.5px] text-gray-300">—</Text>
+    );
+  const leftOf = (l: CarLine) => round2(l.billed - l.paid);
+  const remaining = (l: CarLine) =>
+    leftOf(l) === 0 ? (
+      <Text className="text-[12.5px] font-semibold" style={{ color: '#047857' }}>Cleared</Text>
+    ) : (
+      figure(Math.abs(leftOf(l)), leftOf(l) > 0 ? meta.color : '#047857')
+    );
+  const carColumns: BookColumn<CarLine>[] = layout.full
+    ? [
+        { key: 'date', label: 'Date', width: 140, render: (l) => <Text className="text-[12.5px] text-gray-500">{toBsHistoryLabel(l.day)}</Text> },
+        {
+          key: 'item',
+          label: 'Item',
+          render: (l) => (
+            <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
+              {l.label}
+            </Text>
+          ),
+        },
+        { key: 'billed', label: 'Billed', width: 120, align: 'right', render: (l) => figure(l.billed, '#374151') },
+        { key: 'paid', label: 'Paid', width: 120, align: 'right', render: (l) => figure(l.paid, '#047857') },
+        { key: 'left', label: 'Remaining', width: 130, align: 'right', render: remaining },
+      ]
+    : [
+        {
+          key: 'item',
+          label: 'Item',
+          render: (l) => (
+            <View style={{ minWidth: 0, gap: 2 }}>
+              <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
+                {l.label}
+              </Text>
+              <Text className="text-[11px] text-gray-400" numberOfLines={1}>
+                {[shortDateLabel(l.day), l.billed ? `Billed ${money(l.billed)}` : null, l.paid ? `Paid ${money(l.paid)}` : null].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+          ),
+        },
+        { key: 'left', label: 'Remaining', width: 110, align: 'right', render: remaining },
+      ];
+
   return (
     <BookPage wide={layout.wide}>
       {toolbar}
@@ -398,18 +542,38 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
             </>
           }
         >
-          <BookTable
-            stickyHeader
-            columns={logColumns}
-            rows={view.entries}
-            rowKey={(e) => e.id}
-            onRowPress={() => {
-              // An entry is edited on the ledger, so the card goes with the tap.
-              const id = view.partyId;
-              setView(null);
-              openLedger(id);
-            }}
-          />
+          {carView ? (
+            <BookTable
+              stickyHeader
+              columns={carColumns}
+              rows={carLines(view)}
+              rowKey={(l) => l.id}
+              onRowPress={() => {
+                const id = view.partyId;
+                setView(null);
+                openLedger(id);
+              }}
+              footer={{
+                label: 'Total',
+                cells: {
+                  left: <Text className="text-[13px] font-extrabold" style={{ color: meta.color }}>{money(view.balance)}</Text>,
+                },
+              }}
+            />
+          ) : (
+            <BookTable
+              stickyHeader
+              columns={logColumns}
+              rows={view.entries}
+              rowKey={(e) => e.id}
+              onRowPress={() => {
+                // An entry is edited on the ledger, so the card goes with the tap.
+                const id = view.partyId;
+                setView(null);
+                openLedger(id);
+              }}
+            />
+          )}
         </PopupCard>
       )}
     </BookPage>
