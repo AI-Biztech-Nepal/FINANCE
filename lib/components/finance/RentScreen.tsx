@@ -183,8 +183,8 @@ export function RentScreen({ basePath }: { basePath: string }) {
       )}
 
       <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
-        Tap a rental to edit it or mark it returned. A rental is billed by the day, counting the day it went out and the day it came back; while
-        an item is out past its due date, every day more is added. Rent is kept apart from Sales, so an item on rent stays in your stock.
+        Tap a rental to edit it. A rental is billed by the day, counting the day it was rented and every day since. Rent is kept apart from Sales,
+        so an item on rent stays in your stock.
       </Text>
     </BookPage>
   );

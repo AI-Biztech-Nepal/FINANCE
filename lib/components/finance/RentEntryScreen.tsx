@@ -31,7 +31,7 @@ const MAX_SUGGESTIONS = 6;
 const ADD_PARTY_KEY = '__add-party__';
 
 // The order Enter walks through the boxes; the last one moves on to Save.
-const FIELDS = ['item', 'model', 'rate', 'renter', 'start', 'end', 'returned', 'note'] as const;
+const FIELDS = ['item', 'model', 'rate', 'renter', 'start', 'note'] as const;
 type FieldName = (typeof FIELDS)[number];
 
 /** A titled white card, as on the Paid page: a small icon and heading, then what the card holds. */
@@ -98,8 +98,10 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   const [customerName, setCustomerName] = useState(rental?.customer_name ?? '');
   const [rate, setRate] = useState(rental ? String(rental.rate_per_day) : '');
   const [start, setStart] = useState(rental?.start_date ?? today);
-  const [end, setEnd] = useState(rental?.end_date ?? '');
-  const [returnedOn, setReturnedOn] = useState(rental?.returned_on ?? '');
+  // The due-back and returned days are not on this form; a rental that already has them keeps them (and
+  // they still decide its days and status).
+  const end = rental?.end_date ?? '';
+  const returnedOn = rental?.returned_on ?? '';
   const [note, setNote] = useState(rental?.note ?? '');
   const [saving, setSaving] = useState(false);
   const [focusedField, setFocusedField] = useState<FieldName | null>(null);
@@ -225,15 +227,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       return;
     }
     if (!start) {
-      showAlert('Add the start date', 'Pick the day it went out.');
-      return;
-    }
-    if (end && end < start) {
-      showAlert('Check the dates', 'It cannot be due back before the day it went out.');
-      return;
-    }
-    if (returnedOn && returnedOn < start) {
-      showAlert('Check the dates', 'It cannot come back before the day it went out.');
+      showAlert('Add the date', 'Pick the day it was rented.');
       return;
     }
     const ok = await confirmSave({
@@ -241,22 +235,20 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       rows: [
         { label: 'Item', value: [item.trim(), model.trim()].filter(Boolean).join(' · ') },
         ...(customerName.trim() ? [{ label: 'Rented to', value: customerName.trim() }] : []),
-        { label: 'Went out', value: toBsHistoryLabel(start) },
+        { label: 'Rented on', value: toBsHistoryLabel(start) },
         { label: 'Rate per day', value: `NPR ${formatMoney(Number(rate) || 0)}` },
         { label: 'Days', value: String(figures.days) },
       ],
       total: { label: 'Rent', value: `NPR ${formatMoney(figures.total)}`, color: MONEY.in.base },
     });
     if (!ok) return;
-    // `payments` is left out on purpose: a rental that already has some keeps them.
+    // `payments`, `end_date` and `returned_on` are left out on purpose: a rental that already has them keeps them.
     const values = {
       car: item.trim(),
       model: model.trim() || null,
       customer_id: customerId,
       customer_name: customerName.trim() || null,
       start_date: start,
-      end_date: end || null,
-      returned_on: returnedOn || null,
       rate_per_day: round2(Number(rate) || 0),
       note: note.trim() || null,
     };
@@ -292,15 +284,6 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   }
 
   useScreenHeader({ title: rental ? 'Rental' : 'New rental', resetTitle: 'Rent' }, [!!rental]);
-
-  const clearLink = (set: (v: string) => void, value: string) =>
-    value ? (
-      <Pressable onPress={() => set('')} hitSlop={6} tabIndex={-1}>
-        <Text className="text-[11px] font-semibold" style={{ color: accent }}>
-          Clear
-        </Text>
-      </Pressable>
-    ) : null;
 
   // A suggestion box styled as the Purchase and Paid pages' own: a plain bordered box that takes the accent ring.
   const suggestStyle = (name: FieldName) =>
@@ -396,28 +379,8 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
             compact
           />
         </Box>
-        <Box label="Went out on" basis={170}>
+        <Box label="Rented on" basis={170}>
           <KeyboardDateInput value={start} onChange={setStart} inputRef={setRef('start')} onEnter={() => afterField('start')} onRequestSave={handleSave} accent={accent} />
-        </Box>
-        <Box label="Due back on" basis={170} action={clearLink(setEnd, end)}>
-          <KeyboardDateInput value={end} onChange={setEnd} inputRef={setRef('end')} onEnter={() => afterField('end')} onRequestSave={handleSave} accent={accent} />
-        </Box>
-        <Box
-          label="Came back on"
-          basis={170}
-          action={
-            returnedOn ? (
-              clearLink(setReturnedOn, returnedOn)
-            ) : (
-              <Pressable onPress={() => setReturnedOn(today)} hitSlop={6} tabIndex={-1}>
-                <Text className="text-[11px] font-semibold" style={{ color: accent }}>
-                  Mark returned today
-                </Text>
-              </Pressable>
-            )
-          }
-        >
-          <KeyboardDateInput value={returnedOn} onChange={setReturnedOn} inputRef={setRef('returned')} onEnter={() => afterField('returned')} onRequestSave={handleSave} accent={accent} />
         </Box>
       </View>
 
