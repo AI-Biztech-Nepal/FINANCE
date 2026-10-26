@@ -148,14 +148,14 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       catalog.push({
         key: `p-${p.id}`,
         label: p.name,
-        hint: `${Number(p.price) > 0 ? `NPR ${formatMoney(Number(p.price))} · ` : ''}stock ${p.stock_level}`,
+        hint: Number(p.price) > 0 ? `NPR ${formatMoney(Number(p.price))}` : null,
       });
     }
     for (const f of financeItems ?? []) {
       const k = f.name.trim().toLowerCase();
       if (!k || seen.has(k)) continue;
       seen.add(k);
-      catalog.push({ key: `f-${f.id}`, label: f.name, hint: f.rate != null ? `NPR ${formatMoney(Number(f.rate))}` : 'Saved item' });
+      catalog.push({ key: `f-${f.id}`, label: f.name, hint: f.rate != null ? `NPR ${formatMoney(Number(f.rate))}` : null });
     }
     return catalog
       .filter((c) => c.label.toLowerCase().includes(q))
