@@ -333,9 +333,6 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           (named(t.party_name) || (kind === 'expense' && named(t.expense_category_id ? categoryById.get(t.expense_category_id) : null))));
       const rows = (partyId ? kindBills ?? [] : transactions ?? [])
         .filter((t) => t.type === kind && (!partyId || isTheirs(t)))
-        // A sale bill is only in the Sales Report once it has a bill number - until then it is
-        // still a draft, listed under Completed on the Requests page.
-        .filter((t) => kind !== 'sale' || !!t.bill_no?.trim())
         .map((t): Entry => {
           // The expense report shows the category (same one picked in the entry portal) in
           // place of the generic "Expense" type - the title still falls back to it when there's no party.
