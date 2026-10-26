@@ -834,7 +834,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
 
   const footer = layout.full
     ? {
-        label: `${filteredRows.length} ${filteredRows.length === 1 ? 'item' : 'items'} · Totals`,
+        label: 'Totals',
         cells: {
           ...(vehicles
             ? {
@@ -1001,7 +1001,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           ]),
           footer: [
             '',
-            `${filteredRows.length} ${filteredRows.length === 1 ? 'item' : 'items'} · Totals`,
+            'Totals',
             ...(vehicles ? [''] : []),
             '',
             '',
