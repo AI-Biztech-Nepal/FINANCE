@@ -1,6 +1,6 @@
 // app/(store)/profile.tsx
-import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Image } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, Pressable, ScrollView, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../lib/hooks/useAuth';
@@ -47,19 +47,13 @@ export default function StoreProfile() {
   const [uploading, setUploading] = useState(false);
   const logoUrl = logoPath ? supabase.storage.from('business-assets').getPublicUrl(logoPath).data.publicUrl : null;
 
-  async function pickLogo() {
+  // Puts an image on as the logo: made small enough for the bucket, uploaded to the account's own folder,
+  // and set on the profile straight away.
+  async function uploadLogo(uri: string, width: number | undefined) {
     if (!profile) return;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showAlert('Photo access needed', 'Allow photo library access to add your logo.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
-    if (result.canceled || !result.assets[0]) return;
     setUploading(true);
     try {
-      const asset = result.assets[0];
-      const resizedUri = await resizeImageForUpload(asset.uri, asset.width, 600);
+      const resizedUri = await resizeImageForUpload(uri, width, 600);
       const arraybuffer = await fetch(resizedUri).then((res) => res.arrayBuffer());
       const path = `${profile.id}/logo-${Date.now()}.jpg`;
       const { error } = await supabase.storage.from('business-assets').upload(path, arraybuffer, { contentType: 'image/jpeg' });
@@ -73,6 +67,79 @@ export default function StoreProfile() {
       setUploading(false);
     }
   }
+
+  async function pickLogo() {
+    if (!profile || uploading) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showAlert('Photo access needed', 'Allow photo library access to add your logo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
+    if (result.canceled || !result.assets[0]) return;
+    await uploadLogo(result.assets[0].uri, result.assets[0].width);
+  }
+
+  function removeLogo() {
+    if (!profile || !logoPath) return;
+    showAlert('Remove the logo?', 'The Dashboard goes back to the plain icon until a new one is added.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const saved = await update.mutateAsync({ id: profile.id, values: { business_logo_path: null } });
+            setProfile(saved);
+            setLogoPath(null);
+          } catch (err) {
+            showAlert('Could not remove logo', getErrorMessage(err));
+          }
+        },
+      },
+    ]);
+  }
+
+  // On the web an image file can be dragged onto the logo box. React Native has no drop events, so they are
+  // put on the box's own element; the handler is read through a ref so it always uploads for this render.
+  const dropZone = useRef<View>(null);
+  const [dragging, setDragging] = useState(false);
+  const onDropFile = useRef<(file: File) => void>(() => {});
+  onDropFile.current = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      showAlert('Not an image', 'Drop a JPG, PNG or WebP image for the logo.');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const probe = new window.Image();
+    probe.onload = () => void uploadLogo(url, probe.naturalWidth);
+    probe.onerror = () => showAlert('Could not read image', 'Try another image file.');
+    probe.src = url;
+  };
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = dropZone.current as unknown as HTMLElement | null;
+    if (!node) return;
+    const over = (e: DragEvent) => {
+      e.preventDefault();
+      setDragging(true);
+    };
+    const leave = () => setDragging(false);
+    const drop = (e: DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      const file = e.dataTransfer?.files?.[0];
+      if (file) onDropFile.current(file);
+    };
+    node.addEventListener('dragover', over);
+    node.addEventListener('dragleave', leave);
+    node.addEventListener('drop', drop);
+    return () => {
+      node.removeEventListener('dragover', over);
+      node.removeEventListener('dragleave', leave);
+      node.removeEventListener('drop', drop);
+    };
+  }, []);
 
   async function save() {
     if (!profile) return;
@@ -93,23 +160,43 @@ export default function StoreProfile() {
 
   return (
     <ScrollView className="flex-1 bg-gray-50 px-6 pt-4" contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-      <View className="mb-4 flex-row items-center gap-4">
+      <Text className="mb-1 text-xs font-semibold text-gray-500">Company logo</Text>
+      <View
+        ref={dropZone}
+        className="mb-4 flex-row items-center rounded-2xl border-2 border-dashed p-4"
+        style={{ gap: 16, borderColor: dragging ? '#2563EB' : '#D1D5DB', backgroundColor: dragging ? '#EFF6FF' : '#FFFFFF' }}
+      >
         <Pressable
           onPress={pickLogo}
           disabled={uploading}
-          className="h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-gray-300 bg-white"
+          className="h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-gray-50"
         >
           {logoUrl ? (
             <Image source={{ uri: logoUrl }} style={{ width: 80, height: 80 }} resizeMode="contain" />
           ) : (
-            <Ionicons name="image-outline" size={26} color="#9CA3AF" />
+            <Ionicons name="cloud-upload-outline" size={28} color={dragging ? '#2563EB' : '#9CA3AF'} />
           )}
         </Pressable>
-        <View className="flex-1">
-          <Text className="text-base font-bold text-gray-900">Company logo</Text>
-          <Text className="mt-0.5 text-xs text-gray-400">
-            {uploading ? 'Uploading…' : logoUrl ? 'Tap the logo to replace it' : 'Tap to add - shown on your Dashboard'}
+        <View className="flex-1" style={{ gap: 2 }}>
+          <Text className="text-[15px] font-bold text-gray-900">
+            {uploading ? 'Uploading…' : dragging ? 'Drop to upload' : logoUrl ? 'Your company logo' : 'Add your company logo'}
           </Text>
+          <Text className="text-xs text-gray-500">
+            {Platform.OS === 'web' ? 'Drag and drop an image here, or click to choose one.' : 'Tap to choose an image.'} Shown on your Dashboard.
+          </Text>
+          <Text className="text-[11px] text-gray-400">JPG, PNG or WebP</Text>
+        </View>
+        <View style={{ gap: 8 }}>
+          <Pressable onPress={pickLogo} disabled={uploading} className="flex-row items-center rounded-lg bg-blue-600 px-3 py-2 disabled:opacity-50" style={{ gap: 6 }}>
+            <Ionicons name={logoUrl ? 'swap-horizontal' : 'add'} size={15} color="#FFFFFF" />
+            <Text className="text-[13px] font-semibold text-white">{logoUrl ? 'Change' : 'Choose'}</Text>
+          </Pressable>
+          {logoUrl && (
+            <Pressable onPress={removeLogo} disabled={uploading} className="flex-row items-center rounded-lg border border-gray-300 px-3 py-2 disabled:opacity-50" style={{ gap: 6 }}>
+              <Ionicons name="trash-outline" size={15} color="#B91C1C" />
+              <Text className="text-[13px] font-semibold text-red-700">Remove</Text>
+            </Pressable>
+          )}
         </View>
       </View>
       {FIELDS.map(([key, label, autoComplete]) => (
