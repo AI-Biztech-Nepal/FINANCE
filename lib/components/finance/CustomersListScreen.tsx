@@ -46,7 +46,6 @@ import { journalOf } from '../../utils/journalVoucher';
 import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
-import { getLastSyncedAt, isContactsSyncEnabled, requestAndSyncPhoneContacts } from '../../utils/contactsSync';
 import { pickPhoneContact } from '../../utils/pickPhoneContact';
 import type { BusinessTransactionType, Customer, CustomerLedgerEntry, Profile } from '../../../types/database.types';
 
@@ -488,72 +487,6 @@ function AppCustomerRow({ entry }: { entry: AppCustomer }) {
       <Text className="mt-1.5 text-xs text-gray-400">
         {requestCount} request{requestCount === 1 ? '' : 's'} · last on {new Date(lastRequestAt).toLocaleDateString()}
       </Text>
-    </View>
-  );
-}
-
-function timeAgo(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  return `${Math.floor(hours / 24)} day ago`;
-}
-
-/** Button + status line for the "Your Customers" tab: first tap asks for
- * contacts permission and does an initial pull; after that, the app keeps
- * this list in sync with the phone's contacts automatically in the
- * background (useContactsSyncBootstrap), and this button just lets the
- * user force an immediate re-sync. */
-function PhoneContactsSyncButton({ userId }: { userId: string }) {
-  const queryClient = useQueryClient();
-  const [syncing, setSyncing] = useState(false);
-  const [enabled, setEnabled] = useState(false);
-  const [lastSynced, setLastSynced] = useState<Date | null>(null);
-
-  useEffect(() => {
-    isContactsSyncEnabled(userId).then(setEnabled);
-    getLastSyncedAt(userId).then(setLastSynced);
-  }, [userId]);
-
-  async function handleSync() {
-    setSyncing(true);
-    try {
-      const { granted, synced } = await requestAndSyncPhoneContacts(userId);
-      if (!granted) {
-        showAlert('Contacts access needed', 'Allow contacts access to sync your phone contacts here.');
-        return;
-      }
-      setEnabled(true);
-      setLastSynced(new Date());
-      queryClient.invalidateQueries({ queryKey: ['customers'] });
-      showAlert('Synced', `${synced} phone contact${synced === 1 ? '' : 's'} synced to your customers.`);
-    } catch (err) {
-      showAlert('Could not sync contacts', getErrorMessage(err));
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  return (
-    <View className="mb-3">
-      <Pressable
-        onPress={handleSync}
-        disabled={syncing}
-        className="flex-row items-center justify-center gap-2 rounded-2xl border border-blue-700 bg-blue-50 py-2.5 disabled:opacity-50"
-      >
-        <Ionicons name="sync-outline" size={16} color="#1d4ed8" />
-        <Text className="text-xs font-semibold text-blue-700">
-          {syncing ? 'Syncing…' : enabled ? 'Sync phone contacts now' : 'Sync from phone contacts'}
-        </Text>
-      </Pressable>
-      {enabled && (
-        <Text className="mt-1 text-center text-[10px] text-gray-400">
-          {lastSynced ? `Auto-synced with your phone · last synced ${timeAgo(lastSynced)}` : 'Auto-synced with your phone'}
-        </Text>
-      )}
     </View>
   );
 }
@@ -1186,14 +1119,50 @@ function LedgerList({ basePath }: { basePath: string }) {
       // Drawn in the app's top bar, outside this page's own tree - so it carries the capitals with it.
       right: (inBar) => (
         <CapsProvider>
-          <ToolbarSearch value={search} onChange={setSearch} placeholder="Search by name, phone or type" wide={inBar} />
           <PrintButton onPress={() => printNow.current()} />
           <ExportButton onPress={() => exportNow.current(false)} busy={exporting} />
           <ToolbarButton icon="add" label="New party" onPress={openNewParty} />
         </CapsProvider>
       ),
     },
-    [exporting, search]
+    [exporting]
+  );
+
+  // The search sits right under the figures: a wide, rounded box with the match count and a clear button.
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchBar = (
+    <View
+      className="flex-row items-center rounded-2xl bg-white px-4"
+      style={{
+        height: 50,
+        gap: 10,
+        borderWidth: 1.5,
+        borderColor: searchFocused ? '#2563EB' : '#E2E8F0',
+        boxShadow: searchFocused ? '0 0 0 4px rgba(37,99,235,0.12)' : '0 1px 2px rgba(16,24,40,0.05)',
+      }}
+    >
+      <Ionicons name="search" size={19} color={searchFocused || search ? '#2563EB' : '#94A3B8'} />
+      <TextInput
+        value={search}
+        onChangeText={setSearch}
+        onFocus={() => setSearchFocused(true)}
+        onBlur={() => setSearchFocused(false)}
+        placeholder="Search ledgers by name or phone"
+        placeholderTextColor="#94A3B8"
+        className="flex-1 text-[15px] text-gray-900"
+        style={{ outlineStyle: 'none' } as object}
+      />
+      {!!search.trim() && (
+        <Text className="text-[12.5px] font-semibold" style={{ color: '#1E3A8A' }}>
+          {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
+        </Text>
+      )}
+      {!!search && (
+        <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
+          <Ionicons name="close-circle" size={19} color="#94A3B8" />
+        </Pressable>
+      )}
+    </View>
   );
 
   // --- pieces both layouts share ---
@@ -1514,6 +1483,7 @@ function LedgerList({ basePath }: { basePath: string }) {
       <BookPage wide={layout.wide}>
         {toolbar}
         {summaryCards}
+        {searchBar}
         {addForm}
         {bulkBar}
 
@@ -1545,7 +1515,6 @@ function LedgerList({ basePath }: { basePath: string }) {
 
         {summaryCards}
 
-        {userId && <PhoneContactsSyncButton userId={userId} />}
 
         <View className="flex-row flex-wrap items-center" style={{ gap: 8 }}>
           <Pressable
