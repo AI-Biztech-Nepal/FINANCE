@@ -195,11 +195,14 @@ function StockItemPopup({
   businessName,
   onOpenBill,
   onEdit,
+  onEditPurchase,
   onClose,
 }: {
   row: InventoryRow;
   /** Opens the product form: edit this product, or start tracking a bills-only item. */
   onEdit: () => void;
+  /** Opens a Purchase bill on the bill form, filled in, to edit it. */
+  onEditPurchase: (tx: BusinessTransaction) => void;
   /** Oldest first. */
   moves: Movement[];
   businessName: string;
@@ -433,9 +436,22 @@ function StockItemPopup({
           : ''}
       </Text>
       <View className="flex-row" style={{ gap: 10 }}>
-        <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
-          <Text className="text-[13px] font-bold text-white">{row.product ? 'Edit product' : 'Track as a product'}</Text>
-        </Pressable>
+        {/* An item that was bought opens its latest Purchase bill - vendor, rate and all - to edit; the
+            product's own fields (cost price, stock) are the second button. */}
+        {lastIn ? (
+          <>
+            <Pressable onPress={() => onEditPurchase(lastIn.tx)} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
+              <Text className="text-[13px] font-bold text-white">Edit purchase</Text>
+            </Pressable>
+            <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg border px-4 py-2.5" style={{ borderColor: '#1D4ED8' }}>
+              <Text className="text-[13px] font-bold" style={{ color: '#1D4ED8' }}>{row.product ? 'Edit product' : 'Track as a product'}</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
+            <Text className="text-[13px] font-bold text-white">{row.product ? 'Edit product' : 'Track as a product'}</Text>
+          </Pressable>
+        )}
       </View>
     </PopupCard>
   );
@@ -968,6 +984,10 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           businessName={profile?.business_name ?? profile?.full_name ?? ''}
           onOpenBill={setViewingTx}
           onEdit={() => openEdit(viewingRow)}
+          onEditPurchase={(tx) => {
+            router.push(`${basePath}/transactions?type=${tx.type}&add=1&edit=${tx.id}` as never);
+            setViewingKey(null);
+          }}
           onClose={() => setViewingKey(null)}
         />
       )}
