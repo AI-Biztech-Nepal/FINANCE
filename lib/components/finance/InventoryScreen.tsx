@@ -590,11 +590,12 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
         paidByCar.set(car, (paidByCar.get(car) ?? 0) + Number(e.amount));
       }
     }
-    const billedOf = (key: string): number => {
+    // The same reading of its sale bills is what the car sold for.
+    const billedOf = (key: string, dir: Movement['dir'] = 'in'): number => {
       const counted = new Set<string>();
       let billed = 0;
       for (const m of movementsByName.get(key) ?? []) {
-        if (m.dir !== 'in') continue;
+        if (m.dir !== dir) continue;
         if (itemListOf(m.tx.items).length === 1) {
           if (counted.has(m.tx.id)) continue;
           counted.add(m.tx.id);
@@ -630,11 +631,12 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           profitEstimated = true;
         }
       }
+      const soldFor = vehicles ? billedOf(key, 'out') : 0;
       return {
         key: `p-${product.id}`,
         name: product.name,
         category: product.category,
-        price: Number(product.price),
+        price: soldFor > 0 ? round2(soldFor) : Number(product.price),
         cost,
         stockLevel: stock,
         sold: soldByName.get(key) ?? 0,
@@ -707,6 +709,8 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     () => ({
       sold: filteredRows.reduce((sum, r) => sum + r.sold, 0),
       purchased: filteredRows.reduce((sum, r) => sum + r.purchased, 0),
+      // A vehicle account's cars are one each, so their cost prices add up to what they cost in all.
+      cost: round2(filteredRows.reduce((sum, r) => sum + (r.cost ?? 0), 0)),
       paid: round2(filteredRows.reduce((sum, r) => sum + (r.paid ?? 0), 0)),
       dues: round2(filteredRows.reduce((sum, r) => sum + (r.dues ?? 0), 0)),
       profit: round2(filteredRows.reduce((sum, r) => sum + (r.profit ?? 0), 0)),
@@ -826,6 +830,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
         cells: {
           ...(vehicles
             ? {
+                cost: <Text className="text-[13px] font-extrabold" style={{ color: '#4B5563' }}>{money(totals.cost)}</Text>,
                 paid: <Text className="text-[13px] font-extrabold" style={{ color: '#047857' }}>{money(totals.paid)}</Text>,
                 dues: <Text className="text-[13px] font-extrabold" style={{ color: '#B91C1C' }}>{money(totals.dues)}</Text>,
               }
@@ -992,7 +997,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
             '',
             '',
             '',
-            '',
+            vehicles ? money(totals.cost) : '',
             ...(vehicles ? [money(totals.paid), money(totals.dues), ''] : ['', qty(totals.sold), qty(totals.purchased)]),
             vehicles ? `${totals.profit < 0 ? '-' : ''}${money(Math.abs(totals.profit))}` : money(totals.value),
           ],
