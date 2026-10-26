@@ -695,7 +695,8 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
 
   const stats = useMemo(
     () => ({
-      items: rows.length,
+      // What is left on the shelf: an item that has run out is not counted.
+      items: rows.filter((r) => r.status !== 'out').length,
       value: rows.reduce((sum, r) => sum + (r.value ?? 0), 0),
       profit: round2(rows.reduce((sum, r) => sum + (r.profit ?? 0), 0)),
       out: rows.filter((r) => r.status === 'out').length,
@@ -717,6 +718,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       purchased: filteredRows.reduce((sum, r) => sum + r.purchased, 0),
       // A vehicle account's cars are one each, so their cost prices add up to what they cost in all.
       cost: round2(filteredRows.reduce((sum, r) => sum + (r.cost ?? 0), 0)),
+      price: round2(filteredRows.reduce((sum, r) => sum + (r.price ?? 0), 0)),
       paid: round2(filteredRows.reduce((sum, r) => sum + (r.paid ?? 0), 0)),
       dues: round2(filteredRows.reduce((sum, r) => sum + (r.dues ?? 0), 0)),
       profit: round2(filteredRows.reduce((sum, r) => sum + (r.profit ?? 0), 0)),
@@ -832,11 +834,12 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
 
   const footer = layout.full
     ? {
-        label: `${filteredRows.length} ${filteredRows.length === 1 ? 'item' : 'items'} · Totals`,
+        label: 'Totals',
         cells: {
           ...(vehicles
             ? {
                 cost: <Text className="text-[13px] font-extrabold" style={{ color: '#4B5563' }}>{money(totals.cost)}</Text>,
+                price: <Text className="text-[13px] font-extrabold text-gray-900">{money(totals.price)}</Text>,
                 paid: <Text className="text-[13px] font-extrabold" style={{ color: '#047857' }}>{money(totals.paid)}</Text>,
                 dues: <Text className="text-[13px] font-extrabold" style={{ color: '#B91C1C' }}>{money(totals.dues)}</Text>,
               }
@@ -962,7 +965,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       subtitle: [filter === 'out' ? 'Out of stock' : null, search.trim() ? `Matching "${search.trim()}"` : null].filter(Boolean).join(' · ') || undefined,
       printedOn: toBsHistoryLabel(localTodayIso()),
       summary: [
-        { label: 'Items', value: String(stats.items) },
+        { label: 'In stock', value: String(stats.items) },
         vehicles
           ? { label: 'Profit / Loss', value: `NPR ${stats.profit < 0 ? '-' : ''}${money(Math.abs(stats.profit))}` }
           : { label: 'Stock value (cost)', value: `NPR ${money(stats.value)}` },
@@ -998,13 +1001,13 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           ]),
           footer: [
             '',
-            `${filteredRows.length} ${filteredRows.length === 1 ? 'item' : 'items'} · Totals`,
+            'Totals',
             ...(vehicles ? [''] : []),
             '',
             '',
             '',
             vehicles ? money(totals.cost) : '',
-            ...(vehicles ? [money(totals.paid), money(totals.dues), ''] : ['', qty(totals.sold), qty(totals.purchased)]),
+            ...(vehicles ? [money(totals.paid), money(totals.dues), money(totals.price)] : ['', qty(totals.sold), qty(totals.purchased)]),
             vehicles ? `${totals.profit < 0 ? '-' : ''}${money(Math.abs(totals.profit))}` : money(totals.value),
           ],
           emptyText: rows.length > 0 ? 'No matches.' : 'Nothing bought or sold yet.',
@@ -1114,7 +1117,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       {toolbar}
 
       <BookStats>
-        <BookStat label="Items" value={String(stats.items)} color="#374151" />
+        <BookStat label="In stock" value={String(stats.items)} color="#374151" />
         {vehicles ? (
           <BookStat label="Profit / Loss" value={`NPR ${profitText(stats.profit)}`} color={profitColor(stats.profit)} />
         ) : (
