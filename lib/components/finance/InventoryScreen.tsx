@@ -718,6 +718,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       purchased: filteredRows.reduce((sum, r) => sum + r.purchased, 0),
       // A vehicle account's cars are one each, so their cost prices add up to what they cost in all.
       cost: round2(filteredRows.reduce((sum, r) => sum + (r.cost ?? 0), 0)),
+      price: round2(filteredRows.reduce((sum, r) => sum + (r.price ?? 0), 0)),
       paid: round2(filteredRows.reduce((sum, r) => sum + (r.paid ?? 0), 0)),
       dues: round2(filteredRows.reduce((sum, r) => sum + (r.dues ?? 0), 0)),
       profit: round2(filteredRows.reduce((sum, r) => sum + (r.profit ?? 0), 0)),
@@ -838,6 +839,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           ...(vehicles
             ? {
                 cost: <Text className="text-[13px] font-extrabold" style={{ color: '#4B5563' }}>{money(totals.cost)}</Text>,
+                price: <Text className="text-[13px] font-extrabold text-gray-900">{money(totals.price)}</Text>,
                 paid: <Text className="text-[13px] font-extrabold" style={{ color: '#047857' }}>{money(totals.paid)}</Text>,
                 dues: <Text className="text-[13px] font-extrabold" style={{ color: '#B91C1C' }}>{money(totals.dues)}</Text>,
               }
@@ -1005,7 +1007,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
             '',
             '',
             vehicles ? money(totals.cost) : '',
-            ...(vehicles ? [money(totals.paid), money(totals.dues), ''] : ['', qty(totals.sold), qty(totals.purchased)]),
+            ...(vehicles ? [money(totals.paid), money(totals.dues), money(totals.price)] : ['', qty(totals.sold), qty(totals.purchased)]),
             vehicles ? `${totals.profit < 0 ? '-' : ''}${money(Math.abs(totals.profit))}` : money(totals.value),
           ],
           emptyText: rows.length > 0 ? 'No matches.' : 'Nothing bought or sold yet.',
