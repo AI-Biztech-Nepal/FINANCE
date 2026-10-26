@@ -70,6 +70,7 @@ function withRent(items: WebNavItem[]): WebNavItem[] {
 
 const HIDDEN: [string, string][] = [
   ['rent', 'Rent'],
+  ['rent-entry', 'Rent'],
   ['customers', 'Ledger'],
   ['customer/[id]', 'Ledger'],
   ['transactions', 'Statement'],

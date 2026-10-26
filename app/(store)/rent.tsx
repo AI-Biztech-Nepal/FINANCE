@@ -2,5 +2,5 @@
 import { RentScreen } from '../../lib/components/finance/RentScreen';
 
 export default function StoreRent() {
-  return <RentScreen />;
+  return <RentScreen basePath="/(store)" />;
 }
