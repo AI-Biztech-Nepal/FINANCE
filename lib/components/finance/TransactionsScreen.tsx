@@ -1414,7 +1414,7 @@ function TransactionForm({
     const options: SuggestOption[] = vendorSuggestions.map((s) => ({
       key: s.key,
       label: s.name,
-      hint: s.customer ? (s.phone ?? 'Saved') : 'From contacts',
+      hint: s.customer ? s.phone : 'From contacts',
     }));
     // Nobody saved goes by what was typed: offer to add them right here, like the stock item box does.
     const typed = partyName.trim();

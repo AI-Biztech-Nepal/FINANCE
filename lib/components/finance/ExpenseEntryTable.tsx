@@ -134,7 +134,7 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
     const options: SuggestOption[] = suggestions.map((s) => ({
       key: s.key,
       label: s.name,
-      hint: s.customer ? (s.phone ?? 'Saved') : 'From contacts',
+      hint: s.customer ? s.phone : 'From contacts',
     }));
     // Nobody saved goes by what was typed: offer to add them right here, like the stock item box does.
     const row = focusedRowKey ? rows.find((r) => r.key === focusedRowKey) : null;

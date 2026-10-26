@@ -19,6 +19,9 @@ export interface PaymentRow {
   pendingPhone: string | null;
   amount: string;
   note: string;
+  /** The car (its number) a payment is for, and its model - only on a vehicle account (see `withCar`). */
+  item: string;
+  model: string;
 }
 
 export interface PaymentEntryTableHandle {
@@ -26,7 +29,8 @@ export interface PaymentEntryTableHandle {
   focusRow: (rowKey: string, col?: 0 | 1 | 2) => void;
 }
 
-type Col = 0 | 1 | 2;
+// 0 party, 1 amount, 2 remarks; 3 item and 4 model sit between the party and the amount when `withCar`.
+type Col = 0 | 1 | 2 | 3 | 4;
 const MAX_SUGGESTIONS = 6;
 const ADD_PARTY_KEY = '__add-party__';
 
@@ -50,10 +54,14 @@ interface Props {
   autoFocusFirst?: boolean;
   /** Saves a typed name as a new customer / vendor on the spot. The "Add ... as new ..." row only shows when this is given. */
   onCreateParty?: (name: string) => Promise<Customer | null>;
+  /** A vehicle account: each row also names the car it pays for (Item) and its Model. */
+  withCar?: boolean;
+  /** The cars to pick for a row's vendor - only theirs - narrowed by what is typed. */
+  carOptionsFor?: (vendor: Customer | null, typed: string) => SuggestOption[];
 }
 
 function rowHasContent(row: PaymentRow): boolean {
-  return !!(row.customerName.trim() || row.amount.trim() || row.note.trim());
+  return !!(row.customerName.trim() || row.amount.trim() || row.note.trim() || row.item.trim() || row.model.trim());
 }
 
 export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(function PaymentEntryTable(
@@ -73,9 +81,14 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
     onExit,
     autoFocusFirst,
     onCreateParty,
+    withCar,
+    carOptionsFor,
   },
   ref
 ) {
+  // The order Enter / Tab walk along a row.
+  const order: Col[] = withCar ? [0, 3, 4, 1, 2] : [0, 1, 2];
+  const amountWidth = withCar ? 140 : 160;
   const inputRefs = useRef<Record<string, TextInput | null>>({});
   const pendingFocus = useRef<{ key: string; col: Col } | null>(null);
   const [focusedCell, setFocusedCell] = useState<{ key: string; col: Col } | null>(null);
@@ -120,7 +133,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
     const options: SuggestOption[] = suggestions.map((s) => ({
       key: s.key,
       label: s.name,
-      hint: s.customer ? (s.phone ?? 'Saved') : 'From contacts',
+      hint: s.customer ? s.phone : 'From contacts',
     }));
     // Nobody saved goes by what was typed: offer to add them right here, like the stock item box does.
     const row = focusedRowKey ? rows.find((r) => r.key === focusedRowKey) : null;
@@ -144,7 +157,8 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
   // Enter = Tab, except in the last cell of the last row: a row with
   // something in it starts a new row, a blank one means "done" and moves on.
   function advance(rowIndex: number, col: Col) {
-    if (col < 2) focusCell(rowIndex, (col + 1) as Col);
+    const at = order.indexOf(col);
+    if (at < order.length - 1) focusCell(rowIndex, order[at + 1]);
     else if (rowIndex < rows.length - 1) focusCell(rowIndex + 1, 0);
     else if (rowHasContent(rows[rowIndex])) addRowAndFocus(0);
     else onExit();
@@ -152,8 +166,9 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
 
   // Shift+Enter is Shift+Tab: back one cell, or to the last cell of the row above.
   function retreat(rowIndex: number, col: Col) {
-    if (col > 0) focusCell(rowIndex, (col - 1) as Col);
-    else if (rowIndex > 0) focusCell(rowIndex - 1, 2);
+    const at = order.indexOf(col);
+    if (at > 0) focusCell(rowIndex, order[at - 1]);
+    else if (rowIndex > 0) focusCell(rowIndex - 1, order[order.length - 1]);
   }
 
   function handleKeyPress(e: unknown, row: PaymentRow, rowIndex: number, col: Col) {
@@ -216,9 +231,19 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
         <Text className="px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500" style={{ flex: 1.35 }}>
           {partyLabel}
         </Text>
+        {withCar && (
+          <>
+            <Text className="px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500" style={{ flex: 1 }}>
+              Item
+            </Text>
+            <Text className="px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500" style={{ flex: 1 }}>
+              Model
+            </Text>
+          </>
+        )}
         <Text
           className="px-2.5 text-right text-[11px] font-bold capitalize tracking-wider text-gray-500"
-          style={{ width: 160 }}
+          style={{ width: amountWidth }}
         >
           Amount (NPR)
         </Text>
@@ -261,7 +286,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
                   if (opt.key === ADD_PARTY_KEY) {
                     const created = await onCreateParty?.(row.customerName.trim());
                     if (created) onUpdateRow(row.key, { customerName: created.name, selectedCustomer: created, pendingPhone: null });
-                    if (via !== 'tab') inputRefs.current[`${row.key}:1`]?.focus();
+                    if (via !== 'tab') inputRefs.current[`${row.key}:${order[1]}`]?.focus();
                     return;
                   }
                   const s = suggestions.find((x) => x.key === opt.key);
@@ -271,7 +296,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
                     selectedCustomer: s.customer,
                     pendingPhone: s.customer ? null : s.phone,
                   });
-                  if (via !== 'tab') inputRefs.current[`${row.key}:1`]?.focus();
+                  if (via !== 'tab') inputRefs.current[`${row.key}:${order[1]}`]?.focus();
                 }}
                 inputRef={(el) => {
                   inputRefs.current[`${row.key}:0`] = el;
@@ -296,7 +321,55 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
               />
             </View>
 
-            <View style={{ width: 160 }}>
+            {withCar && (
+              <>
+                {/* The car this payment is for: only the cars bought from this vendor. */}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <SuggestInput
+                    value={row.item}
+                    onChangeText={(v) => onUpdateRow(row.key, { item: v })}
+                    options={focusedCell?.key === row.key && focusedCell.col === 3 ? carOptionsFor?.(linked, row.item) ?? [] : []}
+                    showWhenEmpty
+                    onSelectOption={(opt, via) => {
+                      onUpdateRow(row.key, { item: opt.label });
+                      if (via !== 'tab') inputRefs.current[`${row.key}:4`]?.focus();
+                    }}
+                    inputRef={(el) => {
+                      inputRefs.current[`${row.key}:3`] = el;
+                    }}
+                    onFocus={() => setFocusedCell({ key: row.key, col: 3 })}
+                    onBlur={() => setFocusedCell((cur) => (cur?.key === row.key && cur.col === 3 ? null : cur))}
+                    onKeyPress={(e) => handleKeyPress(e, row, rowIndex, 3)}
+                    placeholder="Car number"
+                    accessibilityLabel={`Item, row ${rowIndex + 1}`}
+                    accent={accent}
+                    inputClassName={cellClass}
+                    inputStyle={cellStyle(row.key, 3)}
+                    compact
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <TextInput
+                    ref={(el) => {
+                      inputRefs.current[`${row.key}:4`] = el;
+                    }}
+                    value={row.model}
+                    onChangeText={(v) => onUpdateRow(row.key, { model: v })}
+                    onFocus={() => setFocusedCell({ key: row.key, col: 4 })}
+                    onBlur={() => setFocusedCell((cur) => (cur?.key === row.key && cur.col === 4 ? null : cur))}
+                    onKeyPress={(e) => handleKeyPress(e, row, rowIndex, 4)}
+                    placeholder="Model"
+                    placeholderTextColor="#B2B8C1"
+                    accessibilityLabel={`Model, row ${rowIndex + 1}`}
+                    selectTextOnFocus
+                    className={cellClass}
+                    style={cellStyle(row.key, 4)}
+                  />
+                </View>
+              </>
+            )}
+
+            <View style={{ width: amountWidth }}>
               <TextInput
                 ref={(el) => {
                   inputRefs.current[`${row.key}:1`] = el;

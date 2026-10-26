@@ -24,7 +24,7 @@ import { BackButton, BookPage, BookStat, BookStats, BookTable, Pill, ToolbarButt
 import { BalanceFigure, EditableDetails } from './CustomerDetailScreen';
 import { TransactionDetailModal } from './TransactionsScreen';
 import { tidyName } from '../../utils/nameCaps';
-import { itemNamesOf, showsItemBesideParty } from '../../utils/accountFeatures';
+import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import type { BusinessTransaction } from '../../../types/database.types';
 
 /** Total Received / Total Paid are money that actually moved; Sales / Purchase / Expense are the bills themselves, paid or not. */
@@ -73,7 +73,7 @@ interface Entry {
   payment?: boolean;
   /** The bill's own number, for a Sales / Purchase bill. */
   billNo?: string;
-  /** What the bill is for - its items - where the report names it beside the vendor (see showsItemBesideParty). */
+  /** What the bill is for - its items - where the report names it beside the vendor (see sellsVehicles). */
   itemNames?: string;
   /** The Ledger type (Vendor, Customer, Employee ...) of who it was with; '' when they have none. */
   ledgerType?: string;
@@ -136,7 +136,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   const userId = useAuthStore((state) => state.session?.user.id);
   const profile = useAuthStore((state) => state.profile);
   // The Purchase Report of an account that buys vehicles says which one, beside the vendor.
-  const showItem = kind === 'purchase' && showsItemBesideParty(profile?.business_name?.trim() || profile?.full_name);
+  const showItem = kind === 'purchase' && sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
   const [viewingTx, setViewingTx] = useState<BusinessTransaction | null>(null);
   // The Expenses Report's individual (a person, a bike, a payee) whose payments are open in a popup:
   // the same table that is under it, on a card of its own that scrolls.
