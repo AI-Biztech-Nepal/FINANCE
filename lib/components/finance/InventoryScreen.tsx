@@ -32,6 +32,8 @@ import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import { compareItems, entryDay } from '../../utils/ledgerStatement';
 import { reportHtml, type PrintReport } from '../../utils/printReport';
+import { itemListOf, sellsVehicles } from '../../utils/accountFeatures';
+import { round2 } from '../../utils/money';
 import type { BusinessTransaction, Product } from '../../../types/database.types';
 
 type StockStatus = 'ok' | 'out' | 'untracked';
@@ -60,6 +62,9 @@ interface InventoryRow {
   stockLevel: number | null; // null = not a real catalog product, so no tracked stock level
   sold: number;
   purchased: number;
+  /** A vehicle account's money side of the car: what has been paid on it, and what is still owed. Null elsewhere. */
+  paid: number | null;
+  dues: number | null;
   status: StockStatus;
   /** Stock on hand at cost price; null when there's no stock level or no cost. */
   value: number | null;
@@ -482,6 +487,13 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     all: true,
     enabled: !!userId,
   });
+  // A vehicle account reads each car's money - paid and still owed - where others read units sold and bought.
+  const vehicles = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+  const { data: vendorLedger } = useSupabaseQuery('vendor_ledger_entries', {
+    filters: userId ? { owner_id: userId } : {},
+    all: true,
+    enabled: !!userId && vehicles,
+  });
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('all');
   const createProduct = useSupabaseInsert('products');
@@ -560,6 +572,31 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       }
     }
 
+    // What was paid on each car: the payments to a vendor whose remark starts with the car (the Paid page
+    // writes it so); and what each car was billed: its purchase bill - the whole bill when it is the only car
+    // on it, else the car's own line. The same reading as the Payable Report.
+    const paidByCar = new Map<string, number>();
+    if (vehicles) {
+      for (const e of vendorLedger ?? []) {
+        if (e.entry_type !== 'credit' || !e.note) continue;
+        const car = nameKey(e.note.split(' · ')[0]);
+        paidByCar.set(car, (paidByCar.get(car) ?? 0) + Number(e.amount));
+      }
+    }
+    const billedOf = (key: string): number => {
+      const counted = new Set<string>();
+      let billed = 0;
+      for (const m of movementsByName.get(key) ?? []) {
+        if (m.dir !== 'in') continue;
+        if (itemListOf(m.tx.items).length === 1) {
+          if (counted.has(m.tx.id)) continue;
+          counted.add(m.tx.id);
+          billed += Number(m.tx.amount);
+        } else billed += m.amount;
+      }
+      return billed;
+    };
+
     const seenNames = new Set<string>();
     const productRows: InventoryRow[] = (products ?? []).map((product) => {
       const key = nameKey(product.name);
@@ -569,6 +606,8 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       // purchase bill with a rate paid for it.
       const billedCost = [...(movementsByName.get(key) ?? [])].reverse().find((m) => m.dir === 'in' && m.rate > 0)?.rate ?? null;
       const cost = product.purchase_price != null ? Number(product.purchase_price) : billedCost;
+      const billed = vehicles ? billedOf(key) : 0;
+      const paid = vehicles && billed > 0 ? round2(paidByCar.get(key) ?? 0) : null;
       return {
         key: `p-${product.id}`,
         name: product.name,
@@ -578,6 +617,8 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
         stockLevel: stock,
         sold: soldByName.get(key) ?? 0,
         purchased: purchasedByName.get(key) ?? 0,
+        paid,
+        dues: paid != null ? round2(billed - paid) : null,
         status: stock <= 0 ? 'out' : 'ok',
         value: cost != null && stock > 0 ? stock * cost : null,
         product,
@@ -602,6 +643,8 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           stockLevel: null,
           sold,
           purchased,
+          paid: null,
+          dues: null,
           status: 'untracked',
           value: null,
         };
@@ -612,7 +655,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     return [...productRows, ...financeItemRows].sort(
       (a, b) => Number(hasStock(b)) - Number(hasStock(a)) || a.name.localeCompare(b.name)
     );
-  }, [products, financeItems, movementsByName]);
+  }, [products, financeItems, movementsByName, vehicles, vendorLedger]);
 
   const stats = useMemo(
     () => ({
@@ -635,6 +678,8 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     () => ({
       sold: filteredRows.reduce((sum, r) => sum + r.sold, 0),
       purchased: filteredRows.reduce((sum, r) => sum + r.purchased, 0),
+      paid: round2(filteredRows.reduce((sum, r) => sum + (r.paid ?? 0), 0)),
+      dues: round2(filteredRows.reduce((sum, r) => sum + (r.dues ?? 0), 0)),
       value: filteredRows.reduce((sum, r) => sum + (r.value ?? 0), 0),
     }),
     [filteredRows]
@@ -662,7 +707,11 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       )}
       {compact && (
         <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-          Sold {qty(r.sold)} · Bought {qty(r.purchased)}
+          {vehicles
+            ? r.dues != null
+              ? `Paid ${money(r.paid ?? 0)} · Due ${money(r.dues)}`
+              : 'No purchase bill'
+            : `Sold ${qty(r.sold)} · Bought ${qty(r.purchased)}`}
         </Text>
       )}
     </View>
@@ -674,6 +723,20 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     width,
     render: (_r, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text>,
   });
+  const paidColumn: BookColumn<InventoryRow> = {
+    key: 'paid',
+    label: 'Total paid',
+    width: 108,
+    align: 'right',
+    render: (r) => (r.paid != null ? num(r.paid ? money(r.paid) : '0', '#047857', true) : dash),
+  };
+  const duesColumn: BookColumn<InventoryRow> = {
+    key: 'dues',
+    label: 'Remaining dues',
+    width: 124,
+    align: 'right',
+    render: (r) => (r.dues == null ? dash : r.dues === 0 ? num('Cleared', '#047857', true) : num(money(Math.abs(r.dues)), r.dues > 0 ? '#B91C1C' : '#047857', true)),
+  };
   const columns: BookColumn<InventoryRow>[] = layout.full
     ? [
         snColumn(52),
@@ -681,9 +744,15 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
         { key: 'stock', label: 'In stock', width: 96, align: 'right', render: (r) => (r.stockLevel != null ? num(qty(r.stockLevel), stockColor(r), true) : dash) },
         { key: 'status', label: 'Status', width: 90, render: (r) => <Pill text={STATUS[r.status].label} color={STATUS[r.status].color} bg={STATUS[r.status].bg} /> },
         { key: 'cost', label: 'Cost price', width: 90, align: 'right', render: (r) => (r.cost != null ? num(rs(r.cost), '#4B5563') : dash) },
+        // A vehicle account: Total paid and Remaining dues sit right behind the Cost price.
+        ...(vehicles ? [paidColumn, duesColumn] : []),
         { key: 'price', label: 'Selling price', width: 100, align: 'right', render: (r) => (r.price != null ? num(rs(r.price)) : dash) },
-        { key: 'sold', label: 'Sold', width: 72, align: 'right', render: (r) => num(qty(r.sold), '#047857', true) },
-        { key: 'purchased', label: 'Purchased', width: 92, align: 'right', render: (r) => num(qty(r.purchased), '#B91C1C', true) },
+        ...(vehicles
+          ? []
+          : [
+              { key: 'sold', label: 'Sold', width: 72, align: 'right' as const, render: (r: InventoryRow) => num(qty(r.sold), '#047857', true) },
+              { key: 'purchased', label: 'Purchased', width: 92, align: 'right' as const, render: (r: InventoryRow) => num(qty(r.purchased), '#B91C1C', true) },
+            ]),
         { key: 'value', label: 'Stock value', width: 108, align: 'right', render: (r) => (r.value != null ? num(money(r.value)) : dash) },
         { key: 'act', label: '', width: 34, align: 'right', render: () => <Ionicons name="chevron-forward" size={14} color="#D1D5DB" /> },
       ]
@@ -698,8 +767,15 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     ? {
         label: `${filteredRows.length} ${filteredRows.length === 1 ? 'item' : 'items'} · Totals`,
         cells: {
-          sold: <Text className="text-[13px] font-extrabold" style={{ color: '#047857' }}>{qty(totals.sold)}</Text>,
-          purchased: <Text className="text-[13px] font-extrabold" style={{ color: '#B91C1C' }}>{qty(totals.purchased)}</Text>,
+          ...(vehicles
+            ? {
+                paid: <Text className="text-[13px] font-extrabold" style={{ color: '#047857' }}>{money(totals.paid)}</Text>,
+                dues: <Text className="text-[13px] font-extrabold" style={{ color: '#B91C1C' }}>{money(totals.dues)}</Text>,
+              }
+            : {
+                sold: <Text className="text-[13px] font-extrabold" style={{ color: '#047857' }}>{qty(totals.sold)}</Text>,
+                purchased: <Text className="text-[13px] font-extrabold" style={{ color: '#B91C1C' }}>{qty(totals.purchased)}</Text>,
+              }),
           value: <Text className="text-[13px] font-extrabold text-gray-900">{money(totals.value)}</Text>,
         },
       }
@@ -829,9 +905,9 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
             { label: 'In stock', align: 'right' },
             { label: 'Status' },
             { label: 'Cost price', align: 'right' },
+            ...(vehicles ? [{ label: 'Total paid', align: 'right' as const }, { label: 'Remaining dues', align: 'right' as const }] : []),
             { label: 'Selling price', align: 'right' },
-            { label: 'Sold', align: 'right' },
-            { label: 'Purchased', align: 'right' },
+            ...(vehicles ? [] : [{ label: 'Sold', align: 'right' as const }, { label: 'Purchased', align: 'right' as const }]),
             { label: 'Stock value', align: 'right' },
           ],
           rows: filteredRows.map((r, n) => [
@@ -841,16 +917,27 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
             r.stockLevel != null ? qty(r.stockLevel) : '',
             STATUS[r.status].label,
             cell(r.cost),
+            ...(vehicles ? [r.paid != null ? money(r.paid) : '', r.dues != null ? money(r.dues) : ''] : []),
             cell(r.price),
-            qty(r.sold),
-            qty(r.purchased),
+            ...(vehicles ? [] : [qty(r.sold), qty(r.purchased)]),
             r.value != null ? money(r.value) : '',
           ]),
-          footer: ['', `${filteredRows.length} ${filteredRows.length === 1 ? 'item' : 'items'} · Totals`, '', '', '', '', '', qty(totals.sold), qty(totals.purchased), money(totals.value)],
+          footer: [
+            '',
+            `${filteredRows.length} ${filteredRows.length === 1 ? 'item' : 'items'} · Totals`,
+            '',
+            '',
+            '',
+            '',
+            ...(vehicles ? [money(totals.paid), money(totals.dues), ''] : ['', qty(totals.sold), qty(totals.purchased)]),
+            money(totals.value),
+          ],
           emptyText: rows.length > 0 ? 'No matches.' : 'Nothing bought or sold yet.',
         },
       ],
-      note: 'Sold and Purchased count the units on Sale and Purchase bills, matched to products by item name.',
+      note: vehicles
+        ? 'Total paid is what has been paid on the car (payments naming it); Remaining dues is its purchase bill less that.'
+        : 'Sold and Purchased count the units on Sale and Purchase bills, matched to products by item name.',
     };
   }
 
