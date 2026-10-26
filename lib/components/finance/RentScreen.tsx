@@ -14,12 +14,9 @@ import { round2 } from '../../utils/money';
 import { rentalFigures, rentalStatus } from '../../utils/rental';
 import type { PrintReport } from '../../utils/printReport';
 
-const RED = '#B91C1C';
-const GREEN = '#047857';
-
-/** Rent: the cars given out on rent - who has each, from when, at what rate, what it comes to and what is
- * still due. Kept apart from Sale and Purchase bills: a car on rent comes back, so it is not a sale and does
- * not leave the stock. A rental is added and edited on its own page (see RentEntryScreen). */
+/** Rent: the items given out on rent - who has each, from when, at what rate, and what it comes to. Kept
+ * apart from Sale and Purchase bills: an item on rent comes back, so it is not a sale and does not leave
+ * the stock. A rental is added and edited on its own page (see RentEntryScreen). */
 export function RentScreen({ basePath }: { basePath: string }) {
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const layout = useBookLayout();
@@ -36,7 +33,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
 
   const openEntry = (id?: string) => router.push((id ? `${basePath}/rent-entry?id=${id}` : `${basePath}/rent-entry`) as never);
 
-  // Cars still out first, then the rest - newest first in each.
+  // Items still out first, then the rest - newest first in each.
   const rows = useMemo(
     () =>
       [...(rentals ?? [])]
@@ -49,8 +46,6 @@ export function RentScreen({ basePath }: { basePath: string }) {
     () => ({
       out: rows.filter((x) => !x.r.returned_on).length,
       total: round2(rows.reduce((s, x) => s + x.total, 0)),
-      received: round2(rows.reduce((s, x) => s + x.received, 0)),
-      due: round2(rows.reduce((s, x) => s + x.due, 0)),
     }),
     [rows]
   );
@@ -60,16 +55,15 @@ export function RentScreen({ basePath }: { basePath: string }) {
     businessName: profile?.business_name ?? profile?.full_name ?? '',
     printedOn: toBsHistoryLabel(today),
     summary: [
-      { label: 'Cars out now', value: String(stats.out) },
+      { label: 'Out now', value: String(stats.out) },
       { label: 'Rent', value: `NPR ${money(stats.total)}` },
-      { label: 'Received', value: `NPR ${money(stats.received)}` },
-      { label: 'Due', value: `NPR ${money(stats.due)}` },
+      { label: 'Rentals', value: String(rows.length) },
     ],
     sections: [
       {
         columns: [
           { label: 'SN' },
-          { label: 'Car' },
+          { label: 'Item' },
           { label: 'Model' },
           { label: 'Rented to' },
           { label: 'From' },
@@ -77,8 +71,6 @@ export function RentScreen({ basePath }: { basePath: string }) {
           { label: 'Days', align: 'right' },
           { label: 'Rate/day', align: 'right' },
           { label: 'Rent', align: 'right' },
-          { label: 'Received', align: 'right' },
-          { label: 'Due', align: 'right' },
           { label: 'Status' },
         ],
         rows: rows.map((x, i) => {
@@ -93,12 +85,10 @@ export function RentScreen({ basePath }: { basePath: string }) {
             String(x.days),
             money(x.r.rate_per_day),
             money(x.total),
-            money(x.received),
-            money(x.due),
             x.status.label,
           ];
         }),
-        footer: ['', '', '', '', '', '', '', 'Total', money(stats.total), money(stats.received), money(stats.due), ''],
+        footer: ['', '', '', '', '', '', '', 'Total', money(stats.total), ''],
         emptyText: 'No rentals yet.',
       },
     ],
@@ -126,9 +116,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
       {text}
     </Text>
   );
-  const dueCell = (x: Row) =>
-    x.due === 0 ? num('Cleared', GREEN, true) : num(money(Math.abs(x.due)), x.due > 0 ? RED : GREEN, true);
-  const carCell = (x: Row, compact: boolean) => (
+  const itemCell = (x: Row, compact: boolean) => (
     <View style={{ minWidth: 0, gap: 2 }}>
       <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
         {x.r.car}
@@ -154,20 +142,18 @@ export function RentScreen({ basePath }: { basePath: string }) {
 
   const columns: BookColumn<Row>[] = layout.full
     ? [
-        { key: 'car', label: 'Car', render: (x) => carCell(x, false) },
-        { key: 'renter', label: 'Rented to', width: 170, render: (x) => (x.r.customer_name ? num(x.r.customer_name, '#111827') : num('—', '#D1D5DB')) },
-        { key: 'from', label: 'From', width: 112, render: (x) => dateCell(x.r.start_date) },
-        { key: 'to', label: 'To', width: 112, render: (x) => dateCell(x.r.returned_on ?? x.r.end_date) },
-        { key: 'days', label: 'Days', width: 58, align: 'right', render: (x) => num(String(x.days)) },
-        { key: 'rate', label: 'Rate / day', width: 96, align: 'right', render: (x) => num(money(x.r.rate_per_day)) },
-        { key: 'total', label: 'Rent', width: 104, align: 'right', render: (x) => num(money(x.total), '#111827', true) },
-        { key: 'received', label: 'Received', width: 104, align: 'right', render: (x) => num(x.received ? money(x.received) : '—', GREEN, true) },
-        { key: 'due', label: 'Due', width: 104, align: 'right', render: dueCell },
-        { key: 'status', label: 'Status', width: 96, render: (x) => <Pill text={x.status.label} color={x.status.color} bg={x.status.bg} /> },
+        { key: 'item', label: 'Item', render: (x) => itemCell(x, false) },
+        { key: 'renter', label: 'Rented to', width: 190, render: (x) => (x.r.customer_name ? num(x.r.customer_name, '#111827') : num('—', '#D1D5DB')) },
+        { key: 'from', label: 'From', width: 120, render: (x) => dateCell(x.r.start_date) },
+        { key: 'to', label: 'To', width: 120, render: (x) => dateCell(x.r.returned_on ?? x.r.end_date) },
+        { key: 'days', label: 'Days', width: 64, align: 'right', render: (x) => num(String(x.days)) },
+        { key: 'rate', label: 'Rate / day', width: 104, align: 'right', render: (x) => num(money(x.r.rate_per_day)) },
+        { key: 'total', label: 'Rent', width: 112, align: 'right', render: (x) => num(money(x.total), '#111827', true) },
+        { key: 'status', label: 'Status', width: 100, render: (x) => <Pill text={x.status.label} color={x.status.color} bg={x.status.bg} /> },
       ]
     : [
-        { key: 'car', label: 'Car', render: (x) => carCell(x, true) },
-        { key: 'due', label: 'Due', width: 100, align: 'right', render: dueCell },
+        { key: 'item', label: 'Item', render: (x) => itemCell(x, true) },
+        { key: 'total', label: 'Rent', width: 100, align: 'right', render: (x) => num(money(x.total), '#111827', true) },
       ];
 
   return (
@@ -175,10 +161,9 @@ export function RentScreen({ basePath }: { basePath: string }) {
       {toolbar}
 
       <BookStats>
-        <BookStat label="Cars out now" value={String(stats.out)} color="#1D4ED8" />
+        <BookStat label="Out now" value={String(stats.out)} color="#1D4ED8" />
         <BookStat label="Rent" value={`NPR ${money(stats.total)}`} color="#374151" />
-        <BookStat label="Received" value={`NPR ${money(stats.received)}`} color={GREEN} />
-        <BookStat label="Due" value={`NPR ${money(stats.due)}`} color={RED} />
+        <BookStat label="Rentals" value={String(rows.length)} color="#374151" />
       </BookStats>
 
       {error ? (
@@ -198,9 +183,8 @@ export function RentScreen({ basePath }: { basePath: string }) {
       )}
 
       <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
-        Tap a rental to edit it, add the payments received, or mark the car returned. A rental is billed by the day, counting the day it went out
-        and the day it came back; while a car is out past its due date, every day more is added. Rent is kept apart from Sales, so a car on rent
-        stays in your stock.
+        Tap a rental to edit it or mark it returned. A rental is billed by the day, counting the day it went out and the day it came back; while
+        an item is out past its due date, every day more is added. Rent is kept apart from Sales, so an item on rent stays in your stock.
       </Text>
     </BookPage>
   );
