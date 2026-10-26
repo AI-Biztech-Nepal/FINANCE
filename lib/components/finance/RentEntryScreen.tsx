@@ -49,9 +49,11 @@ function EntryCard({ icon, title, children, z }: { icon: keyof typeof Ionicons.g
 
 /** A label over its box; boxes sit side by side and wrap when the window is narrow. `action` is a small
  * link at the right of the label (Clear, ...). */
-function Box({ label, basis = 200, grow = 1, action, children }: { label: string; basis?: number; grow?: number; action?: ReactNode; children: ReactNode }) {
+function Box({ label, basis = 200, grow = 1, action, raised, children }: { label: string; basis?: number; grow?: number; action?: ReactNode; raised?: boolean; children: ReactNode }) {
   return (
-    <View style={{ flexGrow: grow, flexBasis: basis, minWidth: 0 }}>
+    // react-native-web gives every View its own stacking layer, so the box whose list is open (and the row it
+    // sits in) is raised above what follows it - otherwise the list would paint under the next row.
+    <View style={{ flexGrow: grow, flexBasis: basis, minWidth: 0, zIndex: raised ? 30 : 0 }}>
       <View className="mb-1.5 flex-row items-center justify-between">
         <Text className="text-xs font-semibold text-gray-600">{label}</Text>
         {action}
@@ -313,8 +315,8 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
 
   const detailsCard = (
     <EntryCard icon="car-outline" title="Rental details" z={20}>
-      <View className="flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
-        <Box label="Item" basis={260} grow={2}>
+      <View className="flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14, zIndex: focusedField === 'item' ? 30 : 0 }}>
+        <Box label="Item" basis={260} grow={2} raised={focusedField === 'item'}>
           <SuggestInput
             value={item}
             onChangeText={setItem}
@@ -364,8 +366,8 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         </Box>
       </View>
 
-      <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
-        <Box label="Rented to" basis={260} grow={2}>
+      <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14, zIndex: focusedField === 'renter' ? 30 : 0 }}>
+        <Box label="Rented to" basis={260} grow={2} raised={focusedField === 'renter'}>
           <SuggestInput
             value={customerName}
             onChangeText={(v) => {
