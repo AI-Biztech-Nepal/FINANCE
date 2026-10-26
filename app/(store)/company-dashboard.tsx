@@ -205,16 +205,21 @@ function ShareTable({ firstHead, rows, total, showCount, shareHead = 'Share' }: 
       {rows.map((r) => (
         <Pressable key={r.label} onPress={r.onPress} disabled={!r.onPress} className="border-b border-gray-100 py-2.5" style={({ hovered }: any) => (hovered && r.onPress ? { backgroundColor: '#F8FAFC' } : null)}>
           <View className="flex-row items-center" style={{ gap: 8 }}>
-            <View style={{ width: 9, height: 9, borderRadius: 3, backgroundColor: r.color }} />
-            <Text className="flex-1 text-[13px] font-semibold text-gray-800" numberOfLines={1}>{r.label}</Text>
+            {/* the name and its colour bar share one column, so the bar stops where the NPR column starts */}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View className="flex-row items-center" style={{ gap: 8 }}>
+                <View style={{ width: 9, height: 9, borderRadius: 3, backgroundColor: r.color }} />
+                <Text className="flex-1 text-[13px] font-semibold text-gray-800" numberOfLines={1}>{r.label}</Text>
+              </View>
+              <View className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100" style={{ marginLeft: 17 }}>
+                <View style={{ width: `${Math.min(100, Math.max(r.share ? 2 : 0, r.share ?? 0))}%`, height: 6, backgroundColor: r.color }} />
+              </View>
+              {!!r.note && <Text className="mt-1 text-[11px] text-gray-500" style={{ marginLeft: 17 }}>{r.note}</Text>}
+            </View>
             {showCount && <Text className="w-12 text-right text-[13px] text-gray-600">{r.count ?? 0}</Text>}
             <Text className="w-28 text-right text-[13px] font-semibold text-gray-900">{npr(r.amount)}</Text>
             <Text className="w-14 text-right text-[13px] font-bold text-blue-700">{r.share == null ? '–' : `${r.share.toFixed(1)}%`}</Text>
           </View>
-          <View className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100" style={{ marginLeft: 17 }}>
-            <View style={{ width: `${Math.min(100, Math.max(r.share ? 2 : 0, r.share ?? 0))}%`, height: 6, backgroundColor: r.color }} />
-          </View>
-          {!!r.note && <Text className="mt-1 text-[11px] text-gray-500" style={{ marginLeft: 17 }}>{r.note}</Text>}
         </Pressable>
       ))}
       {total && (
@@ -573,7 +578,7 @@ export default function StoreDashboard() {
   const logoUrl = profile?.business_logo_path
     ? supabase.storage.from('business-assets').getPublicUrl(profile.business_logo_path).data.publicUrl
     : null;
-  const company = profile?.business_name?.trim() || profile?.full_name || 'Your store';
+  const company = profile?.business_name?.trim() || profile?.full_name || 'Your company';
   const details = [
     profile?.business_address && { icon: 'location-outline' as const, text: profile.business_address },
     profile?.business_phone && { icon: 'call-outline' as const, text: profile.business_phone },
@@ -610,7 +615,7 @@ export default function StoreDashboard() {
           {logoUrl ? <Image source={{ uri: logoUrl }} style={{ width: 76, height: 76 }} resizeMode="cover" /> : <Ionicons name="business" size={34} color="#1E3A8A" />}
         </View>
         <View style={{ flex: 1, minWidth: 220, gap: 6 }}>
-          <Text className="text-[12px] font-semibold tracking-wider text-blue-200">STORE OVERVIEW</Text>
+          <Text className="text-[12px] font-semibold tracking-wider text-blue-200">COMPANY OVERVIEW</Text>
           <Text className="text-[26px] font-extrabold text-white" numberOfLines={2}>{company}</Text>
           {profile?.full_name && profile.business_name ? <Text className="text-[13px] text-blue-100">Owner · {profile.full_name}</Text> : null}
           <View className="mt-1 flex-row flex-wrap" style={{ columnGap: 16, rowGap: 6 }}>
@@ -624,7 +629,7 @@ export default function StoreDashboard() {
         </View>
         <Pressable onPress={() => go('/(store)/profile')} className="flex-row items-center rounded-xl px-4 py-2.5" style={{ gap: 6, backgroundColor: 'rgba(255,255,255,0.16)' }}>
           <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-          <Text className="text-[13px] font-semibold text-white">Store details</Text>
+          <Text className="text-[13px] font-semibold text-white">Company details</Text>
         </Pressable>
       </View>
       <View className="mt-5 flex-row flex-wrap" style={{ gap: 10 }}>
@@ -815,12 +820,14 @@ export default function StoreDashboard() {
               >
                 <View className="flex-row items-center" style={{ gap: 8 }}>
                   <Text className="w-6 text-[12px] text-gray-400">{i + 1}</Text>
-                  <Text className="flex-1 text-[13px] font-semibold text-gray-800" numberOfLines={1}>{name}</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text className="text-[13px] font-semibold text-gray-800" numberOfLines={1}>{name}</Text>
+                    <View className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                      <View style={{ width: `${Math.max(2, pct)}%`, height: 6, backgroundColor: '#2563EB' }} />
+                    </View>
+                  </View>
                   <Text className="w-24 text-right text-[13px] font-semibold text-gray-900">{npr(value)}</Text>
                   <Text className="w-14 text-right text-[13px] font-bold text-blue-700">{pct.toFixed(1)}%</Text>
-                </View>
-                <View className="ml-8 mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                  <View style={{ width: `${Math.max(2, pct)}%`, height: 6, backgroundColor: '#2563EB' }} />
                 </View>
               </Pressable>
             );

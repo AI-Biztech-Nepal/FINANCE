@@ -11,7 +11,8 @@ Nothing here reads or writes Jageer's database.
    `0007_title_case_existing_names.sql` is an optional tidy of names already saved (it only touches
    names written in all capitals or all small letters), and `0008_sync_customer_rename.sql` keeps a
    renamed party's bills in step. `0009_rentals.sql` adds the Rent page's table, and
-   `0010_signup_company_details.sql` saves the company name and address asked for at sign-up. Then the smoke test at the bottom of 0001 (see `finance-port/00_STEP_BY_STEP.md` 1.4-1.5).
+   `0010_signup_company_details.sql` saves the company name and address asked for at sign-up, and
+   `0011_business_assets_bucket.sql` stores the company logo. Then the smoke test at the bottom of 0001 (see `finance-port/00_STEP_BY_STEP.md` 1.4-1.5).
 3. `npm install`, then `npm run web` (or `npm run android`).
 4. **Set up email** (`supabase/email-templates/README.md`): custom SMTP + the sign-up code template.
    Without it, only your own Supabase team's addresses receive sign-up codes and reset links.

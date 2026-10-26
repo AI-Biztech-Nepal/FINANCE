@@ -1,7 +1,11 @@
 // app/(store)/profile.tsx
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../lib/hooks/useAuth';
+import { supabase } from '../../lib/supabase';
+import { resizeImageForUpload } from '../../lib/utils/resizeImage';
 import { AccountSecurityCard } from '../../lib/components/auth/AccountSecurityCard';
 import { useSupabaseUpdate } from '../../lib/hooks/useSupabase';
 import { showAlert, getErrorMessage } from '../../lib/utils/alert';
@@ -28,6 +32,35 @@ export default function StoreProfile() {
   const [form, setForm] = useState<Record<string, string>>(() =>
     Object.fromEntries(FIELDS.map(([k]) => [k, ((profile as any)?.[k] as string | null) ?? '']))
   );
+  // The company logo, shown on the Dashboard (see 0011_business_assets_bucket.sql). Saved with the rest.
+  const [logoPath, setLogoPath] = useState<string | null>(profile?.business_logo_path ?? null);
+  const [uploading, setUploading] = useState(false);
+  const logoUrl = logoPath ? supabase.storage.from('business-assets').getPublicUrl(logoPath).data.publicUrl : null;
+
+  async function pickLogo() {
+    if (!profile) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showAlert('Photo access needed', 'Allow photo library access to add your logo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
+    if (result.canceled || !result.assets[0]) return;
+    setUploading(true);
+    try {
+      const asset = result.assets[0];
+      const resizedUri = await resizeImageForUpload(asset.uri, asset.width, 600);
+      const arraybuffer = await fetch(resizedUri).then((res) => res.arrayBuffer());
+      const path = `${profile.id}/logo-${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from('business-assets').upload(path, arraybuffer, { contentType: 'image/jpeg' });
+      if (error) throw error;
+      setLogoPath(path);
+    } catch (err) {
+      showAlert('Could not upload logo', getErrorMessage(err));
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function save() {
     if (!profile) return;
@@ -36,7 +69,7 @@ export default function StoreProfile() {
       showAlert('Fill in the required details', `Still needed: ${missing.join(', ')}.`);
       return;
     }
-    const values = Object.fromEntries(FIELDS.map(([k]) => [k, form[k].trim() || null]));
+    const values = { ...Object.fromEntries(FIELDS.map(([k]) => [k, form[k].trim() || null])), business_logo_path: logoPath };
     try {
       const saved = await update.mutateAsync({ id: profile.id, values });
       setProfile(saved);
@@ -48,6 +81,25 @@ export default function StoreProfile() {
 
   return (
     <ScrollView className="flex-1 bg-gray-50 px-6 pt-4" contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <View className="mb-4 flex-row items-center gap-4">
+        <Pressable
+          onPress={pickLogo}
+          disabled={uploading}
+          className="h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-gray-300 bg-white"
+        >
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={{ width: 80, height: 80 }} resizeMode="contain" />
+          ) : (
+            <Ionicons name="image-outline" size={26} color="#9CA3AF" />
+          )}
+        </Pressable>
+        <View className="flex-1">
+          <Text className="text-base font-bold text-gray-900">Company logo</Text>
+          <Text className="mt-0.5 text-xs text-gray-400">
+            {uploading ? 'Uploading…' : logoUrl ? 'Tap the logo to replace it, then Save' : 'Tap to add - shown on your Dashboard'}
+          </Text>
+        </View>
+      </View>
       {FIELDS.map(([key, label]) => (
         <View key={key} className="mb-3">
           <Text className="mb-1 text-xs font-semibold text-gray-500">
