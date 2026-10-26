@@ -89,7 +89,7 @@ const HIDDEN: [string, string][] = [
   ['import-statement', 'Import Statement'],
   ['report', 'Report'],
   ['daybook', 'Day Book'],
-  ['profile', 'Store Details'],
+  ['profile', 'Company Details'],
 ];
 
 export default function StoreLayout() {
@@ -135,7 +135,7 @@ export default function StoreLayout() {
   return (
     <RoleGuard allow={['store']}>
       {isWideWeb ? (
-        <WebSidebarShell items={navItems} roleLabel="Store" profileHref="/(store)/profile">
+        <WebSidebarShell items={navItems} roleLabel="Company" profileHref="/(store)/profile">
           {tabs}
         </WebSidebarShell>
       ) : (

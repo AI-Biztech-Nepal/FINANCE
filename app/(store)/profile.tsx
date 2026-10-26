@@ -10,12 +10,14 @@ const FIELDS = [
   ['full_name', 'Your name'],
   ['phone', 'Your phone'],
   ['city', 'City'],
-  ['business_name', 'Store name (printed on bills)'],
-  ['business_address', 'Store address'],
-  ['business_phone', 'Store phone'],
+  ['business_name', 'Company name (printed on bills)'],
+  ['business_address', 'Company address'],
+  ['business_phone', 'Company phone'],
   ['business_vat_no', 'VAT / PAN no.'],
   ['business_reg_no', 'Registration no.'],
 ] as const;
+// Asked for when the account is made (see register.tsx), and kept filled in.
+const REQUIRED: readonly string[] = ['full_name', 'business_name', 'business_address'];
 
 export default function StoreProfile() {
   const profile = useAuthStore((state) => state.profile);
@@ -29,11 +31,16 @@ export default function StoreProfile() {
 
   async function save() {
     if (!profile) return;
+    const missing = FIELDS.filter(([k]) => REQUIRED.includes(k) && !form[k].trim()).map(([, label]) => label.replace(/\s*\(.*\)$/, ''));
+    if (missing.length > 0) {
+      showAlert('Fill in the required details', `Still needed: ${missing.join(', ')}.`);
+      return;
+    }
     const values = Object.fromEntries(FIELDS.map(([k]) => [k, form[k].trim() || null]));
     try {
       const saved = await update.mutateAsync({ id: profile.id, values });
       setProfile(saved);
-      showAlert('Saved', 'Store details updated.');
+      showAlert('Saved', 'Company details updated.');
     } catch (err) {
       showAlert('Could not save', getErrorMessage(err));
     }
@@ -43,7 +50,10 @@ export default function StoreProfile() {
     <ScrollView className="flex-1 bg-gray-50 px-6 pt-4" contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       {FIELDS.map(([key, label]) => (
         <View key={key} className="mb-3">
-          <Text className="mb-1 text-xs font-semibold text-gray-500">{label}</Text>
+          <Text className="mb-1 text-xs font-semibold text-gray-500">
+            {label}
+            {REQUIRED.includes(key) && <Text className="text-red-500"> *</Text>}
+          </Text>
           <TextInput
             value={form[key]}
             onChangeText={(v) => setForm((f) => ({ ...f, [key]: v }))}

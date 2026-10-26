@@ -202,7 +202,7 @@ export function WebSidebarShell({
         <Pressable
           onPress={profileHref ? () => router.push(profileHref as any) : undefined}
           disabled={!profileHref}
-          accessibilityLabel="Account and store details"
+          accessibilityLabel="Account and company details"
           style={{
             flexDirection: 'row',
             alignItems: 'center',

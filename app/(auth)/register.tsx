@@ -11,6 +11,8 @@ import { showAlert } from '../../lib/utils/alert';
 
 export default function Register() {
   const [fullName, setFullName] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,6 +38,14 @@ export default function Register() {
       showAlert('Add your name', 'Enter your full name so others know who they are dealing with.');
       return;
     }
+    if (!companyName.trim()) {
+      showAlert('Add your company name', 'Enter the company name - it is printed on your bills.');
+      return;
+    }
+    if (!address.trim()) {
+      showAlert('Add your address', 'Enter the company address - it is printed on your bills.');
+      return;
+    }
     if (!isValidEmail(trimmedEmail)) {
       showAlert('Check your email', 'Enter a valid email address, e.g. you@example.com.');
       return;
@@ -50,7 +60,11 @@ export default function Register() {
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
-      options: { data: { full_name: fullName.trim() }, emailRedirectTo: authRedirectUrl() },
+      // The company name and address go onto the new profile with the name (see 0010_signup_company_details.sql).
+      options: {
+        data: { full_name: fullName.trim(), business_name: companyName.trim(), business_address: address.trim() },
+        emailRedirectTo: authRedirectUrl(),
+      },
     });
     setIsSubmitting(false);
 
@@ -84,9 +98,11 @@ export default function Register() {
         <View className="mb-5 items-center">
           <AppLogo size={100} />
         </View>
-        <Text className="mb-6 text-center text-2xl font-extrabold text-gray-900">Create your store account</Text>
+        <Text className="mb-6 text-center text-2xl font-extrabold text-gray-900">Create your company account</Text>
 
-        <Text className="mb-1.5 text-xs font-semibold text-gray-500">Full name</Text>
+        <Text className="mb-1.5 text-xs font-semibold text-gray-500">
+          Your name<Text className="text-red-500"> *</Text>
+        </Text>
         <TextInput
           value={fullName}
           onChangeText={setFullName}
@@ -95,7 +111,31 @@ export default function Register() {
           className="mb-3.5 rounded-xl border-[1.5px] border-gray-200 px-4 py-3.5 text-sm text-gray-900"
         />
 
-        <Text className="mb-1.5 text-xs font-semibold text-gray-500">Email</Text>
+        <Text className="mb-1.5 text-xs font-semibold text-gray-500">
+          Company name<Text className="text-red-500"> *</Text>
+        </Text>
+        <TextInput
+          value={companyName}
+          onChangeText={setCompanyName}
+          placeholder="Printed on your bills"
+          placeholderTextColor="#9CA3AF"
+          className="mb-3.5 rounded-xl border-[1.5px] border-gray-200 px-4 py-3.5 text-sm text-gray-900"
+        />
+
+        <Text className="mb-1.5 text-xs font-semibold text-gray-500">
+          Address<Text className="text-red-500"> *</Text>
+        </Text>
+        <TextInput
+          value={address}
+          onChangeText={setAddress}
+          placeholder="Company address"
+          placeholderTextColor="#9CA3AF"
+          className="mb-3.5 rounded-xl border-[1.5px] border-gray-200 px-4 py-3.5 text-sm text-gray-900"
+        />
+
+        <Text className="mb-1.5 text-xs font-semibold text-gray-500">
+          Email<Text className="text-red-500"> *</Text>
+        </Text>
         <TextInput
           value={email}
           onChangeText={setEmail}
