@@ -16,6 +16,7 @@ import { ContactPickerModal } from '../ContactPickerModal';
 import { DateField } from '../DateTimeFields';
 import { FormSection } from './FormSection';
 import { RenamePartyPopup } from './FormKit';
+import { useConfirmNewParty } from './NewPartyConfirm';
 import { PaymentEntryTable, type PaymentEntryTableHandle, type PaymentRow } from './PaymentEntryTable';
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { KeyboardSelect } from './KeyboardSelect';
@@ -204,6 +205,8 @@ function QuickPaymentForm() {
   const phoneContacts = usePhoneContacts();
   const { scanning, pickAndScan } = useScanBill();
   const { confirm: confirmSave, dialog: confirmDialog } = useConfirmSave();
+  // A new customer / vendor made from a typed name is checked first, with its name editable.
+  const { askNewParty, dialog: newPartyDialog } = useConfirmNewParty();
 
   const [customerName, setCustomerName] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -323,7 +326,12 @@ function QuickPaymentForm() {
       // Typed a name that doesn't match anyone picked/selected above - save
       // them as a new customer on the spot rather than making this a dead
       // end that sends the reseller off to Your Customers first.
-      const customer = selectedCustomer ?? (await createCustomer.mutateAsync({ owner_id: userId, name: trimmedName, phone: null }));
+      let customer = selectedCustomer;
+      if (!customer) {
+        const finalName = await askNewParty({ name: trimmedName, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
+        if (!finalName) return;
+        customer = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
+      }
       await insertEntry.mutateAsync({
         [payTarget === 'vendor' ? 'vendor_id' : 'customer_id']: customer.id,
         owner_id: userId,
@@ -532,7 +540,9 @@ function QuickPaymentForm() {
             (customers ?? []).find((c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase()) ?? null;
         }
         if (!customer) {
-          customer = await createCustomer.mutateAsync({ owner_id: userId, name: trimmedName, phone: row.pendingPhone });
+          const finalName = await askNewParty({ name: trimmedName, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
+          if (!finalName) return;
+          customer = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: row.pendingPhone });
         }
         if (customer !== row.selectedCustomer) {
           updateRow(row.key, { selectedCustomer: customer, customerName: customer.name });
@@ -666,6 +676,7 @@ function QuickPaymentForm() {
   const pickerModals = (
     <>
       {confirmDialog}
+      {newPartyDialog}
       <ContactPickerModal
         visible={showPicker}
         initialQuery={pickerQuery}
@@ -808,7 +819,9 @@ function QuickPaymentForm() {
                 dueOf={payTarget === 'vendor' ? dueOf : undefined}
                 onCreateParty={async (name) => {
                   try {
-                    return await createCustomer.mutateAsync({ owner_id: userId, name, phone: null });
+                    const finalName = await askNewParty({ name, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
+                    if (!finalName) return null;
+                    return await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
                   } catch (err) {
                     showAlert('Could not add ' + (payTarget === 'vendor' ? 'vendor' : 'customer'), getErrorMessage(err));
                     return null;
@@ -880,6 +893,8 @@ function QuickPaymentForm() {
         </View>
 
         {confirmDialog}
+
+        {newPartyDialog}
 
         <ContactPickerModal
           visible={activeRowKey != null}

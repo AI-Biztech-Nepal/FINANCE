@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useRole } from '../../hooks/useAuth';
 import { sellsVehicles } from '../../utils/accountFeatures';
+import { useConfirmNewParty } from './NewPartyConfirm';
 import { useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate, useSupabaseUpsert, useSupabaseDelete } from '../../hooks/useSupabase';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { useScreenHeader } from '../../hooks/useScreenHeader';
@@ -663,6 +664,9 @@ function TransactionForm({
   const withModel = type === 'purchase' && sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
   const createTx = useSupabaseInsert('business_transactions');
   const { confirm: confirmSave, dialog: confirmDialog } = useConfirmSave();
+  // A new customer / vendor made from a typed name is checked first, with its name editable.
+  const { askNewParty, dialog: newPartyDialog } = useConfirmNewParty();
+  const newPartyKind = type === 'purchase' ? 'vendor' : type === 'sale' ? 'customer' : 'payee';
   const updateTx = useSupabaseUpdate('business_transactions');
   const { data: categories } = useSupabaseQuery('expense_categories', {
     filters: { owner_id: userId },
@@ -824,7 +828,7 @@ function TransactionForm({
   // seemed to "take", then Save would refuse with "Pick a customer". Create
   // a real customer here too when this is a bill, same as Quick Payment
   // already does.
-  async function handleSelectPartyNew(name: string, phone: string | null) {
+  async function handleSelectPartyNew(name: string, phone: string | null, confirmName = false) {
     setShowPartyPicker(false);
     if (!phone && !isBill) {
       setPartyName(name);
@@ -838,8 +842,15 @@ function TransactionForm({
         return;
       }
     }
+    // A name typed in the box is checked first; one the picker's own step already confirmed is not asked again.
+    let finalName = name;
+    if (confirmName) {
+      const checked = await askNewParty({ name, kind: newPartyKind });
+      if (!checked) return;
+      finalName = checked;
+    }
     try {
-      const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone });
+      const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone });
       selectCustomer(created);
     } catch (err) {
       showAlert('Could not add customer', getErrorMessage(err));
@@ -987,14 +998,19 @@ function TransactionForm({
         // the saved party of that name - and a brand-new name is saved as a
         // new customer/vendor on the spot, same as Quick Payment does.
         let resolvedCustomerId = customerId;
+        let savedPartyName = partyName;
         if (!resolvedCustomerId) {
           const typed = partyName.trim();
           const existing = customers.find((c) => c.name.trim().toLowerCase() === typed.toLowerCase());
           if (existing) {
             resolvedCustomerId = existing.id;
           } else {
-            const created = await createCustomer.mutateAsync({ owner_id: userId, name: typed, phone: null });
+            const finalName = await askNewParty({ name: typed, kind: newPartyKind });
+            if (!finalName) return;
+            const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
             resolvedCustomerId = created.id;
+            savedPartyName = created.name;
+            setPartyName(created.name);
           }
           setCustomerId(resolvedCustomerId);
         }
@@ -1030,7 +1046,7 @@ function TransactionForm({
         const values = {
           type,
           amount: grandTotal,
-          party_name: tidyName(partyName.trim()) || null,
+          party_name: tidyName(savedPartyName.trim()) || null,
           customer_id: resolvedCustomerId,
           note: note.trim() || null,
           bill_no: billNo.trim() || null,
@@ -1530,7 +1546,9 @@ function TransactionForm({
               onUpdateRow={updateExpenseRow}
               onCreateParty={async (name) => {
                 try {
-                  return await createCustomer.mutateAsync({ owner_id: userId, name: tidyName(name), phone: null });
+                  const finalName = await askNewParty({ name: tidyName(name), kind: 'payee' });
+                  if (!finalName) return null;
+                  return await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
                 } catch (err) {
                   showAlert('Could not add vendor', getErrorMessage(err));
                   return null;
@@ -1573,6 +1591,8 @@ function TransactionForm({
         </View>
 
         {confirmDialog}
+
+        {newPartyDialog}
 
         <ContactPickerModal
           visible={activePartyRowKey != null}
@@ -1654,7 +1674,7 @@ function TransactionForm({
                     onSelectOption={async (opt, via) => {
                       if (opt.key === ADD_PARTY_KEY) {
                         if (via !== 'tab') billNoRef.current?.focus();
-                        await handleSelectPartyNew(tidyName(partyName.trim()), null);
+                        await handleSelectPartyNew(tidyName(partyName.trim()), null, true);
                         return;
                       }
                       const s = vendorSuggestions.find((x) => x.key === opt.key);
@@ -1946,6 +1966,8 @@ function TransactionForm({
         </View>
 
         {confirmDialog}
+
+        {newPartyDialog}
 
         {addStockFor && (
           <AddStockItemDialog
@@ -2287,6 +2309,7 @@ function TransactionForm({
         available={available}
       />
       {confirmDialog}
+      {newPartyDialog}
       <ContactPickerModal
         visible={showPartyPicker}
         initialQuery={partyPickerQuery}

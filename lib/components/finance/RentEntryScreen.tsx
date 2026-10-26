@@ -13,6 +13,7 @@ import { KeyInput } from './KeyInput';
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
 import { useConfirmSave } from './ConfirmSave';
+import { useConfirmNewParty } from './NewPartyConfirm';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { MONEY } from './moneyColors';
 import { money } from './BookKit';
@@ -98,6 +99,8 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   const deleteRental = useSupabaseDelete('rentals');
   const createCustomer = useSupabaseInsert('customers');
   const { confirm: confirmSave, dialog: confirmDialog } = useConfirmSave();
+  // A new customer made from a typed name is checked first, with its name editable.
+  const { askNewParty, dialog: newPartyDialog } = useConfirmNewParty();
 
   const [item, setItem] = useState(rental?.car ?? '');
   const [model, setModel] = useState(rental?.model ?? '');
@@ -218,8 +221,10 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   async function pickRenter(opt: SuggestOption, via: 'enter' | 'tab' | 'click') {
     if (opt.key === ADD_PARTY_KEY) {
       if (!userId) return;
+      const finalName = await askNewParty({ name: customerName.trim(), kind: 'customer' });
+      if (!finalName) return;
       try {
-        const created = await createCustomer.mutateAsync({ owner_id: userId, name: customerName.trim(), phone: null });
+        const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
         setCustomerName(created.name);
         setCustomerId(created.id);
       } catch (err) {
@@ -233,8 +238,10 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       if (s.customer) setCustomerId(s.customer.id);
       else {
         // A phone contact that is not saved yet is saved now, so the rental links to a real customer.
+        const finalName = await askNewParty({ name: s.name, kind: 'customer' });
+        if (!finalName) return;
         try {
-          const created = await createCustomer.mutateAsync({ owner_id: userId, name: s.name, phone: s.phone });
+          const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: s.phone });
           setCustomerId(created.id);
         } catch {
           setCustomerId(null);
@@ -530,6 +537,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
           </View>
         </View>
         {confirmDialog}
+        {newPartyDialog}
       </ScrollView>
     );
   }
@@ -540,6 +548,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       <View className="mb-4">{summaryCard}</View>
       {actions}
       {confirmDialog}
+      {newPartyDialog}
     </ScrollView>
   );
 }
