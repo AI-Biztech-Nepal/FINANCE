@@ -58,6 +58,8 @@ interface Props {
   withCar?: boolean;
   /** The cars to pick for a row's vendor - only theirs - narrowed by what is typed. */
   carOptionsFor?: (vendor: Customer | null, typed: string) => SuggestOption[];
+  /** The model number already entered for a car (on its purchase bill); '' when there is none. */
+  modelFor?: (item: string) => string;
 }
 
 function rowHasContent(row: PaymentRow): boolean {
@@ -83,6 +85,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
     onCreateParty,
     withCar,
     carOptionsFor,
+    modelFor,
   },
   ref
 ) {
@@ -331,7 +334,9 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
                     options={focusedCell?.key === row.key && focusedCell.col === 3 ? carOptionsFor?.(linked, row.item) ?? [] : []}
                     showWhenEmpty
                     onSelectOption={(opt, via) => {
-                      onUpdateRow(row.key, { item: opt.label });
+                      // The car's model comes with it when its purchase bill has one; else what is typed stays.
+                      const model = modelFor?.(opt.label) ?? '';
+                      onUpdateRow(row.key, { item: opt.label, ...(model ? { model } : {}) });
                       if (via !== 'tab') inputRefs.current[`${row.key}:4`]?.focus();
                     }}
                     inputRef={(el) => {

@@ -109,13 +109,26 @@ function QuickPaymentForm() {
     }
     return map;
   }, [purchaseBills]);
+  // The model number entered on the purchase bill of each car (the latest bill that has one).
+  const modelByCar = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const bill of purchaseBills ?? []) {
+      for (const item of bill.items ?? []) {
+        const car = item.description?.trim().toLowerCase();
+        const model = item.model?.trim();
+        if (car && model && !map.has(car)) map.set(car, model);
+      }
+    }
+    return map;
+  }, [purchaseBills]);
+  const modelFor = (car: string) => modelByCar.get(car.trim().toLowerCase()) ?? '';
   const carOptionsFor = (vendor: Customer | null, typed: string): SuggestOption[] => {
     const mine = vendor ? [...(carsByVendor.get(`id:${vendor.id}`) ?? []), ...(carsByVendor.get(`name:${vendor.name.trim().toLowerCase()}`) ?? [])] : [];
     const q = typed.trim().toLowerCase();
     // Only this vendor's cars - never the rest of the stock. A vendor with none leaves the box a plain one.
     return [...new Set(mine)]
       .filter((name) => !q || name.toLowerCase().includes(q))
-      .map((name) => ({ key: name, label: name }));
+      .map((name) => ({ key: name, label: name, hint: modelFor(name) }));
   };
   // Same-direction, same-target manual entries only - counts Payment In
   // separately from Payment Out (and vendor separately from customer), and
@@ -746,6 +759,7 @@ function QuickPaymentForm() {
                 onUpdateRow={updateRow}
                 withCar={withCar}
                 carOptionsFor={carOptionsFor}
+                modelFor={modelFor}
                 onCreateParty={async (name) => {
                   try {
                     return await createCustomer.mutateAsync({ owner_id: userId, name, phone: null });
