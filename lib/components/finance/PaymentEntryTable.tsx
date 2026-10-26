@@ -136,15 +136,11 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
   }, [focusedRowKey, rows, customers, phoneContacts]);
 
   const suggestionOptions = useMemo<SuggestOption[]>(() => {
-    // A vendor with something still owed shows it beside the name, in place of the phone.
-    const options: SuggestOption[] = suggestions.map((s) => {
-      const due = s.customer && dueOf ? dueOf(s.customer.id) : 0;
-      return {
-        key: s.key,
-        label: s.name,
-        hint: due > 0 ? `Due ${formatMoney(due)}` : s.customer ? s.phone : 'From contacts',
-      };
-    });
+    const options: SuggestOption[] = suggestions.map((s) => ({
+      key: s.key,
+      label: s.name,
+      hint: s.customer ? s.phone : 'From contacts',
+    }));
     // Nobody saved goes by what was typed: offer to add them right here, like the stock item box does.
     const row = focusedRowKey ? rows.find((r) => r.key === focusedRowKey) : null;
     const typed = row?.customerName.trim() ?? '';
@@ -153,7 +149,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
       options.push({ key: ADD_PARTY_KEY, label: `Add "${typed}" as new ${partyLabel.toLowerCase()}`, kind: 'add' });
     }
     return options;
-  }, [suggestions, focusedRowKey, rows, customers, onCreateParty, partyLabel, dueOf]);
+  }, [suggestions, focusedRowKey, rows, customers, onCreateParty, partyLabel]);
 
   function focusCell(rowIndex: number, col: Col) {
     const row = rows[rowIndex];
