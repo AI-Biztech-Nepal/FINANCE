@@ -128,7 +128,7 @@ function QuickPaymentForm() {
     // Only this vendor's cars - never the rest of the stock. A vendor with none leaves the box a plain one.
     return [...new Set(mine)]
       .filter((name) => !q || name.toLowerCase().includes(q))
-      .map((name) => ({ key: name, label: name, hint: modelFor(name) }));
+      .map((name) => ({ key: name, label: name }));
   };
   // Same-direction, same-target manual entries only - counts Payment In
   // separately from Payment Out (and vendor separately from customer), and
