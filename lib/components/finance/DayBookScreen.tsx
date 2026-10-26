@@ -30,6 +30,7 @@ import { PopupCard } from './FormKit';
 import { journalOf } from '../../utils/journalVoucher';
 import { supabase } from '../../supabase';
 import { tidyName } from '../../utils/nameCaps';
+import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import type { BusinessTransaction } from '../../../types/database.types';
 import { decimalInput } from '../../utils/number';
 
@@ -949,6 +950,9 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
   const { data: accounts } = useSupabaseQuery('bank_accounts', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
   const { data: categories } = useSupabaseQuery('expense_categories', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
 
+  // A vehicle account's sale and purchase bills read with the car on them (the item) in place of the remark.
+  const showItems = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+
   const book = useMemo(() => {
     const contactName = new Map((contacts ?? []).map((c) => [c.id, c.name]));
     const accountName = new Map((accounts ?? []).map((a) => [a.id, a.name]));
@@ -998,7 +1002,8 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
           [
             t.bill_no ? `Bill #${t.bill_no}` : null,
             isExpense && t.party_name ? category : null,
-            t.note,
+            // The item (car) where the account shows it; a bill with no items keeps its remark.
+            !isExpense && showItems ? itemNamesOf(t.items) || t.note : t.note,
             !isExpense && t.payment_mode === 'credit' ? 'On credit' : null,
           ]
             .filter(Boolean)
@@ -1317,7 +1322,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
       accountOptions,
       selected,
     };
-  }, [transactions, customerEntries, vendorEntries, transfers, contacts, accounts, categories, day, from, singleDay, selectedAccount]);
+  }, [transactions, customerEntries, vendorEntries, transfers, contacts, accounts, categories, day, from, singleDay, selectedAccount, showItems]);
 
   // A bill's triggers write to the ledgers, so after it is changed the ledgers are read again too.
   const refreshBooks = () =>
