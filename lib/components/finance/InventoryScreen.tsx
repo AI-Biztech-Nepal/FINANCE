@@ -695,7 +695,8 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
 
   const stats = useMemo(
     () => ({
-      items: rows.length,
+      // What is left on the shelf: an item that has run out is not counted.
+      items: rows.filter((r) => r.status !== 'out').length,
       value: rows.reduce((sum, r) => sum + (r.value ?? 0), 0),
       profit: round2(rows.reduce((sum, r) => sum + (r.profit ?? 0), 0)),
       out: rows.filter((r) => r.status === 'out').length,
@@ -962,7 +963,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       subtitle: [filter === 'out' ? 'Out of stock' : null, search.trim() ? `Matching "${search.trim()}"` : null].filter(Boolean).join(' · ') || undefined,
       printedOn: toBsHistoryLabel(localTodayIso()),
       summary: [
-        { label: 'Items', value: String(stats.items) },
+        { label: 'In stock', value: String(stats.items) },
         vehicles
           ? { label: 'Profit / Loss', value: `NPR ${stats.profit < 0 ? '-' : ''}${money(Math.abs(stats.profit))}` }
           : { label: 'Stock value (cost)', value: `NPR ${money(stats.value)}` },
@@ -1114,7 +1115,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       {toolbar}
 
       <BookStats>
-        <BookStat label="Items" value={String(stats.items)} color="#374151" />
+        <BookStat label="In stock" value={String(stats.items)} color="#374151" />
         {vehicles ? (
           <BookStat label="Profit / Loss" value={`NPR ${profitText(stats.profit)}`} color={profitColor(stats.profit)} />
         ) : (
