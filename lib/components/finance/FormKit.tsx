@@ -200,26 +200,29 @@ export function RenamePartyPopup({
 }) {
   return (
     <PopupCard title={title} onClose={onClose} maxWidth={460}>
-      <Field label="Name" basis={240}>
-        <TextInput
-          value={value}
-          onChangeText={onChange}
-          autoFocus
-          placeholder="Name"
-          placeholderTextColor="#9CA3AF"
-          onKeyPress={(e) => {
-            const k = readKey(e);
-            if (k.key === 'Enter') {
-              k.prevent();
-              onSave();
-            } else if (k.key === 'Escape') {
-              k.prevent();
-              onClose();
-            }
-          }}
-          className={INPUT}
-        />
-      </Field>
+      {/* In a row, as the ledger's Edit popup has it: a Field's width setting is a height in a column. */}
+      <FieldRow>
+        <Field label="Name" basis={240}>
+          <TextInput
+            value={value}
+            onChangeText={onChange}
+            autoFocus
+            placeholder="Name"
+            placeholderTextColor="#9CA3AF"
+            onKeyPress={(e) => {
+              const k = readKey(e);
+              if (k.key === 'Enter') {
+                k.prevent();
+                onSave();
+              } else if (k.key === 'Escape') {
+                k.prevent();
+                onClose();
+              }
+            }}
+            className={INPUT}
+          />
+        </Field>
+      </FieldRow>
       <FormActions onCancel={onClose} onSave={onSave} saving={saving} />
     </PopupCard>
   );
