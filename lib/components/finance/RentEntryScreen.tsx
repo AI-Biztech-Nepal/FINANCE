@@ -84,6 +84,13 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   const { data: products } = useSupabaseQuery('products', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
   const { data: financeItems } = useSupabaseQuery('finance_items', { filters: owner, enabled: !!userId });
   const { data: customers } = useSupabaseQuery('customers', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
+  // The model number entered on each item's purchase bill (the latest bill that has one), so picking an item brings it in.
+  const { data: purchaseBills } = useSupabaseQuery('business_transactions', {
+    filters: userId ? { owner_id: userId, type: 'purchase' } : {},
+    orderBy: { column: 'created_at', ascending: false },
+    all: true,
+    enabled: !!userId,
+  });
   const { data: allRentals } = useSupabaseQuery('rentals', { filters: owner, orderBy: { column: 'created_at', ascending: false }, enabled: !!userId });
   const phoneContacts = usePhoneContacts();
   const createRental = useSupabaseInsert('rentals');
@@ -183,6 +190,23 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
     }
     return options;
   }, [renterSuggestions, customerName, customerId, customers]);
+
+  const modelByItem = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const bill of purchaseBills ?? []) {
+      for (const line of bill.items ?? []) {
+        const name = line.description?.trim().toLowerCase();
+        const m = line.model?.trim();
+        if (name && m && !map.has(name)) map.set(name, m);
+      }
+    }
+    return map;
+  }, [purchaseBills]);
+  /** Brings in the item's model; `onlyIfEmpty` leaves one that is already typed. */
+  const fillModel = (name: string, onlyIfEmpty = false) => {
+    const found = modelByItem.get(name.trim().toLowerCase());
+    if (found && !(onlyIfEmpty && model.trim())) setModel(found);
+  };
 
   const recent = useMemo(() => (allRentals ?? []).filter((r) => r.id !== rental?.id).slice(0, 5), [allRentals, rental?.id]);
 
@@ -306,11 +330,16 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
             options={focusedField === 'item' ? itemOptions : []}
             onSelectOption={(opt, via) => {
               setItem(opt.label);
+              fillModel(opt.label);
               if (via !== 'tab') focus('model');
             }}
             inputRef={setRef('item')}
             onFocus={() => setFocusedField('item')}
-            onBlur={() => setFocusedField((f) => (f === 'item' ? null : f))}
+            onBlur={() => {
+              setFocusedField((f) => (f === 'item' ? null : f));
+              // An item typed out in full (not picked) brings its model in too, when none is typed.
+              fillModel(item, true);
+            }}
             onKeyPress={enterKey('item')}
             placeholder="Item name…"
             accessibilityLabel="Item"
