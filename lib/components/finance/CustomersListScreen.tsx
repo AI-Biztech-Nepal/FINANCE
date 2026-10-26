@@ -43,6 +43,7 @@ import { nameCaps, capWords } from '../../utils/nameCaps';
 import { isValidPhone10 } from '../../utils/phone';
 import { localTodayIso } from '../../utils/localDate';
 import { journalOf } from '../../utils/journalVoucher';
+import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { getLastSyncedAt, isContactsSyncEnabled, requestAndSyncPhoneContacts } from '../../utils/contactsSync';
@@ -78,13 +79,16 @@ function useLedgerItems(userId: string | undefined): { byParty: Map<string, Ledg
     all: true,
     enabled: !!userId,
   });
-  // A bill's number is on the bill, not on the ledger entry it posts: read just what is needed of it.
+  // A bill's number is on the bill, not on the ledger entry it posts: read just what is needed of it
+  // (its items too, for an account that shows the item in place of the remark).
   const { data: bills } = useSupabaseQuery('business_transactions', {
     filters: userId ? { owner_id: userId } : {},
-    columns: 'id,bill_no,type',
+    columns: 'id,bill_no,type,items',
     all: true,
     enabled: !!userId,
   });
+  const profile = useAuthStore((state) => state.profile);
+  const showItems = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
 
   return useMemo(() => {
     const byParty = new Map<string, LedgerItem[]>();
@@ -117,6 +121,13 @@ function useLedgerItems(userId: string | undefined): { byParty: Map<string, Ledg
             : 'Receipt no.';
       referenceById.set(e.id, { no, kind });
     };
+    // What a line says about itself: the remark - or, for an entry a bill posted on an account that shows
+    // items, the item (car) on that bill, falling back to the remark when the bill has none.
+    const noteOf = (e: Pick<CustomerLedgerEntry, 'source' | 'source_type' | 'source_id' | 'note'>) => {
+      const fromBill = e.source === 'booking' && e.source_type === 'business_transaction' && !!e.source_id;
+      if (!showItems || !fromBill) return e.note;
+      return itemNamesOf(billById.get(e.source_id!)?.items) || e.note;
+    };
     for (const e of customerEntries ?? []) {
       note('customer', e);
       add(e.customer_id, {
@@ -126,7 +137,7 @@ function useLedgerItems(userId: string | undefined): { byParty: Map<string, Ledg
         amount: Number(e.amount),
         day: entryDay(e.entry_date, e.created_at),
         createdAt: e.created_at,
-        note: e.note,
+        note: noteOf(e),
       });
     }
     for (const e of vendorEntries ?? []) {
@@ -138,11 +149,11 @@ function useLedgerItems(userId: string | undefined): { byParty: Map<string, Ledg
         amount: Number(e.amount),
         day: entryDay(e.entry_date, e.created_at),
         createdAt: e.created_at,
-        note: e.note,
+        note: noteOf(e),
       });
     }
     return { byParty, referenceById };
-  }, [customerEntries, vendorEntries, bills]);
+  }, [customerEntries, vendorEntries, bills, showItems]);
 }
 
 /** Id of the existing customer already using `phone` for this owner, if any. */

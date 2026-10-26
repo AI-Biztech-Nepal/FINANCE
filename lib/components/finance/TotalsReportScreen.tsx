@@ -136,7 +136,10 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   const userId = useAuthStore((state) => state.session?.user.id);
   const profile = useAuthStore((state) => state.profile);
   // The Purchase Report of an account that buys vehicles says which one, beside the vendor.
-  const showItem = kind === 'purchase' && sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+  const vehicleAccount = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+  const showItem = kind === 'purchase' && vehicleAccount;
+  // ... and its sale / purchase bills read with the item on them in place of the remark.
+  const itemForRemark = (kind === 'purchase' || kind === 'sale') && vehicleAccount;
   const [viewingTx, setViewingTx] = useState<BusinessTransaction | null>(null);
   // The Expenses Report's individual (a person, a bike, a payee) whose payments are open in a popup:
   // the same table that is under it, on a card of its own that scrolls.
@@ -347,7 +350,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
             note:
               kind === 'expense'
                 ? t.note ?? ''
-                : [t.bill_no ? `Bill #${t.bill_no}` : null, t.note].filter(Boolean).join(' · '),
+                : [t.bill_no ? `Bill #${t.bill_no}` : null, itemForRemark ? itemNamesOf(t.items) || t.note : t.note].filter(Boolean).join(' · '),
             type: kind === 'expense' ? { label: category ?? 'Uncategorized', color: MONEY.out.text, bg: MONEY.out.bg } : PILL[kind],
             // A bill to a saved customer / vendor opens that party's ledger; a walk-in or expense has none.
             nav: t.customer_id && kind !== 'expense' ? { kind: 'party', partyId: t.customer_id } : { kind: 'transactions', type: kind },
@@ -563,6 +566,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     kind,
     partyId,
     showItem,
+    itemForRemark,
   ]);
 
   // The rest of what is on a person's ledger - money received from or paid to them, and what they

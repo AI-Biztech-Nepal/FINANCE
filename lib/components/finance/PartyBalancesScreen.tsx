@@ -17,6 +17,7 @@ import { entryDay } from '../../utils/ledgerStatement';
 import { reportHtml, type PrintReport, type PrintSection } from '../../utils/printReport';
 import { MONEY } from './moneyColors';
 import { journalOf } from '../../utils/journalVoucher';
+import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import { PopupCard } from './FormKit';
 import { ExcelButton, PrintButton, exportReportDocument, printReportDocument } from './PrintButton';
 
@@ -119,6 +120,14 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
     all: true,
     enabled: !!userId && direction === 'give',
   });
+  // A vehicle account's entries that a bill posted read with the item (car) on the bill in place of its remark.
+  const showItems = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+  const { data: itemBills } = useSupabaseQuery('business_transactions', {
+    filters: userId ? { owner_id: userId } : {},
+    columns: 'id,items',
+    all: true,
+    enabled: !!userId && showItems,
+  });
   const { nameById: partyTypeName } = usePartyTypes(userId);
   // Where a heading's ledger opens: the report for their Ledger type, else their ledger.
   const hrefFor = usePartyDestination(userId, basePath);
@@ -140,6 +149,11 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
     };
     const detailOf = (receiptNo: string | null, note: string | null, fallback: string) =>
       [receiptNo ? `No. ${receiptNo}` : null, note].filter(Boolean).join(' · ') || fallback;
+    const itemsByBill = new Map((itemBills ?? []).map((b) => [b.id, b.items]));
+    const noteOf = (e: { source: string; source_type: string | null; source_id: string | null; note: string | null }) =>
+      showItems && e.source === 'booking' && e.source_type === 'business_transaction' && e.source_id
+        ? itemNamesOf(itemsByBill.get(e.source_id)) || e.note
+        : e.note;
 
     if (direction === 'receive') {
       for (const e of customerEntries ?? []) {
@@ -151,7 +165,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
           id: e.id,
           day: entryDay(e.entry_date, e.created_at),
           createdAt: e.created_at,
-          detail: voucher ? [voucher.code, voucher.narration].filter(Boolean).join(' · ') : detailOf(e.receipt_no, e.note, kind.label),
+          detail: voucher ? [voucher.code, voucher.narration].filter(Boolean).join(' · ') : detailOf(e.receipt_no, noteOf(e), kind.label),
           ...kind,
           signed: credit ? -Number(e.amount) : Number(e.amount),
         });
@@ -165,7 +179,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
           id: e.id,
           day: entryDay(e.entry_date, e.created_at),
           createdAt: e.created_at,
-          detail: voucher ? [voucher.code, voucher.narration].filter(Boolean).join(' · ') : detailOf(e.receipt_no, e.note, kind.label),
+          detail: voucher ? [voucher.code, voucher.narration].filter(Boolean).join(' · ') : detailOf(e.receipt_no, noteOf(e), kind.label),
           ...kind,
           signed: credit ? -Number(e.amount) : Number(e.amount),
         });
@@ -181,7 +195,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
       out.push({ partyId, name: person?.name ?? 'Unknown', ledgerType: person?.ledgerType ?? '', balance, entries });
     }
     return out.sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name));
-  }, [direction, customerEntries, vendorEntries, personById]);
+  }, [direction, customerEntries, vendorEntries, personById, itemBills, showItems]);
 
   // The name typed in the search bar narrows the headings, the tiles and what prints.
   const [search, setSearch] = useState('');

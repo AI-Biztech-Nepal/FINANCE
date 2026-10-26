@@ -16,6 +16,7 @@ import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { useFreshLedgerArea } from '../../hooks/useFreshLedgerArea';
 import { journalOf } from '../../utils/journalVoucher';
+import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import { formatMoney, round2 } from '../../utils/money';
 import { BankAccountPickerModal } from './BankAccountPickerModal';
 import { EntryWhenFields, PartyMoveField, PaymentMethodButton, stampOf, timeOf, useEntryParty, useEntryWhen } from './EntryEditParts';
@@ -777,6 +778,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
 
   const { data: partyRow } = useSupabaseRow('customers', id);
   const profile = useAuthStore((state) => state.profile);
+  const showItems = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
   const { nameById: partyTypeName } = usePartyTypes(partyRow?.owner_id);
 
   // ---- The statement: both ledgers as one account (see ledgerStatement.ts) ----
@@ -827,7 +829,8 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
         key: `tx-${t.id}`,
         label: TX_TYPE_LABEL[t.type],
         tone: isSale ? IN_TONE : OUT_TONE,
-        detail: t.note ?? '',
+        // A vehicle account reads the item (car) on the bill here in place of its remark.
+        detail: (showItems ? itemNamesOf(t.items) : '') || (t.note ?? ''),
         reference: t.bill_no ?? '',
         dateLabel: toBsHistoryLabel(day),
         day,
@@ -921,7 +924,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     }
     return lines.sort(compareItems);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries, vendorEntries, linkedTransactions, calendarMode]);
+  }, [entries, vendorEntries, linkedTransactions, calendarMode, showItems]);
 
   // Every line with the running balance after it, oldest first - and shown newest first.
   const statementAsc = useMemo<HistoryRow[]>(() => withRunningBalance(allLines, 0), [allLines]);

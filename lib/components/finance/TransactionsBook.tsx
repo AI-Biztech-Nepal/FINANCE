@@ -15,6 +15,7 @@ import type { PrintReport } from '../../utils/printReport';
 import { useReportActions } from './PrintButton';
 import type { FeedItem } from './TransactionsScreen';
 import { tidyName } from '../../utils/nameCaps';
+import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import type { AccountTransfer, BusinessTransaction, BusinessTransactionType } from '../../../types/database.types';
 
 type FilterKey = 'all' | BusinessTransactionType;
@@ -186,6 +187,8 @@ export function TransactionsBook({
     [showTabs, hasBack, filter, filters, from, to, canImport, importHref]
   );
 
+  // A vehicle account's sale and purchase bills read with the item (car) on them in place of the remark.
+  const showItems = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
   const rows = useMemo<Row[]>(() => {
     const goParty = (id: string) => () => basePath && router.push(`${basePath}/customer/${id}` as never);
     return shownFeed.map((item): Row => {
@@ -208,7 +211,7 @@ export function TransactionsBook({
             [
               t.bill_no ? `Bill #${t.bill_no}` : null,
               isExpense && t.party_name ? category : null,
-              t.note,
+              !isExpense && showItems ? itemNamesOf(t.items) || t.note : t.note,
               isExpense ? via : t.payment_mode === 'credit' ? 'On credit' : null,
             ]
               .filter(Boolean)
@@ -295,7 +298,7 @@ export function TransactionsBook({
         onDelete: () => onDeleteTransfer(tr),
       };
     });
-  }, [shownFeed, basePath, categoryNameById, bankAccountNameById, accountName, onOpenTx, onDeleteTx, onDeleteTransfer, calendarMode]);
+  }, [shownFeed, basePath, categoryNameById, bankAccountNameById, accountName, onOpenTx, onDeleteTx, onDeleteTransfer, calendarMode, showItems]);
 
   const stats = useMemo(() => {
     const sums = { sale: 0, purchase: 0, expense: 0 };
