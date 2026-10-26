@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { resizeImageForUpload } from '../../lib/utils/resizeImage';
+import { builtInLogo } from '../../lib/utils/accountFeatures';
 import { AccountSecurityCard } from '../../lib/components/auth/AccountSecurityCard';
 import { useSupabaseUpdate } from '../../lib/hooks/useSupabase';
 import { showAlert, getErrorMessage } from '../../lib/utils/alert';
@@ -46,6 +47,8 @@ export default function StoreProfile() {
   const [logoPath, setLogoPath] = useState<string | null>(profile?.business_logo_path ?? null);
   const [uploading, setUploading] = useState(false);
   const logoUrl = logoPath ? supabase.storage.from('business-assets').getPublicUrl(logoPath).data.publicUrl : null;
+  // Until one is uploaded, the logo the app keeps for this company (if any) is the one in use.
+  const fallbackLogo = logoUrl ? null : builtInLogo(profile?.business_name?.trim() || profile?.full_name);
 
   // Puts an image on as the logo: made small enough for the bucket, uploaded to the account's own folder,
   // and set on the profile straight away.
@@ -171,15 +174,15 @@ export default function StoreProfile() {
           disabled={uploading}
           className="h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-gray-50"
         >
-          {logoUrl ? (
-            <Image source={{ uri: logoUrl }} style={{ width: 80, height: 80 }} resizeMode="contain" />
+          {logoUrl || fallbackLogo ? (
+            <Image source={logoUrl ? { uri: logoUrl } : fallbackLogo!} style={{ width: 76, height: 76 }} resizeMode="contain" />
           ) : (
             <Ionicons name="cloud-upload-outline" size={28} color={dragging ? '#2563EB' : '#9CA3AF'} />
           )}
         </Pressable>
         <View className="flex-1" style={{ gap: 2 }}>
           <Text className="text-[15px] font-bold text-gray-900">
-            {uploading ? 'Uploading…' : dragging ? 'Drop to upload' : logoUrl ? 'Your company logo' : 'Add your company logo'}
+            {uploading ? 'Uploading…' : dragging ? 'Drop to upload' : logoUrl || fallbackLogo ? 'Your company logo' : 'Add your company logo'}
           </Text>
           <Text className="text-xs text-gray-500">
             {Platform.OS === 'web' ? 'Drag and drop an image here, or click to choose one.' : 'Tap to choose an image.'} Shown on your Dashboard.
@@ -188,8 +191,8 @@ export default function StoreProfile() {
         </View>
         <View style={{ gap: 8 }}>
           <Pressable onPress={pickLogo} disabled={uploading} className="flex-row items-center rounded-lg bg-blue-600 px-3 py-2 disabled:opacity-50" style={{ gap: 6 }}>
-            <Ionicons name={logoUrl ? 'swap-horizontal' : 'add'} size={15} color="#FFFFFF" />
-            <Text className="text-[13px] font-semibold text-white">{logoUrl ? 'Change' : 'Choose'}</Text>
+            <Ionicons name={logoUrl || fallbackLogo ? 'swap-horizontal' : 'add'} size={15} color="#FFFFFF" />
+            <Text className="text-[13px] font-semibold text-white">{logoUrl || fallbackLogo ? 'Change' : 'Choose'}</Text>
           </Pressable>
           {logoUrl && (
             <Pressable onPress={removeLogo} disabled={uploading} className="flex-row items-center rounded-lg border border-gray-300 px-3 py-2 disabled:opacity-50" style={{ gap: 6 }}>

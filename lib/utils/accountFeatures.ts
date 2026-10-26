@@ -8,6 +8,12 @@ export function sellsVehicles(businessName: string | null | undefined): boolean 
   return /\bdee?va\s+auto\b/i.test(businessName ?? '');
 }
 
+/** A logo kept with the app for an account that has not uploaded one of its own (Company Details): Hamro G&G
+ * Auto Enterprises, picked out by its business name - "G&G", "G & G" or "GnG", in any case. */
+export function builtInLogo(businessName: string | null | undefined): number | null {
+  return /\bg\s*(&|n|and)\s*g\b/i.test(businessName ?? '') ? require('../../assets/logos/gng.png') : null;
+}
+
 /** The names of a bill's items, each once, in the order they are on the bill. */
 export function itemListOf(items: BillItem[] | null | undefined): string[] {
   const seen = new Set<string>();

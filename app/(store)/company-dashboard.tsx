@@ -21,6 +21,7 @@ import { supabase } from '../../lib/supabase';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../../lib/components/web/WebSidebarShell';
 import { CARD_SHADOW, RecentActivityCard } from '../../lib/components/finance/dashboard/FinanceDashboard';
 import { formatMoney } from '../../lib/utils/money';
+import { builtInLogo } from '../../lib/utils/accountFeatures';
 
 const npr = (n: number) => `NPR ${formatMoney(n)}`;
 /** 1,23,456 -> "1.23L", 12,34,567 -> "12.3L", 1,23,45,678 -> "1.23Cr": short money for charts. */
@@ -579,6 +580,8 @@ export default function StoreDashboard() {
     ? supabase.storage.from('business-assets').getPublicUrl(profile.business_logo_path).data.publicUrl
     : null;
   const company = profile?.business_name?.trim() || profile?.full_name || 'Your company';
+  // No logo uploaded: the one the app keeps for this company, if any.
+  const fallbackLogo = logoUrl ? null : builtInLogo(company);
   const details = [
     profile?.business_address && { icon: 'location-outline' as const, text: profile.business_address },
     profile?.business_phone && { icon: 'call-outline' as const, text: profile.business_phone },
@@ -612,7 +615,13 @@ export default function StoreDashboard() {
     <LinearGradient colors={['#0F172A', '#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 20, padding: wide ? 28 : 20 }}>
       <View className="flex-row flex-wrap items-center" style={{ gap: 18 }}>
         <View className="items-center justify-center overflow-hidden rounded-2xl bg-white" style={{ width: 76, height: 76 }}>
-          {logoUrl ? <Image source={{ uri: logoUrl }} style={{ width: 76, height: 76 }} resizeMode="cover" /> : <Ionicons name="business" size={34} color="#1E3A8A" />}
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={{ width: 76, height: 76 }} resizeMode="cover" />
+          ) : fallbackLogo ? (
+            <Image source={fallbackLogo} style={{ width: 68, height: 68 }} resizeMode="contain" />
+          ) : (
+            <Ionicons name="business" size={34} color="#1E3A8A" />
+          )}
         </View>
         <View style={{ flex: 1, minWidth: 220, gap: 6 }}>
           <Text className="text-[12px] font-semibold tracking-wider text-blue-200">COMPANY OVERVIEW</Text>
