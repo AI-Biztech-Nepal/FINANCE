@@ -206,6 +206,35 @@ export interface StatementImport {
   created_at: string;
 }
 
+/** Money received on a rental (see supabase/migrations/0009_rentals.sql). */
+export interface RentalPayment {
+  /** 'YYYY-MM-DD' */
+  date: string;
+  amount: number;
+  note?: string | null;
+}
+
+/** A car given out on rent. What it comes to (days x rate) and what is due are worked out from these. */
+export interface Rental {
+  id: string;
+  owner_id: string;
+  car: string;
+  model: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  /** 'YYYY-MM-DD' */
+  start_date: string;
+  /** The day it is due back, when one was agreed. */
+  end_date: string | null;
+  /** The day it actually came back; null while it is still out. */
+  returned_on: string | null;
+  rate_per_day: number;
+  payments: RentalPayment[];
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Minimal shape expected by Supabase's generated Database type.
 // Expand this if/when you swap in the CLI-generated version.
 export interface Database {
@@ -258,6 +287,7 @@ export interface Database {
         Update: Partial<StatementImport>;
         Relationships: [];
       };
+      rentals: { Row: Rental; Insert: Partial<Rental>; Update: Partial<Rental>; Relationships: [] };
     };
   };
 }

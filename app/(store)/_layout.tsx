@@ -1,6 +1,9 @@
 // app/(store)/_layout.tsx
+import { useMemo } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
 import { Tabs } from 'expo-router';
+import { useAuthStore } from '../../lib/hooks/useAuth';
+import { sellsVehicles } from '../../lib/utils/accountFeatures';
 import { RoleGuard } from '../../lib/components/RoleGuard';
 import { freshScreenLayout } from '../../lib/components/FreshScreen';
 import { TabIcon } from '../../lib/components/TabIcon';
@@ -54,7 +57,19 @@ const NAV_ITEMS: WebNavItem[] = [
   },
 ];
 
+// A vehicle account also rents its cars out: Rent sits in Finance's list just below Stock and Inventory.
+function withRent(items: WebNavItem[]): WebNavItem[] {
+  return items.map((item) => {
+    if (!item.children) return item;
+    const at = item.children.findIndex((child) => child.href.endsWith('/inventory'));
+    if (at === -1) return item;
+    const rent: WebNavItem = { href: '/(store)/rent', label: 'Rent', icon: 'car' };
+    return { ...item, children: [...item.children.slice(0, at + 1), rent, ...item.children.slice(at + 1)] };
+  });
+}
+
 const HIDDEN: [string, string][] = [
+  ['rent', 'Rent'],
   ['customers', 'Ledger'],
   ['customer/[id]', 'Ledger'],
   ['transactions', 'Statement'],
@@ -81,6 +96,11 @@ const HIDDEN: [string, string][] = [
 export default function StoreLayout() {
   const { width } = useWindowDimensions();
   const isWideWeb = Platform.OS === 'web' && width >= WEB_SIDEBAR_MIN_WIDTH;
+  const profile = useAuthStore((state) => state.profile);
+  const navItems = useMemo(
+    () => (sellsVehicles(profile?.business_name?.trim() || profile?.full_name) ? withRent(NAV_ITEMS) : NAV_ITEMS),
+    [profile?.business_name, profile?.full_name]
+  );
   const tabs = (
     <Tabs
       backBehavior="history"
@@ -116,7 +136,7 @@ export default function StoreLayout() {
   return (
     <RoleGuard allow={['store']}>
       {isWideWeb ? (
-        <WebSidebarShell items={NAV_ITEMS} roleLabel="Store" profileHref="/(store)/profile">
+        <WebSidebarShell items={navItems} roleLabel="Store" profileHref="/(store)/profile">
           {tabs}
         </WebSidebarShell>
       ) : (
