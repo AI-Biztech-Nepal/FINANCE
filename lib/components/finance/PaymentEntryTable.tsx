@@ -60,6 +60,8 @@ interface Props {
   carOptionsFor?: (vendor: Customer | null, typed: string) => SuggestOption[];
   /** The model number already entered for a car (on its purchase bill); '' when there is none. */
   modelFor?: (item: string) => string;
+  /** What is still owed to a saved vendor (negative = paid ahead). When given, the vendor box shows it. */
+  dueOf?: (partyId: string) => number;
 }
 
 function rowHasContent(row: PaymentRow): boolean {
@@ -86,6 +88,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
     withCar,
     carOptionsFor,
     modelFor,
+    dueOf,
   },
   ref
 ) {
@@ -133,11 +136,15 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
   }, [focusedRowKey, rows, customers, phoneContacts]);
 
   const suggestionOptions = useMemo<SuggestOption[]>(() => {
-    const options: SuggestOption[] = suggestions.map((s) => ({
-      key: s.key,
-      label: s.name,
-      hint: s.customer ? s.phone : 'From contacts',
-    }));
+    // A vendor with something still owed shows it beside the name, in place of the phone.
+    const options: SuggestOption[] = suggestions.map((s) => {
+      const due = s.customer && dueOf ? dueOf(s.customer.id) : 0;
+      return {
+        key: s.key,
+        label: s.name,
+        hint: due > 0 ? `Due ${formatMoney(due)}` : s.customer ? s.phone : 'From contacts',
+      };
+    });
     // Nobody saved goes by what was typed: offer to add them right here, like the stock item box does.
     const row = focusedRowKey ? rows.find((r) => r.key === focusedRowKey) : null;
     const typed = row?.customerName.trim() ?? '';
@@ -146,7 +153,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
       options.push({ key: ADD_PARTY_KEY, label: `Add "${typed}" as new ${partyLabel.toLowerCase()}`, kind: 'add' });
     }
     return options;
-  }, [suggestions, focusedRowKey, rows, customers, onCreateParty, partyLabel]);
+  }, [suggestions, focusedRowKey, rows, customers, onCreateParty, partyLabel, dueOf]);
 
   function focusCell(rowIndex: number, col: Col) {
     const row = rows[rowIndex];
@@ -322,6 +329,21 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
                   ) : null
                 }
               />
+              {/* What is still owed to the chosen vendor, so the amount can be set against it. */}
+              {linked && dueOf ? (
+                (() => {
+                  const due = dueOf(linked.id);
+                  return (
+                    <Text
+                      className="px-2.5 pb-1 text-[11px] font-semibold"
+                      style={{ color: due > 0 ? '#B91C1C' : due < 0 ? '#047857' : '#9CA3AF' }}
+                      numberOfLines={1}
+                    >
+                      {due > 0 ? `Due NPR ${formatMoney(due)}` : due < 0 ? `Paid ahead NPR ${formatMoney(-due)}` : 'Nothing due'}
+                    </Text>
+                  );
+                })()
+              ) : null}
             </View>
 
             {withCar && (

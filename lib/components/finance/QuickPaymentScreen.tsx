@@ -138,6 +138,21 @@ function QuickPaymentForm() {
     filters: userId ? { owner_id: userId, entry_type: entryType, source: 'manual' } : {},
     enabled: !!userId,
   });
+  // What is still owed to each vendor: their ledger's bills (debit) less what has been paid (credit) - the
+  // same figure as the Payable Report. Every entry, not a capped first page: a balance is a sum over all of them.
+  const { data: vendorLedger } = useSupabaseQuery('vendor_ledger_entries', {
+    filters: userId ? { owner_id: userId } : {},
+    all: true,
+    enabled: !!userId && payTarget === 'vendor',
+  });
+  const dueByVendor = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const e of vendorLedger ?? []) {
+      map.set(e.vendor_id, (map.get(e.vendor_id) ?? 0) + (e.entry_type === 'debit' ? Number(e.amount) : -Number(e.amount)));
+    }
+    return map;
+  }, [vendorLedger]);
+  const dueOf = (vendorId: string) => round2(dueByVendor.get(vendorId) ?? 0);
   const insertEntry = useSupabaseInsert(targetTable);
   const createCustomer = useSupabaseInsert('customers');
   const updateCustomer = useSupabaseUpdate('customers');
@@ -760,6 +775,7 @@ function QuickPaymentForm() {
                 withCar={withCar}
                 carOptionsFor={carOptionsFor}
                 modelFor={modelFor}
+                dueOf={payTarget === 'vendor' ? dueOf : undefined}
                 onCreateParty={async (name) => {
                   try {
                     return await createCustomer.mutateAsync({ owner_id: userId, name, phone: null });
