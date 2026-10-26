@@ -436,17 +436,12 @@ function StockItemPopup({
           : ''}
       </Text>
       <View className="flex-row" style={{ gap: 10 }}>
-        {/* An item that was bought opens its latest Purchase bill - vendor, rate and all - to edit; the
-            product's own fields (cost price, stock) are the second button. */}
+        {/* An item that was bought opens its latest Purchase bill - vendor, rate and all - to edit. One
+            with no purchase bill has nothing to open, so the product form is its only way to edit. */}
         {lastIn ? (
-          <>
-            <Pressable onPress={() => onEditPurchase(lastIn.tx)} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
-              <Text className="text-[13px] font-bold text-white">Edit purchase</Text>
-            </Pressable>
-            <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg border px-4 py-2.5" style={{ borderColor: '#1D4ED8' }}>
-              <Text className="text-[13px] font-bold" style={{ color: '#1D4ED8' }}>{row.product ? 'Edit product' : 'Track as a product'}</Text>
-            </Pressable>
-          </>
+          <Pressable onPress={() => onEditPurchase(lastIn.tx)} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
+            <Text className="text-[13px] font-bold text-white">Edit purchase</Text>
+          </Pressable>
         ) : (
           <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
             <Text className="text-[13px] font-bold text-white">{row.product ? 'Edit product' : 'Track as a product'}</Text>
