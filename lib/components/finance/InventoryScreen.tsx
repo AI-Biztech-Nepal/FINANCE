@@ -554,7 +554,10 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       const key = nameKey(product.name);
       seenNames.add(key);
       const stock = Number(product.stock_level);
-      const cost = product.purchase_price != null ? Number(product.purchase_price) : null;
+      // A product bought before its bill had a rate has no cost price of its own: it is what its latest
+      // purchase bill with a rate paid for it.
+      const billedCost = [...(movementsByName.get(key) ?? [])].reverse().find((m) => m.dir === 'in' && m.rate > 0)?.rate ?? null;
+      const cost = product.purchase_price != null ? Number(product.purchase_price) : billedCost;
       return {
         key: `p-${product.id}`,
         name: product.name,

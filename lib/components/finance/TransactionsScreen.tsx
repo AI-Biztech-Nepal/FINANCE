@@ -673,6 +673,7 @@ function TransactionForm({
     enabled: !!userId,
   });
   const createProduct = useSupabaseInsert('products');
+  const updateProduct = useSupabaseUpdate('products');
   const phoneContacts = usePhoneContacts();
   const { scanning, pickAndScan } = useScanBill();
   // Pre-fills the party picker's search box with whatever name Scan Bill
@@ -1002,6 +1003,23 @@ function TransactionForm({
           if (!name || known.has(name.toLowerCase())) continue;
           known.add(name.toLowerCase());
           await createStockProduct(name, r.rate);
+        }
+        // A purchase's rate is what the item cost. A product first bought with no rate has no cost price,
+        // so its stock value stays blank - the first rate a purchase bill gives it becomes its cost price.
+        // A failure here doesn't block the bill either.
+        if (type === 'purchase') {
+          const costless = new Map(products.filter((p) => p.purchase_price == null).map((p) => [p.name.trim().toLowerCase(), p]));
+          for (const r of validItems) {
+            const key = r.description.trim().toLowerCase();
+            const product = costless.get(key);
+            if (!product || !(Number(r.rate) > 0)) continue;
+            costless.delete(key);
+            try {
+              await updateProduct.mutateAsync({ id: product.id, values: { purchase_price: Number(r.rate) } });
+            } catch {
+              // the bill itself still saves
+            }
+          }
         }
         const values = {
           type,

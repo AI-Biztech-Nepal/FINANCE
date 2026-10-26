@@ -24,6 +24,7 @@ import { BackButton, BookPage, BookStat, BookStats, BookTable, Pill, ToolbarButt
 import { BalanceFigure, EditableDetails } from './CustomerDetailScreen';
 import { TransactionDetailModal } from './TransactionsScreen';
 import { tidyName } from '../../utils/nameCaps';
+import { itemNamesOf, showsItemBesideParty } from '../../utils/accountFeatures';
 import type { BusinessTransaction } from '../../../types/database.types';
 
 /** Total Received / Total Paid are money that actually moved; Sales / Purchase / Expense are the bills themselves, paid or not. */
@@ -72,6 +73,8 @@ interface Entry {
   payment?: boolean;
   /** The bill's own number, for a Sales / Purchase bill. */
   billNo?: string;
+  /** What the bill is for - its items - where the report names it beside the vendor (see showsItemBesideParty). */
+  itemNames?: string;
   /** The Ledger type (Vendor, Customer, Employee ...) of who it was with; '' when they have none. */
   ledgerType?: string;
   /** Where tapping it goes, when that is not the person's ledger page (see usePartyDestination). */
@@ -132,6 +135,8 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   const layout = useBookLayout();
   const userId = useAuthStore((state) => state.session?.user.id);
   const profile = useAuthStore((state) => state.profile);
+  // The Purchase Report of an account that buys vehicles says which one, beside the vendor.
+  const showItem = kind === 'purchase' && showsItemBesideParty(profile?.business_name?.trim() || profile?.full_name);
   const [viewingTx, setViewingTx] = useState<BusinessTransaction | null>(null);
   // The Expenses Report's individual (a person, a bike, a payee) whose payments are open in a popup:
   // the same table that is under it, on a card of its own that scrolls.
@@ -355,6 +360,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                 : tidyName((t.customer_id ? nameById.get(t.customer_id) : undefined) || t.party_name?.trim()) || 'No party',
             subject: kind === 'expense' ? tidyName(t.party_name?.trim()) || category || 'Uncategorized' : undefined,
             billNo: t.bill_no?.trim() || '',
+            itemNames: showItem ? itemNamesOf(t.items) : undefined,
             ledgerType: (t.customer_id ? ledgerTypeById.get(t.customer_id) : undefined) ?? '',
           };
         });
@@ -556,6 +562,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     basePath,
     kind,
     partyId,
+    showItem,
   ]);
 
   // The rest of what is on a person's ledger - money received from or paid to them, and what they
@@ -613,10 +620,10 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
         : partyId
           ? entries
           : entries.filter((e) => new Date(e.date).getFullYear() === year);
-      // Searched by name: who it was with, the category it is filed under, the bike / person paid.
+      // Searched by name: who it was with, the category it is filed under, the bike / person paid, the item bought.
       if (!needle || partyId) return inPeriodEntries;
       return inPeriodEntries.filter((e) =>
-        [e.party, e.category, e.subject].some((v) => !!v && v.toLowerCase().includes(needle))
+        [e.party, e.category, e.subject, e.itemNames].some((v) => !!v && v.toLowerCase().includes(needle))
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -790,6 +797,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       { label: 'Date' },
       { label: 'Bill No.' },
       { label: pickWord.one },
+      ...(showItem ? [{ label: 'Item' }] : []),
       { label: 'Ledger type' },
       { label: 'Amount (NPR)', align: 'right' as const },
     ];
@@ -798,12 +806,14 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       dateOf(e),
       e.billNo || '-',
       e.category || e.party || '-',
+      ...(showItem ? [e.itemNames || '-'] : []),
       e.ledgerType || '-',
       money(e.amount),
     ];
+    const billFooter = (total: number) => ['', '', '', '', ...(showItem ? [''] : []), 'Total', money(total)];
     const logSection = (heading: string, rows: Entry[], total: number): PrintSection =>
       billLog
-        ? { heading, columns: billColumnsPrint, rows: rows.map(billRowPrint), footer: ['', '', '', '', 'Total', money(total)] }
+        ? { heading, columns: billColumnsPrint, rows: rows.map(billRowPrint), footer: billFooter(total) }
         : { heading, columns: printColumns, rows: rows.map(printRow), footer: ['', '', 'Total', money(total)] };
 
     const sections: PrintSection[] = [];
@@ -819,7 +829,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       sections.push({
         columns: billColumnsPrint,
         rows: shownEntries.map(billRowPrint),
-        footer: ['', '', '', '', 'Total', money(stats.total)],
+        footer: billFooter(stats.total),
         emptyText: 'Nothing here yet.',
       });
     } else if (grouped) {
@@ -943,6 +953,16 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     ) : (
       <Text className="text-[12.5px] text-gray-300">—</Text>
     );
+  const itemColumn: BookColumn<Entry> = {
+    key: 'item',
+    label: 'Item',
+    width: 240,
+    render: (e) => (
+      <Text className="text-[13px] text-gray-700" numberOfLines={1}>
+        {e.itemNames || '—'}
+      </Text>
+    ),
+  };
   const billColumns: BookColumn<Entry>[] = layout.full
     ? [
         { key: 'sn', label: 'SN', width: 56, render: (_e, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
@@ -966,6 +986,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
             </Text>
           ),
         },
+        ...(showItem ? [itemColumn] : []),
         { key: 'ledger', label: 'Ledger type', width: 150, render: ledgerTypePill },
         { key: 'amount', label: 'Amount', width: 130, align: 'right', render: amountCell },
         { key: 'act', label: '', width: 34, align: 'right', render: chevron },
@@ -981,7 +1002,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                 {e.category || e.party || '—'}
               </Text>
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-                {[toBsHistoryLabel(e.date.slice(0, 10)), e.billNo ? `Bill ${e.billNo}` : null, e.ledgerType || null].filter(Boolean).join(' · ')}
+                {[e.itemNames || null, toBsHistoryLabel(e.date.slice(0, 10)), e.billNo ? `Bill ${e.billNo}` : null, e.ledgerType || null].filter(Boolean).join(' · ')}
               </Text>
             </View>
           ),
