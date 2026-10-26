@@ -62,6 +62,8 @@ interface Props {
   modelFor?: (item: string) => string;
   /** What is still owed to a saved vendor (negative = paid ahead). When given, the vendor box shows it. */
   dueOf?: (partyId: string) => number;
+  /** What is still owed on one car of a vendor; null when it is not one of theirs. When given, the Item box shows it. */
+  itemDueOf?: (vendor: Customer | null, item: string) => number | null;
 }
 
 function rowHasContent(row: PaymentRow): boolean {
@@ -89,6 +91,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
     carOptionsFor,
     modelFor,
     dueOf,
+    itemDueOf,
   },
   ref
 ) {
@@ -370,6 +373,22 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
                     inputStyle={cellStyle(row.key, 3)}
                     compact
                   />
+                  {/* What is left to pay on this car, under it - as the vendor's due is under the vendor. */}
+                  {itemDueOf
+                    ? (() => {
+                        const due = itemDueOf(linked, row.item);
+                        if (due == null) return null;
+                        return (
+                          <Text
+                            className="px-2.5 pb-1 text-[11px] font-semibold"
+                            style={{ color: due > 0 ? '#B91C1C' : due < 0 ? '#047857' : '#9CA3AF' }}
+                            numberOfLines={1}
+                          >
+                            {due > 0 ? `Due NPR ${formatMoney(due)}` : due < 0 ? `Paid ahead NPR ${formatMoney(-due)}` : 'Cleared'}
+                          </Text>
+                        );
+                      })()
+                    : null}
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <TextInput

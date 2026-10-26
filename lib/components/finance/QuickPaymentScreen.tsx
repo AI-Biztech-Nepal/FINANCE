@@ -122,6 +122,25 @@ function QuickPaymentForm() {
     return map;
   }, [purchaseBills]);
   const modelFor = (car: string) => modelByCar.get(car.trim().toLowerCase()) ?? '';
+  // What is still owed on each car: what its purchase bill billed (the whole bill when it is the only car
+  // on it, else the car's own line) less the payments whose remark starts with that car - the way the
+  // Payable Report reads them. Keyed by vendor ("id:..." or, for a bill with no saved vendor, "name:...") and car.
+  const carBilled = useMemo(() => {
+    const map = new Map<string, number>();
+    const add = (key: string, amount: number) => map.set(key, (map.get(key) ?? 0) + amount);
+    for (const bill of purchaseBills ?? []) {
+      const vendorKey = bill.customer_id ? `id:${bill.customer_id}` : `name:${(bill.party_name ?? '').trim().toLowerCase()}`;
+      const cars = itemListOf(bill.items);
+      if (cars.length === 1) add(`${vendorKey}|${cars[0].toLowerCase()}`, Number(bill.amount));
+      else {
+        for (const item of bill.items ?? []) {
+          const car = item.description?.trim().toLowerCase();
+          if (car) add(`${vendorKey}|${car}`, Number(item.amount) || 0);
+        }
+      }
+    }
+    return map;
+  }, [purchaseBills]);
   const carOptionsFor = (vendor: Customer | null, typed: string): SuggestOption[] => {
     const mine = vendor ? [...(carsByVendor.get(`id:${vendor.id}`) ?? []), ...(carsByVendor.get(`name:${vendor.name.trim().toLowerCase()}`) ?? [])] : [];
     const q = typed.trim().toLowerCase();
@@ -153,6 +172,23 @@ function QuickPaymentForm() {
     return map;
   }, [vendorLedger]);
   const dueOf = (vendorId: string) => round2(dueByVendor.get(vendorId) ?? 0);
+  const carPaid = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const e of vendorLedger ?? []) {
+      if (e.entry_type !== 'credit' || !e.note) continue;
+      const key = `id:${e.vendor_id}|${e.note.split(' · ')[0].trim().toLowerCase()}`;
+      map.set(key, (map.get(key) ?? 0) + Number(e.amount));
+    }
+    return map;
+  }, [vendorLedger]);
+  /** What is left to pay on a car of this vendor; null when none of the vendor's bills has the car. */
+  const itemDueOf = (vendor: Customer | null, car: string): number | null => {
+    const c = car.trim().toLowerCase();
+    if (!vendor || !c) return null;
+    const billed = [`id:${vendor.id}`, `name:${vendor.name.trim().toLowerCase()}`].reduce((s, k) => s + (carBilled.get(`${k}|${c}`) ?? 0), 0);
+    if (!billed) return null;
+    return round2(billed - (carPaid.get(`id:${vendor.id}|${c}`) ?? 0));
+  };
   const insertEntry = useSupabaseInsert(targetTable);
   const createCustomer = useSupabaseInsert('customers');
   const updateCustomer = useSupabaseUpdate('customers');
@@ -775,6 +811,7 @@ function QuickPaymentForm() {
                 withCar={withCar}
                 carOptionsFor={carOptionsFor}
                 modelFor={modelFor}
+                itemDueOf={withCar ? itemDueOf : undefined}
                 dueOf={payTarget === 'vendor' ? dueOf : undefined}
                 onCreateParty={async (name) => {
                   try {
