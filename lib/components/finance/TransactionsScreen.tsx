@@ -13,7 +13,7 @@ import { useIsWideWeb } from '../../hooks/useWideGrid';
 import { usePhoneContacts } from '../../hooks/usePhoneContacts';
 import { useScanBill } from '../../hooks/useScanBill';
 import { DateField } from '../DateTimeFields';
-import { Field, FieldRow, FormActions, INPUT, PopupCard, Segmented } from './FormKit';
+import { Field, FieldRow, FormActions, INPUT, PopupCard, RenamePartyPopup, Segmented } from './FormKit';
 import { EntryWhenFields, PartyMoveField, PaymentMethodButton, stampOf, timeOf, useEntryParty, useEntryWhen } from './EntryEditParts';
 import { MONEY } from './moneyColors';
 import { TrendChartCard } from './TrendChartCard';
@@ -1728,32 +1728,14 @@ function TransactionForm({
                 </View>
               </View>
               {showRenameParty && (
-                <View className="mt-3 flex-row items-center gap-2">
-                  <TextInput
-                    value={renamePartyValue}
-                    onChangeText={setRenamePartyValue}
-                    autoFocus
-                    placeholder="Name"
-                    placeholderTextColor="#9CA3AF"
-                    onKeyPress={(e) => {
-                      const k = readKey(e);
-                      if (k.key === 'Enter') {
-                        k.prevent();
-                        handleRenameParty();
-                      } else if (k.key === 'Escape') {
-                        k.prevent();
-                        setShowRenameParty(false);
-                      }
-                    }}
-                    className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900"
-                  />
-                  <Pressable onPress={handleRenameParty} disabled={renamingParty} hitSlop={8}>
-                    <Ionicons name="checkmark-circle" size={22} color="#059669" />
-                  </Pressable>
-                  <Pressable onPress={() => setShowRenameParty(false)} hitSlop={8}>
-                    <Ionicons name="close-circle" size={22} color="#9CA3AF" />
-                  </Pressable>
-                </View>
+                <RenamePartyPopup
+                  title={`Edit ${partyLabel.toLowerCase()}`}
+                  value={renamePartyValue}
+                  onChange={setRenamePartyValue}
+                  onSave={handleRenameParty}
+                  onClose={() => setShowRenameParty(false)}
+                  saving={renamingParty}
+                />
               )}
             </View>
 
@@ -2052,22 +2034,14 @@ function TransactionForm({
               )}
             </View>
             {showRenameParty && (
-              <View className="mb-1 flex-row items-center gap-2">
-                <TextInput
-                  value={renamePartyValue}
-                  onChangeText={setRenamePartyValue}
-                  autoFocus
-                  placeholder="Name"
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                />
-                <Pressable onPress={handleRenameParty} disabled={renamingParty} hitSlop={8}>
-                  <Ionicons name="checkmark-circle" size={22} color="#059669" />
-                </Pressable>
-                <Pressable onPress={() => setShowRenameParty(false)} hitSlop={8}>
-                  <Ionicons name="close-circle" size={22} color="#9CA3AF" />
-                </Pressable>
-              </View>
+              <RenamePartyPopup
+                title={type === 'purchase' ? 'Edit vendor' : 'Edit customer'}
+                value={renamePartyValue}
+                onChange={setRenamePartyValue}
+                onSave={handleRenameParty}
+                onClose={() => setShowRenameParty(false)}
+                saving={renamingParty}
+              />
             )}
             <Text className="text-[11px] text-gray-400">
               Required — this bill books against their ledger. Tap to search your saved customers and phone contacts,
@@ -2230,22 +2204,14 @@ function TransactionForm({
               )}
             </View>
             {showRenameParty && (
-              <View className="mb-1 mt-1 flex-row items-center gap-2">
-                <TextInput
-                  value={renamePartyValue}
-                  onChangeText={setRenamePartyValue}
-                  autoFocus
-                  placeholder="Name"
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                />
-                <Pressable onPress={handleRenameParty} disabled={renamingParty} hitSlop={8}>
-                  <Ionicons name="checkmark-circle" size={22} color="#059669" />
-                </Pressable>
-                <Pressable onPress={() => setShowRenameParty(false)} hitSlop={8}>
-                  <Ionicons name="close-circle" size={22} color="#9CA3AF" />
-                </Pressable>
-              </View>
+              <RenamePartyPopup
+                title={'Edit payee'}
+                value={renamePartyValue}
+                onChange={setRenamePartyValue}
+                onSave={handleRenameParty}
+                onClose={() => setShowRenameParty(false)}
+                saving={renamingParty}
+              />
             )}
             <Text className="mb-2.5 mt-1 text-[11px] text-gray-400">
               Tap to search your saved customers and phone contacts.

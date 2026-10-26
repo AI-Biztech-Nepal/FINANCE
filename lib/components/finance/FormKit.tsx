@@ -4,10 +4,11 @@
 // customer's details and ledger entries): a small titled card, fields side by
 // side that wrap on a narrow screen, and Cancel / Save on the right.
 import { type ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Text } from './CapsText';
 import { Ionicons } from '@expo/vector-icons';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
+import { readKey } from '../../utils/webKeys';
 
 export const INPUT = 'rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900';
 
@@ -177,5 +178,49 @@ export function PopupCard({
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+/** Fixing the name of a customer, vendor or payee, from the page it is picked on - a popup over the page,
+ * the same one on every page (the name card behind it stays as it is). Enter saves, Esc closes. */
+export function RenamePartyPopup({
+  title,
+  value,
+  onChange,
+  onSave,
+  onClose,
+  saving,
+}: {
+  title: string;
+  value: string;
+  onChange: (v: string) => void;
+  onSave: () => void;
+  onClose: () => void;
+  saving?: boolean;
+}) {
+  return (
+    <PopupCard title={title} onClose={onClose} maxWidth={460}>
+      <Field label="Name" basis={240}>
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          autoFocus
+          placeholder="Name"
+          placeholderTextColor="#9CA3AF"
+          onKeyPress={(e) => {
+            const k = readKey(e);
+            if (k.key === 'Enter') {
+              k.prevent();
+              onSave();
+            } else if (k.key === 'Escape') {
+              k.prevent();
+              onClose();
+            }
+          }}
+          className={INPUT}
+        />
+      </Field>
+      <FormActions onCancel={onClose} onSave={onSave} saving={saving} />
+    </PopupCard>
   );
 }

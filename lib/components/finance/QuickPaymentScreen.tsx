@@ -15,6 +15,7 @@ import { BankAccountPickerModal } from './BankAccountPickerModal';
 import { ContactPickerModal } from '../ContactPickerModal';
 import { DateField } from '../DateTimeFields';
 import { FormSection } from './FormSection';
+import { RenamePartyPopup } from './FormKit';
 import { PaymentEntryTable, type PaymentEntryTableHandle, type PaymentRow } from './PaymentEntryTable';
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { KeyboardSelect } from './KeyboardSelect';
@@ -625,22 +626,14 @@ function QuickPaymentForm() {
         )}
       </View>
       {showRenameCustomer && (
-        <View className="mb-1 flex-row items-center gap-2">
-          <TextInput
-            value={renameCustomerValue}
-            onChangeText={setRenameCustomerValue}
-            autoFocus
-            placeholder="Name"
-            placeholderTextColor="#9CA3AF"
-            className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-          />
-          <Pressable onPress={handleRenameCustomer} disabled={renamingCustomer} hitSlop={8}>
-            <Ionicons name="checkmark-circle" size={22} color="#059669" />
-          </Pressable>
-          <Pressable onPress={() => setShowRenameCustomer(false)} hitSlop={8}>
-            <Ionicons name="close-circle" size={22} color="#9CA3AF" />
-          </Pressable>
-        </View>
+        <RenamePartyPopup
+          title={payTarget === 'vendor' ? 'Edit vendor' : 'Edit customer'}
+          value={renameCustomerValue}
+          onChange={setRenameCustomerValue}
+          onSave={handleRenameCustomer}
+          onClose={() => setShowRenameCustomer(false)}
+          saving={renamingCustomer}
+        />
       )}
       {selectedCustomer ? (
         <View className="flex-row items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2">
