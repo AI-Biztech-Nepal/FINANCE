@@ -34,6 +34,7 @@ import { compareItems, entryDay } from '../../utils/ledgerStatement';
 import { reportHtml, type PrintReport } from '../../utils/printReport';
 import { itemListOf, sellsVehicles } from '../../utils/accountFeatures';
 import { round2 } from '../../utils/money';
+import { tidyName } from '../../utils/nameCaps';
 import type { BusinessTransaction, Product } from '../../../types/database.types';
 
 type StockStatus = 'ok' | 'out' | 'untracked';
@@ -65,6 +66,12 @@ interface InventoryRow {
   /** A vehicle account's money side of the car: what has been paid on it, and what is still owed. Null elsewhere. */
   paid: number | null;
   dues: number | null;
+  /** A vehicle account's vendor: who the car was last bought from. '' when there is no purchase bill. */
+  vendor: string;
+  /** A vehicle account's profit (+) or loss (-) on the car: what it sold for less what it cost; once not sold, what it
+   * would make at its selling price (`profitEstimated`). Null when it cannot be worked out. */
+  profit: number | null;
+  profitEstimated: boolean;
   status: StockStatus;
   /** Stock on hand at cost price; null when there's no stock level or no cost. */
   value: number | null;
@@ -608,6 +615,21 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       const cost = product.purchase_price != null ? Number(product.purchase_price) : billedCost;
       const billed = vehicles ? billedOf(key) : 0;
       const paid = vehicles && billed > 0 ? round2(paidByCar.get(key) ?? 0) : null;
+      const moves = movementsByName.get(key) ?? [];
+      const vendor = vehicles ? tidyName([...moves].reverse().find((m) => m.dir === 'in' && m.party)?.party ?? '') : '';
+      // Sold: what the sale bills brought in less the cost of the units sold. Not sold yet: what it would make at
+      // its selling price, if one is set.
+      const soldQty = soldByName.get(key) ?? 0;
+      const revenue = moves.filter((m) => m.dir === 'out').reduce((sum, m) => sum + m.amount, 0);
+      let profit: number | null = null;
+      let profitEstimated = false;
+      if (vehicles && cost != null) {
+        if (soldQty > 0 && revenue > 0) profit = round2(revenue - cost * soldQty);
+        else if (Number(product.price) > 0) {
+          profit = round2((Number(product.price) - cost) * Math.max(stock, 1));
+          profitEstimated = true;
+        }
+      }
       return {
         key: `p-${product.id}`,
         name: product.name,
@@ -619,6 +641,9 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
         purchased: purchasedByName.get(key) ?? 0,
         paid,
         dues: paid != null ? round2(billed - paid) : null,
+        vendor,
+        profit,
+        profitEstimated,
         status: stock <= 0 ? 'out' : 'ok',
         value: cost != null && stock > 0 ? stock * cost : null,
         product,
@@ -645,6 +670,9 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           purchased,
           paid: null,
           dues: null,
+          vendor: '',
+          profit: null,
+          profitEstimated: false,
           status: 'untracked',
           value: null,
         };
@@ -661,6 +689,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     () => ({
       items: rows.length,
       value: rows.reduce((sum, r) => sum + (r.value ?? 0), 0),
+      profit: round2(rows.reduce((sum, r) => sum + (r.profit ?? 0), 0)),
       out: rows.filter((r) => r.status === 'out').length,
     }),
     [rows]
@@ -680,6 +709,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       purchased: filteredRows.reduce((sum, r) => sum + r.purchased, 0),
       paid: round2(filteredRows.reduce((sum, r) => sum + (r.paid ?? 0), 0)),
       dues: round2(filteredRows.reduce((sum, r) => sum + (r.dues ?? 0), 0)),
+      profit: round2(filteredRows.reduce((sum, r) => sum + (r.profit ?? 0), 0)),
       value: filteredRows.reduce((sum, r) => sum + (r.value ?? 0), 0),
     }),
     [filteredRows]
@@ -737,10 +767,34 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     align: 'right',
     render: (r) => (r.dues == null ? dash : r.dues === 0 ? num('Cleared', '#047857', true) : num(money(Math.abs(r.dues)), r.dues > 0 ? '#B91C1C' : '#047857', true)),
   };
+  const vendorColumn: BookColumn<InventoryRow> = {
+    key: 'vendor',
+    label: 'Vendor',
+    width: 170,
+    render: (r) => (r.vendor ? num(r.vendor, '#111827') : dash),
+  };
+  const profitText = (v: number) => `${v < 0 ? '-' : ''}${money(Math.abs(v))}`;
+  const profitColor = (v: number) => (v > 0 ? '#047857' : v < 0 ? '#B91C1C' : '#6B7280');
+  const profitColumn: BookColumn<InventoryRow> = {
+    key: 'profit',
+    label: 'Profit / Loss',
+    width: 128,
+    align: 'right',
+    render: (r) =>
+      r.profit == null ? (
+        dash
+      ) : (
+        <Text className="text-[12.5px] font-bold" style={{ color: profitColor(r.profit) }} numberOfLines={1}>
+          {profitText(r.profit)}
+          {r.profitEstimated ? <Text className="text-[10px] font-medium text-gray-400"> est.</Text> : null}
+        </Text>
+      ),
+  };
   const columns: BookColumn<InventoryRow>[] = layout.full
     ? [
         snColumn(52),
         { key: 'item', label: 'Item', render: (r) => itemCell(r, false) },
+        ...(vehicles ? [vendorColumn] : []),
         { key: 'stock', label: 'In stock', width: 96, align: 'right', render: (r) => (r.stockLevel != null ? num(qty(r.stockLevel), stockColor(r), true) : dash) },
         { key: 'status', label: 'Status', width: 90, render: (r) => <Pill text={STATUS[r.status].label} color={STATUS[r.status].color} bg={STATUS[r.status].bg} /> },
         { key: 'cost', label: 'Cost price', width: 90, align: 'right', render: (r) => (r.cost != null ? num(rs(r.cost), '#4B5563') : dash) },
@@ -753,7 +807,10 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
               { key: 'sold', label: 'Sold', width: 72, align: 'right' as const, render: (r: InventoryRow) => num(qty(r.sold), '#047857', true) },
               { key: 'purchased', label: 'Purchased', width: 92, align: 'right' as const, render: (r: InventoryRow) => num(qty(r.purchased), '#B91C1C', true) },
             ]),
-        { key: 'value', label: 'Stock value', width: 108, align: 'right', render: (r) => (r.value != null ? num(money(r.value)) : dash) },
+        // A vehicle account reads the profit or loss on each car where others read the stock value.
+        vehicles
+          ? profitColumn
+          : { key: 'value', label: 'Stock value', width: 108, align: 'right' as const, render: (r: InventoryRow) => (r.value != null ? num(money(r.value)) : dash) },
         { key: 'act', label: '', width: 34, align: 'right', render: () => <Ionicons name="chevron-forward" size={14} color="#D1D5DB" /> },
       ]
     : [
@@ -776,7 +833,9 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
                 sold: <Text className="text-[13px] font-extrabold" style={{ color: '#047857' }}>{qty(totals.sold)}</Text>,
                 purchased: <Text className="text-[13px] font-extrabold" style={{ color: '#B91C1C' }}>{qty(totals.purchased)}</Text>,
               }),
-          value: <Text className="text-[13px] font-extrabold text-gray-900">{money(totals.value)}</Text>,
+          ...(vehicles
+            ? { profit: <Text className="text-[13px] font-extrabold" style={{ color: profitColor(totals.profit) }}>{profitText(totals.profit)}</Text> }
+            : { value: <Text className="text-[13px] font-extrabold text-gray-900">{money(totals.value)}</Text> }),
         },
       }
     : undefined;
@@ -893,7 +952,9 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       printedOn: toBsHistoryLabel(localTodayIso()),
       summary: [
         { label: 'Items', value: String(stats.items) },
-        { label: 'Stock value (cost)', value: `NPR ${money(stats.value)}` },
+        vehicles
+          ? { label: 'Profit / Loss', value: `NPR ${stats.profit < 0 ? '-' : ''}${money(Math.abs(stats.profit))}` }
+          : { label: 'Stock value (cost)', value: `NPR ${money(stats.value)}` },
         { label: 'Out of stock', value: String(stats.out) },
       ],
       sections: [
@@ -901,6 +962,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           columns: [
             { label: 'SN' },
             { label: 'Item' },
+            ...(vehicles ? [{ label: 'Vendor' }] : []),
             { label: 'Category' },
             { label: 'In stock', align: 'right' },
             { label: 'Status' },
@@ -908,11 +970,12 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
             ...(vehicles ? [{ label: 'Total paid', align: 'right' as const }, { label: 'Remaining dues', align: 'right' as const }] : []),
             { label: 'Selling price', align: 'right' },
             ...(vehicles ? [] : [{ label: 'Sold', align: 'right' as const }, { label: 'Purchased', align: 'right' as const }]),
-            { label: 'Stock value', align: 'right' },
+            vehicles ? { label: 'Profit / Loss', align: 'right' as const } : { label: 'Stock value', align: 'right' as const },
           ],
           rows: filteredRows.map((r, n) => [
             String(n + 1),
             r.name,
+            ...(vehicles ? [r.vendor] : []),
             r.category ?? '',
             r.stockLevel != null ? qty(r.stockLevel) : '',
             STATUS[r.status].label,
@@ -920,23 +983,24 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
             ...(vehicles ? [r.paid != null ? money(r.paid) : '', r.dues != null ? money(r.dues) : ''] : []),
             cell(r.price),
             ...(vehicles ? [] : [qty(r.sold), qty(r.purchased)]),
-            r.value != null ? money(r.value) : '',
+            vehicles ? (r.profit != null ? `${r.profit < 0 ? '-' : ''}${money(Math.abs(r.profit))}${r.profitEstimated ? ' est.' : ''}` : '') : r.value != null ? money(r.value) : '',
           ]),
           footer: [
             '',
             `${filteredRows.length} ${filteredRows.length === 1 ? 'item' : 'items'} · Totals`,
+            ...(vehicles ? [''] : []),
             '',
             '',
             '',
             '',
             ...(vehicles ? [money(totals.paid), money(totals.dues), ''] : ['', qty(totals.sold), qty(totals.purchased)]),
-            money(totals.value),
+            vehicles ? `${totals.profit < 0 ? '-' : ''}${money(Math.abs(totals.profit))}` : money(totals.value),
           ],
           emptyText: rows.length > 0 ? 'No matches.' : 'Nothing bought or sold yet.',
         },
       ],
       note: vehicles
-        ? 'Total paid is what has been paid on the car (payments naming it); Remaining dues is its purchase bill less that.'
+        ? 'Total paid is what has been paid on the car (payments naming it); Remaining dues is its purchase bill less that. Profit / Loss is what it sold for less its cost; "est." is what it would make at its selling price, not sold yet.'
         : 'Sold and Purchased count the units on Sale and Purchase bills, matched to products by item name.',
     };
   }
@@ -1040,7 +1104,11 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
 
       <BookStats>
         <BookStat label="Items" value={String(stats.items)} color="#374151" />
-        <BookStat label="Stock value (cost)" value={`NPR ${money(stats.value)}`} color="#1D4ED8" />
+        {vehicles ? (
+          <BookStat label="Profit / Loss" value={`NPR ${profitText(stats.profit)}`} color={profitColor(stats.profit)} />
+        ) : (
+          <BookStat label="Stock value (cost)" value={`NPR ${money(stats.value)}`} color="#1D4ED8" />
+        )}
         <BookStat label="Out of stock" value={String(stats.out)} color="#B91C1C" onPress={toggleOut} />
       </BookStats>
 
