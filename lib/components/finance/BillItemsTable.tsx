@@ -15,18 +15,21 @@ export interface BillItemRow {
   qty: string;
   rate: string;
   hsCode?: string;
+  /** Optional model number of the item (see `withModel`). */
+  model?: string;
 }
 
 export interface BillItemsTableHandle {
   focusRow: (index: number, col?: 0 | 1 | 2 | 3) => void;
 }
 
-/** 0 Item, 1 Qty, 2 Rate, 3 HS code. */
-type Col = 0 | 1 | 2 | 3;
-/** The order the keyboard walks a row in - the order the cells are drawn: HS code, Item, Qty, Rate. Enter
- * goes forward through it (and from the Rate to the next row's HS code), Shift+Enter goes back. The HS
- * code is optional, but it is always in the way: Enter on an empty one just moves on. */
+/** 0 Item, 1 Qty, 2 Rate, 3 HS code, 4 Model No. */
+type Col = 0 | 1 | 2 | 3 | 4;
+/** The order the keyboard walks a row in - the order the cells are drawn: HS code, Item, (Model No.,) Qty,
+ * Rate. Enter goes forward through it (and from the Rate to the next row's HS code), Shift+Enter goes
+ * back. The HS code is optional, but it is always in the way: Enter on an empty one just moves on. */
 const WALK: Col[] = [3, 0, 1, 2];
+const WALK_WITH_MODEL: Col[] = [3, 0, 4, 1, 2];
 const MAX_SUGGESTIONS = 6;
 const ADD_STOCK_ITEM_KEY = '__add-stock-item__';
 
@@ -55,10 +58,12 @@ interface Props {
   onExit: () => void;
   /** Rendered inside the card under the rows (the totals band). */
   footer?: ReactNode;
+  /** Adds a Model No. column beside the item - for goods that are told apart by model (a vehicle). */
+  withModel?: boolean;
 }
 
 function isBlank(row: BillItemRow): boolean {
-  return !row.description.trim() && !row.qty.trim() && !row.rate.trim() && !row.hsCode?.trim();
+  return !row.description.trim() && !row.qty.trim() && !row.rate.trim() && !row.hsCode?.trim() && !row.model?.trim();
 }
 
 function amountOf(row: BillItemRow): number {
@@ -70,9 +75,10 @@ function cleanNumber(v: string): string {
 }
 
 export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function BillItemsTable(
-  { items, products, financeItems, accent, onUpdate, onRemove, onRequestSave, onAddStockItem, onExit, footer },
+  { items, products, financeItems, accent, onUpdate, onRemove, onRequestSave, onAddStockItem, onExit, footer, withModel },
   ref
 ) {
+  const walk = withModel ? WALK_WITH_MODEL : WALK;
   const inputRefs = useRef<Record<string, TextInput | null>>({});
   const [focusedCell, setFocusedCell] = useState<{ index: number; col: Col } | null>(null);
 
@@ -144,14 +150,14 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
     } else if (k.key === 'Enter' && k.shift) {
       // Back one cell - and from a row's first cell to the Rate of the row above.
       k.prevent();
-      const at = WALK.indexOf(col);
-      if (at > 0) focusCell(index, WALK[at - 1]);
-      else if (index > 0) focusCell(index - 1, WALK[WALK.length - 1]);
+      const at = walk.indexOf(col);
+      if (at > 0) focusCell(index, walk[at - 1]);
+      else if (index > 0) focusCell(index - 1, walk[walk.length - 1]);
     } else if (k.key === 'Enter') {
       k.prevent();
-      const at = WALK.indexOf(col);
-      if (at < WALK.length - 1) focusCell(index, WALK[at + 1]);
-      else if (index < items.length - 1) focusCell(index + 1, WALK[0]);
+      const at = walk.indexOf(col);
+      if (at < walk.length - 1) focusCell(index, walk[at + 1]);
+      else if (index < items.length - 1) focusCell(index + 1, walk[0]);
       else onExit();
     } else if (k.key === 'ArrowDown' && index < items.length - 1) {
       k.prevent();
@@ -206,6 +212,11 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
         <Text className={headClass} style={{ flex: 1 }}>
           Item
         </Text>
+        {withModel && (
+          <Text className={headClass} style={{ width: 150 }}>
+            Model No.
+          </Text>
+        )}
         <Text className={`${headClass} text-right`} style={{ width: 90 }}>
           Qty
         </Text>
@@ -265,6 +276,7 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
                   if (!s) return;
                   onUpdate(index, {
                     hs_code: row.hs_code,
+                    model: row.model,
                     description: s.name,
                     qty: row.qty.trim() ? row.qty : '1',
                     rate: s.rate != null ? String(s.rate) : row.rate,
@@ -285,6 +297,27 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
                 inputStyle={cellStyle(index, 0)}
               />
             </View>
+
+            {withModel && (
+              <View style={{ width: 150 }}>
+                <TextInput
+                  ref={(el) => {
+                    inputRefs.current[`${index}:4`] = el;
+                  }}
+                  value={row.model ?? ''}
+                  onChangeText={(v) => onUpdate(index, { ...row, model: v })}
+                  onFocus={() => setFocusedCell({ index, col: 4 })}
+                  onBlur={() => setFocusedCell((cur) => (cur?.index === index && cur.col === 4 ? null : cur))}
+                  onKeyPress={(e) => handleKeyPress(e, index, 4)}
+                  placeholder="Model no."
+                  placeholderTextColor="#B2B8C1"
+                  accessibilityLabel={`Model number, row ${index + 1}`}
+                  selectTextOnFocus
+                  className={cellClass}
+                  style={cellStyle(index, 4)}
+                />
+              </View>
+            )}
 
             <View style={{ width: 90 }}>
               <TextInput

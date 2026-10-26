@@ -5,6 +5,7 @@ import { KeyboardAwareSectionList } from 'react-native-keyboard-aware-scroll-vie
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useRole } from '../../hooks/useAuth';
+import { sellsVehicles } from '../../utils/accountFeatures';
 import { useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate, useSupabaseUpsert, useSupabaseDelete } from '../../hooks/useSupabase';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { useScreenHeader } from '../../hooks/useScreenHeader';
@@ -60,6 +61,8 @@ const todayIso = localTodayIso;
 
 interface ItemRowState {
   hs_code?: string;
+  /** Model number - entered on a vehicle account's Purchase bill. */
+  model?: string;
   description: string;
   qty: string;
   rate: string;
@@ -655,6 +658,9 @@ function TransactionForm({
   // The keyboard-driven desk layout is for a wide web screen; a phone (or a
   // phone browser) gets the same touch form the native app does.
   const desktopWeb = useIsWideWeb();
+  // A vehicle account's Purchase bill has a Model No. beside each item.
+  const profile = useAuthStore((state) => state.profile);
+  const withModel = type === 'purchase' && sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
   const createTx = useSupabaseInsert('business_transactions');
   const { confirm: confirmSave, dialog: confirmDialog } = useConfirmSave();
   const updateTx = useSupabaseUpdate('business_transactions');
@@ -701,7 +707,7 @@ function TransactionForm({
   const [billDate, setBillDate] = useState(initial?.bill_date ?? todayIso());
   const [items, setItems] = useState<ItemRowState[]>(
     initial
-      ? initial.items.map((i) => ({ hs_code: i.hs_code ?? '', description: i.description, qty: String(i.qty), rate: String(i.rate) }))
+      ? initial.items.map((i) => ({ hs_code: i.hs_code ?? '', model: i.model ?? '', description: i.description, qty: String(i.qty), rate: String(i.rate) }))
       : []
   );
   const [showItemPicker, setShowItemPicker] = useState(false);
@@ -1031,6 +1037,7 @@ function TransactionForm({
           bill_date: billDate || null,
           items: validItems.map((r) => ({
             ...(r.hs_code?.trim() ? { hs_code: r.hs_code.trim() } : {}),
+            ...(r.model?.trim() ? { model: r.model.trim() } : {}),
             description: r.description.trim(),
             qty: Number(r.qty),
             rate: Number(r.rate),
@@ -1428,7 +1435,7 @@ function TransactionForm({
   useEffect(() => {
     if (!desktopWeb || !isBill) return;
     const last = items[items.length - 1];
-    if (!last || last.description.trim() || last.qty.trim() || last.rate.trim() || last.hs_code?.trim()) {
+    if (!last || last.description.trim() || last.qty.trim() || last.rate.trim() || last.hs_code?.trim() || last.model?.trim()) {
       setItems((prev) => [...prev, { description: '', qty: '', rate: '' }]);
     }
   }, [items, isBill, desktopWeb]);
@@ -1759,6 +1766,7 @@ function TransactionForm({
               onUpdate={updateItem}
               onRemove={removeItem}
               onRequestSave={handleSave}
+              withModel={withModel}
               onAddStockItem={(name, rate, index) => setAddStockFor({ index, name, rate })}
               onExit={() => discountRef.current?.focus()}
               footer={

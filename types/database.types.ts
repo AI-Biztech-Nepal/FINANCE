@@ -143,6 +143,8 @@ export interface BillItem {
   description: string;
   /** Harmonized System code for the line - optional, absent on older bills. */
   hs_code?: string | null;
+  /** The item's model number - optional, only entered on a vehicle account's Purchase bill. */
+  model?: string | null;
   qty: number;
   rate: number;
   amount: number;
