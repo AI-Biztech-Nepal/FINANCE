@@ -63,6 +63,8 @@ type BookRow = {
   cashOut: number | null;
   /** Running cash + bank balance after this row; null for non-cash rows. */
   balance: number | null;
+  /** A vehicle account: what the vehicle this entry is about was bought for (its purchase bill), when known. */
+  purchasePrice: number | null;
   /** Name of the account the money went through, for the row's tag. */
   account: string | null;
   /** The same movement per account, so one account can be viewed on its own. */
@@ -156,7 +158,7 @@ function amountText(n: number | null | undefined): string {
 // columns need about this much window to fit beside the sidebar - narrower
 // than that and the table falls back to the compact four-column form rather
 // than cutting off Cash in / Cash out / Balance.
-const COL = { sn: 52, date: 140, type: 104, invoice: 150, discount: 76, amount: 104, cashIn: 100, cashOut: 100, balance: 112 };
+const COL = { sn: 52, date: 140, type: 104, invoice: 150, discount: 76, amount: 104, purchase: 112, cashIn: 100, cashOut: 100, balance: 112 };
 const FULL_TABLE_MIN_WINDOW = 1280;
 
 function TypePill({ kind }: { kind: Kind }) {
@@ -189,8 +191,10 @@ function AccountPill({ row }: { row: BookRow }) {
  * move the running balance) mixed with the sales and purchase bills and
  * transfers (which don't), closing balance last. `dayLabel` is given for a
  * view of more than one day, and puts a date band above each day's entries. */
-function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabel, onOpenRow }: {
+function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabel, onOpenRow, withPurchase }: {
   rows: BookRow[];
+  /** A vehicle account: a Purchase price column - what the vehicle each entry is about was bought for. */
+  withPurchase?: boolean;
   opening: number;
   totalIn: number;
   totalOut: number;
@@ -274,9 +278,15 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
                     {r.sub}
                   </Text>
                 )}
-                {(r.invoiceNo != null || !!r.discount) && (
+                {(r.invoiceNo != null || !!r.discount || (withPurchase && r.purchasePrice != null)) && (
                   <Text className="text-xs text-gray-500">
-                    {[r.invoiceNo ? `Invoice no. ${r.invoiceNo}` : null, r.discount ? `Discount ${money(r.discount)}` : null].filter(Boolean).join(' · ')}
+                    {[
+                      r.invoiceNo ? `Invoice no. ${r.invoiceNo}` : null,
+                      r.discount ? `Discount ${money(r.discount)}` : null,
+                      withPurchase && r.purchasePrice != null ? `Purchase price ${money(r.purchasePrice)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </Text>
                 )}
               </View>
@@ -320,6 +330,7 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
             {headCell('Type', { width: COL.type })}
             {headCell('Discount', { width: COL.discount }, true)}
             {headCell('Bill amount', { width: COL.amount }, true)}
+            {withPurchase && headCell('Purchase price', { width: COL.purchase }, true)}
             {headCell('Cash in', { width: COL.cashIn }, true)}
             {headCell('Cash out', { width: COL.cashOut }, true)}
             <Text className="px-2.5 py-2 text-right text-xs font-bold text-gray-600" style={{ width: COL.balance }}>
@@ -363,6 +374,7 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
               </View>
               {num(r.discount, { width: COL.discount }, '#4B5563')}
               {num(r.amount, { width: COL.amount }, KIND[r.kind].color)}
+              {withPurchase && num(r.purchasePrice, { width: COL.purchase }, '#4B5563')}
               {num(r.cashIn, { width: COL.cashIn }, '#047857', true)}
               {num(r.cashOut, { width: COL.cashOut }, '#B91C1C', true)}
               <Text
@@ -884,6 +896,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
 
   // A vehicle account's sale and purchase bills read with the car on them (the item) in place of the remark.
   const showItems = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+  const { data: products } = useSupabaseQuery('products', { filters: owner, enabled: !!userId && showItems });
 
   const book = useMemo(() => {
     const contactName = new Map((contacts ?? []).map((c) => [c.id, c.name]));
@@ -891,7 +904,17 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
     const categoryName = new Map((categories ?? []).map((c) => [c.id, c.name]));
     const via = (bankId: string | null) => (bankId ? (accountName.get(bankId) ?? 'Other account') : 'Cash');
     const keyOf = (bankId: string | null): AccountKey => bankId ?? CASH;
-    const blank = { invoiceNo: null, discount: null, amount: null, cashIn: null, cashOut: null, balance: null, account: null, moves: [] as Move[] };
+    const blank = { invoiceNo: null, discount: null, amount: null, cashIn: null, cashOut: null, balance: null, purchasePrice: null, account: null, moves: [] as Move[] };
+    // A vehicle account: each vehicle's purchase price - its purchase bill's rate (the latest bill), else its stock
+    // item's cost price - looked up by the vehicle an entry names (a bill's item, a payment's remark).
+    const vehicleKey = (name: string | null | undefined) => (name ?? '').split(' · ')[0].trim().replace(/\s+/g, ' ').toLowerCase();
+    const costByVehicle = new Map<string, number>();
+    if (showItems) {
+      for (const p of products ?? []) if (p.purchase_price != null) costByVehicle.set(vehicleKey(p.name), Number(p.purchase_price));
+      const purchases = (transactions ?? []).filter((t) => t.type === 'purchase').sort((a, b) => (a.bill_date ?? a.created_at).localeCompare(b.bill_date ?? b.created_at));
+      for (const t of purchases) for (const i of t.items ?? []) if (Number(i.rate) > 0) costByVehicle.set(vehicleKey(i.description), Number(i.rate));
+    }
+    const costOf = (name: string | null | undefined) => (showItems ? costByVehicle.get(vehicleKey(name)) ?? null : null);
 
     // Every account's balance at the start of the day. Transfers count here -
     // they leave one account and enter another - though they net to nothing in
@@ -925,6 +948,8 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
         ...blank,
         id: t.id,
         kind: isExpense ? 'expense' : t.type === 'sale' ? 'sale' : 'purchase',
+        // A sale / purchase names the vehicle as its item; an expense on a vehicle is made out to it.
+        purchasePrice: isExpense ? costOf(t.party_name) : costOf((t.items ?? [])[0]?.description),
         date,
         time: timeOf(t.created_at),
         details: isExpense
@@ -971,6 +996,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
         ...blank,
         id: e.id,
         kind: isIn ? 'received' : 'paid',
+        purchasePrice: costOf(e.note),
         date,
         time: timeOf(e.created_at),
         details: `${isIn ? 'Received from' : 'Paid to'} ${contactName.get(e.customer_id) ?? 'customer'}`,
@@ -1022,6 +1048,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
         ...blank,
         id: e.id,
         kind: 'paid',
+        purchasePrice: costOf(e.note),
         date,
         time: timeOf(e.created_at),
         details: `Paid to ${contactName.get(e.vendor_id) ?? 'vendor'}`,
@@ -1254,7 +1281,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
       accountOptions,
       selected,
     };
-  }, [transactions, customerEntries, vendorEntries, transfers, contacts, accounts, categories, day, from, singleDay, selectedAccount, showItems]);
+  }, [transactions, customerEntries, vendorEntries, transfers, contacts, accounts, categories, day, from, singleDay, selectedAccount, showItems, products]);
 
   // A bill's triggers write to the ledgers, so after it is changed the ledgers are read again too.
   const refreshBooks = () =>
@@ -1363,12 +1390,13 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
             { label: 'Type' },
             { label: 'Discount', align: 'right' },
             { label: 'Bill amount', align: 'right' },
+            ...(showItems ? [{ label: 'Purchase price', align: 'right' as const }] : []),
             { label: 'Cash in', align: 'right' },
             { label: 'Cash out', align: 'right' },
             { label: 'Balance', align: 'right' },
           ],
           rows: [
-            ['', '', '', 'Opening balance', '', '', '', '', '', money(book.opening)],
+            ['', '', '', 'Opening balance', '', '', '', ...(showItems ? [''] : []), '', '', money(book.opening)],
             ...entries.map((r, i) => [
               String(i + 1),
               `${toBsHistoryLabel(r.date)} ${r.time}`,
@@ -1377,12 +1405,13 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
               [KIND[r.kind].label, r.account].filter(Boolean).join(' · '),
               cell(r.discount || null),
               cell(r.amount),
+              ...(showItems ? [cell(r.purchasePrice)] : []),
               cell(r.cashIn),
               cell(r.cashOut),
               cell(r.balance),
             ]),
           ],
-          footer: ['', '', '', 'Totals', '', '', '', money(book.totalIn), money(book.totalOut), money(book.closing)],
+          footer: ['', '', '', 'Totals', '', '', '', ...(showItems ? [''] : []), money(book.totalIn), money(book.totalOut), money(book.closing)],
         },
       ],
     };
@@ -1443,6 +1472,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
             totalOut={book.totalOut}
             closing={book.closing}
             full={fullTable}
+            withPurchase={showItems}
             dayLabel={singleDay ? undefined : dayLabel}
             onOpenRow={(row) => {
               if (row.bill) setViewingTx(row.bill);
