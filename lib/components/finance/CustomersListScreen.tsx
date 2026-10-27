@@ -1620,6 +1620,17 @@ function LedgerList({ basePath }: { basePath: string }) {
             <Text className="text-[12.5px] text-gray-300">—</Text>
           ),
       },
+      vehicles
+        ? {
+            // The original price: all that was billed with them, before any payment - what is still to be
+            // received or paid is in Receivable and Payable.
+            key: 'balance',
+            label: 'Balance',
+            width: 120,
+            align: 'right',
+            render: (d) => priceText(priceOf(d)),
+          }
+        : { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (d) => <PartyBalance position={positionOf(d)} compact /> },
       {
         // All the money paid to them - to a vendor, or given out to a customer - whatever it settled.
         key: 'totalPaid',
@@ -1651,21 +1662,6 @@ function LedgerList({ basePath }: { basePath: string }) {
           ),
       },
       {
-        // The part of the balance that is money coming in (green), blank when it runs the other way.
-        key: 'receivable',
-        label: 'Receivable',
-        width: 105,
-        align: 'right',
-        render: (d) =>
-          d.status === 'receivable' ? (
-            <Text className="text-[12.5px] font-bold" style={{ color: LEDGER_TONE.receivable.text }}>
-              {bookMoney(d.balance)}
-            </Text>
-          ) : (
-            <Text className="text-[12.5px] text-gray-300">—</Text>
-          ),
-      },
-      {
         // The part of the balance that is money going out (red), blank when it runs the other way.
         key: 'payable',
         label: 'Payable',
@@ -1680,17 +1676,21 @@ function LedgerList({ basePath }: { basePath: string }) {
             <Text className="text-[12.5px] text-gray-300">—</Text>
           ),
       },
-      vehicles
-        ? {
-            // The original price: all that was billed with them, before any payment - what is still to be
-            // received or paid is in Receivable and Payable.
-            key: 'balance',
-            label: 'Balance',
-            width: 120,
-            align: 'right',
-            render: (d) => priceText(priceOf(d)),
-          }
-        : { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (d) => <PartyBalance position={positionOf(d)} compact /> },
+      {
+        // The part of the balance that is money coming in (green), blank when it runs the other way.
+        key: 'receivable',
+        label: 'Receivable',
+        width: 105,
+        align: 'right',
+        render: (d) =>
+          d.status === 'receivable' ? (
+            <Text className="text-[12.5px] font-bold" style={{ color: LEDGER_TONE.receivable.text }}>
+              {bookMoney(d.balance)}
+            </Text>
+          ) : (
+            <Text className="text-[12.5px] text-gray-300">—</Text>
+          ),
+      },
     ];
 
     // The listed parties added up, column by column, in the line under the table - which stays in view while
