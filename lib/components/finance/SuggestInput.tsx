@@ -77,6 +77,17 @@ export function SuggestInput({
     onSelectOption(option, via);
   }
 
+  // Nothing highlighted with the arrows: Enter / Tab still takes the name typed when it is there - the one
+  // that is exactly what was typed, or the only one the list has - so it never has to be picked by hand.
+  // (An "Add ... as new" row is not a name that exists, so it is never taken this way.)
+  function autoPick(): SuggestOption | undefined {
+    const existing = options.filter((o) => o.kind !== 'add');
+    const typed = value.trim().toLowerCase();
+    // Nothing typed (a list opened on an empty box): Enter just moves on.
+    if (!typed) return undefined;
+    return existing.find((o) => o.label.trim().toLowerCase() === typed) ?? (existing.length === 1 ? existing[0] : undefined);
+  }
+
   function handleKeyPress(e: unknown) {
     const k = readKey(e);
     if (visible) {
@@ -90,14 +101,20 @@ export function SuggestInput({
         setIndex(activeIndex - 1);
         return;
       }
-      if (k.key === 'Enter' && !k.ctrl && activeIndex >= 0) {
-        k.prevent();
-        choose(options[activeIndex], 'enter');
-        return;
+      if (k.key === 'Enter' && !k.ctrl) {
+        const pick = activeIndex >= 0 ? options[activeIndex] : autoPick();
+        if (pick) {
+          k.prevent();
+          choose(pick, 'enter');
+          return;
+        }
       }
-      if (k.key === 'Tab' && !k.shift && activeIndex >= 0) {
-        choose(options[activeIndex], 'tab');
-        return;
+      if (k.key === 'Tab' && !k.shift) {
+        const pick = activeIndex >= 0 ? options[activeIndex] : autoPick();
+        if (pick) {
+          choose(pick, 'tab');
+          return;
+        }
       }
       if (k.key === 'Escape') {
         k.prevent();

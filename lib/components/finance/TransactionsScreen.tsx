@@ -271,6 +271,15 @@ function ItemPickerModal({
               <TextInput
                 value={search}
                 onChangeText={setSearch}
+                // Enter takes the item typed when it is there - the one that is exactly it, or the only match.
+                onSubmitEditing={() => {
+                  const typed = search.trim().toLowerCase();
+                  const nameOf = (row: (typeof matches)[number]) => (row.kind === 'product' ? row.product.name : row.item.name).trim().toLowerCase();
+                  const pick = matches.find((row) => nameOf(row) === typed) ?? (matches.length === 1 ? matches[0] : undefined);
+                  if (!pick) return;
+                  if (pick.kind === 'product') onPick(pick.product);
+                  else onPickFinanceItem(pick.item);
+                }}
                 placeholder="Search your products, or type a new item name"
                 placeholderTextColor="#9CA3AF"
                 autoFocus

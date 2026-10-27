@@ -130,6 +130,12 @@ export function ContactPickerModal({
               <TextInput
                 value={search}
                 onChangeText={setSearch}
+                // Enter takes the name typed when it is there - the one that is exactly it, or the only match.
+                onSubmitEditing={() => {
+                  const typed = search.trim().toLowerCase();
+                  const pick = suggestions.find((s) => s.name.trim().toLowerCase() === typed) ?? (suggestions.length === 1 ? suggestions[0] : undefined);
+                  if (pick) handleSelect(pick);
+                }}
                 placeholder={placeholder}
                 autoFocus
                 className="mb-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
