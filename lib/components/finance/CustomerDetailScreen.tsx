@@ -1043,6 +1043,44 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     }
   }
 
+  // Every entry can be changed or taken out from the vehicle popup: a bill on its own form (deleting it takes its
+  // amount off the ledger too), a typed payment in its edit form. A line the system writes from somewhere else - a
+  // rental's daily wage, a job's payment - follows that record, so it says where to change it instead.
+  const deleteBill = useSupabaseDelete('business_transactions');
+  const lockedReason = (row: HistoryRow) =>
+    row.vendor?.source_type === 'rental_wage'
+      ? 'This daily wage comes from a rental. Change the rental (its employee, wage or Returned on) or remove it on the Rent page, and its wage lines follow.'
+      : 'This entry was written by another record (a job or a booking). Change that record and this follows.';
+  function editAnyRow(row: HistoryRow) {
+    if (row.tx) router.push(`${basePath}/transactions?type=${row.tx.type}&add=1&edit=${row.tx.id}` as never);
+    else if (row.manual) openRow(row);
+    else showAlert('Changed elsewhere', lockedReason(row));
+  }
+  function deleteAnyRow(row: HistoryRow) {
+    const tx = row.tx;
+    if (tx) {
+      showAlert(
+        `Delete this ${tx.type === 'purchase' ? 'purchase' : tx.type === 'sale' ? 'sale' : 'expense'} bill?`,
+        `NPR ${formatMoney(Number(tx.amount))}${tx.bill_no ? ` · Bill #${tx.bill_no}` : ''}. Its amount comes off the ledger too. This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteBill.mutateAsync(tx.id);
+              } catch (err) {
+                showAlert('Could not delete', getErrorMessage(err));
+              }
+            },
+          },
+        ]
+      );
+    } else if (row.manual) removeRow(row);
+    else showAlert('Changed elsewhere', lockedReason(row));
+  }
+
   function removeRow(row: HistoryRow) {
     showAlert('Remove this entry?', undefined, [
       { text: 'Cancel', style: 'cancel' },
@@ -1365,6 +1403,14 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
           <VehicleEntries
             group={openGroup}
             full={tableMode}
+            onEditRow={(r) => {
+              setOpenGroup(null);
+              editAnyRow(r);
+            }}
+            onDeleteRow={(r) => {
+              setOpenGroup(null);
+              deleteAnyRow(r);
+            }}
             onOpenRow={(r) => {
               setOpenGroup(null);
               openRow(r);
@@ -1513,7 +1559,19 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
 
 /** A vehicle's entries, oldest first, in the vehicle table's columns: what each put on it, and what is left on the
  * vehicle after it. An entry opens as it does everywhere (a bill's detail, a payment's edit form). */
-function VehicleEntries({ group, full, onOpenRow }: { group: VehicleGroup; full: boolean; onOpenRow: (r: HistoryRow) => void }) {
+function VehicleEntries({
+  group,
+  full,
+  onOpenRow,
+  onEditRow,
+  onDeleteRow,
+}: {
+  group: VehicleGroup;
+  full: boolean;
+  onOpenRow: (r: HistoryRow) => void;
+  onEditRow: (r: HistoryRow) => void;
+  onDeleteRow: (r: HistoryRow) => void;
+}) {
   const vendor = group.side === 'vendor';
   let running = 0;
   // Oldest first (the bills were gathered before the payments), so "left" runs as the money came.
@@ -1543,6 +1601,23 @@ function VehicleEntries({ group, full, onOpenRow }: { group: VehicleGroup; full:
       {!!l.row.detail && <Text className="font-normal text-gray-500">{` · ${l.row.detail}`}</Text>}
     </Text>
   );
+  // Edit and Delete on every entry.
+  const actions: BookColumn<Line> = {
+    key: 'actions',
+    label: '',
+    width: 76,
+    align: 'right',
+    render: (l) => (
+      <View className="flex-row items-center justify-end" style={{ gap: 12 }}>
+        <Pressable onPress={() => onEditRow(l.row)} hitSlop={6} accessibilityLabel="Edit entry">
+          <Ionicons name="create-outline" size={16} color="#2563EB" />
+        </Pressable>
+        <Pressable onPress={() => onDeleteRow(l.row)} hitSlop={6} accessibilityLabel="Delete entry">
+          <Ionicons name="trash-outline" size={16} color="#DC2626" />
+        </Pressable>
+      </View>
+    ),
+  };
   const last = lines[lines.length - 1];
   const sum = (f: (l: Line) => number) => round2(lines.reduce((s, l) => s + f(l), 0));
   const columns: BookColumn<Line>[] = full
@@ -1556,6 +1631,7 @@ function VehicleEntries({ group, full, onOpenRow }: { group: VehicleGroup; full:
         { key: 'received', label: 'Total Received', width: 120, align: 'right', render: (l) => fig(l.part.received, MONEY.in.text) },
         { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (l) => fig(l.payable, MONEY.out.text) },
         { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (l) => fig(l.receivable, MONEY.in.text) },
+        actions,
       ]
     : [
         {
@@ -1578,6 +1654,7 @@ function VehicleEntries({ group, full, onOpenRow }: { group: VehicleGroup; full:
           render: (l) => fig(l.part.billed || l.part.paid || l.part.received, l.part.billed ? '#111827' : l.part.paid ? MONEY.out.text : MONEY.in.text),
         },
         { key: 'left', label: 'Left', width: 110, align: 'right', render: (l) => (l.payable ? fig(l.payable, MONEY.out.text) : fig(l.receivable, MONEY.in.text)) },
+        actions,
       ];
   return (
     <BookTable
