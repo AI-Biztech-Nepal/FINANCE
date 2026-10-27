@@ -1,6 +1,6 @@
 // lib/components/finance/CustomersListScreen.tsx
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { View, TextInput, Pressable, ScrollView, Platform, useWindowDimensions } from 'react-native';
+import { View, TextInput, Pressable, ScrollView, Platform, Modal, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -935,8 +935,9 @@ function LedgerList({ basePath }: { basePath: string }) {
   // The search box filters the table as you type: every party whose name or phone contains what is
   // typed, those whose name starts with it first.
   const [search, setSearch] = useState('');
-  // The second box: the Ledger type (Customer, Vendor, Employee ...), on its own.
-  const [typeSearch, setTypeSearch] = useState('');
+  // The Ledger type picked from the dropdown beside the search: '' = every type, NO_TYPE = parties with none.
+  const [typeFilter, setTypeFilter] = useState('');
+  const [typeMenuOpenList, setTypeMenuOpenList] = useState(false);
   // A name typed in the search that is not saved yet starts the New party form with it filled in.
   const [newPartyName, setNewPartyName] = useState('');
   const [showAddForm, setShowAddForm] = useState(add === '1');
@@ -1086,6 +1087,8 @@ function LedgerList({ basePath }: { basePath: string }) {
   const appUserType = useMemo(() => partyTypes.find((t) => /^customers?$/i.test(t.name.trim())), [partyTypes]);
   // The Ledger type a row is listed under, as a word to search by (nothing for a party with none).
   const typeOf = (d: PartyRowData) => (d.row.kind === 'customer' ? d.typeName ?? '' : appUserType?.name ?? 'Customer');
+  const typeIdOf = (d: PartyRowData) =>
+    d.row.kind === 'customer' ? d.row.customer.party_type_id ?? NO_TYPE : appUserType?.id ?? NO_TYPE;
 
   // In name order (A-Z): `merged` is already sorted that way and filtering keeps the order. With
   // something typed in the search, a party shows when its name, phone or Ledger type contains it -
@@ -1101,9 +1104,8 @@ function LedgerList({ basePath }: { basePath: string }) {
           ? active.filter((d) => d.status !== 'settled')
           : active.filter((d) => d.status === filter);
     const q = search.trim().toLowerCase();
-    const t = typeSearch.trim().toLowerCase();
-    // The type box narrows to the parties whose Ledger type has what is typed in it.
-    const byType = t ? byStatus.filter((d) => typeOf(d).toLowerCase().includes(t)) : byStatus;
+    // The type picked in the dropdown.
+    const byType = typeFilter ? byStatus.filter((d) => typeIdOf(d) === typeFilter) : byStatus;
     if (!q) return byType;
     const rank = (d: PartyRowData) => {
       const name = d.row.name.toLowerCase();
@@ -1116,13 +1118,13 @@ function LedgerList({ basePath }: { basePath: string }) {
       .filter((d) => d.row.name.toLowerCase().includes(q) || (d.row.phone ?? '').includes(q))
       .sort((a, b) => rank(a) - rank(b));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysed, filter, search, typeSearch, appUserType, period, periodItemsByParty]);
+  }, [analysed, filter, search, typeFilter, appUserType, period, periodItemsByParty]);
 
   // The Ledger is laid out by Ledger type - Customer, Vendor, Employee, Expense ... - each header with
   // how many parties it holds and what they add up to, and the parties inside it. Only a type with
   // someone in it is a header: one nobody is filed under is left out. A search or a status filter
   // lists (and opens) only the headers with a match.
-  const narrowed = !!search.trim() || !!typeSearch.trim() || filter !== 'all' || !!period.from;
+  const narrowed = !!search.trim() || !!typeFilter || filter !== 'all' || !!period.from;
   const groups = useMemo((): LedgerGroup[] => {
     const byKey = new Map<string, LedgerGroup>();
     const slot = (key: string, label: string) => {
@@ -1358,12 +1360,72 @@ function LedgerList({ basePath }: { basePath: string }) {
       )}
     </View>
   );
+  // The Ledger types, each with how many parties it holds, in a dropdown - All types first, then A-Z, then the
+  // parties with none.
+  const typeChoices = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const d of analysed) count.set(typeIdOf(d), (count.get(typeIdOf(d)) ?? 0) + 1);
+    const list = [...partyTypes]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((t) => ({ id: t.id, label: t.name, count: count.get(t.id) ?? 0 }));
+    if (count.get(NO_TYPE)) list.push({ id: NO_TYPE, label: 'No ledger type', count: count.get(NO_TYPE)! });
+    return [{ id: '', label: 'All types', count: analysed.length }, ...list];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysed, partyTypes, appUserType]);
+  const typeDropdown = (
+    <>
+      <Pressable
+        onPress={() => setTypeMenuOpenList(true)}
+        className="flex-row items-center rounded-2xl bg-white px-4"
+        style={{ height: 50, gap: 8, flexGrow: 1, flexBasis: 200, borderWidth: 1.5, borderColor: typeFilter ? '#2563EB' : '#E2E8F0' }}
+        accessibilityLabel="Ledger type"
+      >
+        <Ionicons name="pricetags-outline" size={18} color={typeFilter ? '#2563EB' : '#94A3B8'} />
+        <Text className="flex-1 text-[15px] text-gray-900" numberOfLines={1}>
+          {typeChoices.find((c) => c.id === typeFilter)?.label ?? 'All types'}
+        </Text>
+        <Ionicons name="chevron-down" size={16} color="#6B7280" />
+      </Pressable>
+      <Modal visible={typeMenuOpenList} transparent animationType="fade" onRequestClose={() => setTypeMenuOpenList(false)}>
+        <Pressable className="flex-1 items-center justify-center bg-black/40 p-4" onPress={() => setTypeMenuOpenList(false)}>
+          <Pressable className="w-full overflow-hidden rounded-3xl bg-white" style={{ maxWidth: 380 }} onPress={(e) => e.stopPropagation()}>
+            <View className="flex-row items-center justify-between border-b border-gray-100 px-6 py-4">
+              <Text className="text-lg font-bold text-gray-900">Ledger type</Text>
+              <Pressable onPress={() => setTypeMenuOpenList(false)} hitSlop={8} accessibilityLabel="Close">
+                <Ionicons name="close" size={20} color="#6B7280" />
+              </Pressable>
+            </View>
+            <ScrollView style={{ maxHeight: 460 }}>
+              {typeChoices.map((c, i) => {
+                const on = c.id === typeFilter;
+                return (
+                  <Pressable
+                    key={c.id || 'all'}
+                    onPress={() => {
+                      setTypeFilter(c.id);
+                      setTypeMenuOpenList(false);
+                    }}
+                    className={`flex-row items-center px-6 py-3.5 ${i < typeChoices.length - 1 ? 'border-b border-gray-100' : ''}`}
+                    style={on ? { backgroundColor: '#EFF6FF' } : undefined}
+                  >
+                    <Text className={`flex-1 text-[15px] ${on ? 'font-bold text-blue-700' : 'font-semibold text-gray-900'}`}>{c.label}</Text>
+                    <Text className="text-[13px] text-gray-500">{c.count}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+
   const searchBar = (
     <View className="flex-row flex-wrap items-center" style={{ gap: 10 }}>
       <PeriodPicker value={period} onChange={setPeriod} />
       {searchBox('name', search, setSearch, 'Search by ledger name or phone', 'search', 2)}
-      {searchBox('type', typeSearch, setTypeSearch, 'Search by ledger type (Customer, Vendor, Employee ...)', 'pricetags-outline', 1)}
-      {(!!search.trim() || !!typeSearch.trim()) && (
+      {typeDropdown}
+      {(!!search.trim() || !!typeFilter) && (
         <Text className="text-[12.5px] font-semibold" style={{ color: '#1E3A8A' }}>
           {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
         </Text>
@@ -1372,36 +1434,34 @@ function LedgerList({ basePath }: { basePath: string }) {
   );
 
   // --- pieces both layouts share ---
+  // The four money cards, in the table's own colours - Total paid (red), Total received (green), Payable (red),
+  // Receivable (green) - and how many ledgers there are. Paid and received count the period picked; payable and
+  // receivable are what is owed at its end. Payable / Receivable narrow the list to those parties.
+  const cashTotals = useMemo(() => {
+    let paid = 0;
+    let received = 0;
+    for (const d of analysed) {
+      paid += d.totalPaid;
+      received += d.totalReceived;
+    }
+    return { paid: round2(paid), received: round2(received) };
+  }, [analysed]);
   const summaryCards = (
     <BookStats>
-      {vehicles ? (
-        <SummaryCard
-          label="Balance"
-          caption="Original price"
-          value={`NPR ${bookMoney(totalPrice)}`}
-          color={LEDGER_TONE.settled.text}
-          accent={LEDGER_TONE.settled.base}
-        />
-      ) : (
-        <SummaryCard
-          label="Net balance"
-          value={`${cards.net < 0 ? '−' : ''}NPR ${bookMoney(Math.abs(cards.net))}`}
-          color={cards.net > 0 ? LEDGER_TONE.receivable.text : cards.net < 0 ? LEDGER_TONE.payable.text : LEDGER_TONE.settled.text}
-          accent={cards.net > 0 ? LEDGER_TONE.receivable.base : cards.net < 0 ? LEDGER_TONE.payable.base : LEDGER_TONE.settled.base}
-          active={filter === 'open'}
-          onPress={() => setFilter(filter === 'open' ? 'all' : 'open')}
-        />
-      )}
       <SummaryCard
-        label="Total receivable"
-        value={`NPR ${bookMoney(cards.receivable)}`}
-        color={LEDGER_TONE.receivable.text}
-        accent={LEDGER_TONE.receivable.base}
-        active={filter === 'receivable'}
-        onPress={() => setFilter(filter === 'receivable' ? 'all' : 'receivable')}
+        label="Total paid"
+        value={`NPR ${bookMoney(cashTotals.paid)}`}
+        color={LEDGER_TONE.payable.text}
+        accent={LEDGER_TONE.payable.base}
       />
       <SummaryCard
-        label="Total payable"
+        label="Total received"
+        value={`NPR ${bookMoney(cashTotals.received)}`}
+        color={LEDGER_TONE.receivable.text}
+        accent={LEDGER_TONE.receivable.base}
+      />
+      <SummaryCard
+        label="Payable"
         value={`NPR ${bookMoney(cards.payable)}`}
         color={LEDGER_TONE.payable.text}
         accent={LEDGER_TONE.payable.base}
@@ -1409,7 +1469,15 @@ function LedgerList({ basePath }: { basePath: string }) {
         onPress={() => setFilter(filter === 'payable' ? 'all' : 'payable')}
       />
       <SummaryCard
-        label="Parties"
+        label="Receivable"
+        value={`NPR ${bookMoney(cards.receivable)}`}
+        color={LEDGER_TONE.receivable.text}
+        accent={LEDGER_TONE.receivable.base}
+        active={filter === 'receivable'}
+        onPress={() => setFilter(filter === 'receivable' ? 'all' : 'receivable')}
+      />
+      <SummaryCard
+        label="Total ledgers"
         value={String(merged.length)}
         color={LEDGER_TONE.settled.text}
         accent={LEDGER_TONE.settled.base}
@@ -1651,7 +1719,7 @@ function LedgerList({ basePath }: { basePath: string }) {
         width: 140,
         render: (d) => (
           <Text className="text-[12.5px] font-semibold text-gray-700" numberOfLines={1}>
-            {d.typeName ? highlight(d.typeName, typeSearch) : d.row.kind === 'customer' ? '—' : 'Customer'}
+            {d.typeName ? d.typeName : d.row.kind === 'customer' ? '—' : 'Customer'}
           </Text>
         ),
       },
@@ -1769,8 +1837,8 @@ function LedgerList({ basePath }: { basePath: string }) {
               rows={sortedRows}
               rowKey={(d) => `${d.row.kind}-${d.row.id}`}
               onRowPress={open}
+              // One scrollbar - the page's: the table grows with its rows and its header stays pinned at the top.
               stickyHeader
-              maxRows={20}
               footer={tableFooter}
             />
             {vehicles && (
@@ -1801,7 +1869,7 @@ function LedgerList({ basePath }: { basePath: string }) {
         <View className="flex-row items-center" style={{ gap: 8 }}>
           <PeriodPicker value={period} onChange={setPeriod} />
         </View>
-        <ToolbarSearch value={typeSearch} onChange={setTypeSearch} placeholder="Search by ledger type" wide={false} />
+        {typeDropdown}
 
         {summaryCards}
 
