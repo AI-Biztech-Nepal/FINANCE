@@ -417,6 +417,7 @@ function QuickPaymentForm() {
 
   const tableRef = useRef<PaymentEntryTableHandle>(null);
   const receiptRef = useRef<TextInput>(null);
+  const dateRef = useRef<TextInput>(null);
   const methodRef = useRef<HTMLSelectElement | null>(null);
   const saveButtonRef = useRef<View>(null);
 
@@ -575,8 +576,8 @@ function QuickPaymentForm() {
       setBankAccountId(null);
       setDate(todayIso());
       setReceiptNoTouched(false);
-      // Ready for the next voucher - caret straight back in the first cell.
-      tableRef.current?.focusRow(fresh.key, 0);
+      // Ready for the next voucher - caret straight back on the date.
+      dateRef.current?.focus();
     } catch (err) {
       showAlert('Could not save', getErrorMessage(err));
     } finally {
@@ -750,6 +751,8 @@ function QuickPaymentForm() {
                     <KeyboardDateInput
                       value={date}
                       onChange={setDate}
+                      inputRef={dateRef}
+                      autoFocus
                       accent={accent}
                       onEnter={() => receiptRef.current?.focus()}
                       onRequestSave={handleSaveAll}
@@ -831,7 +834,6 @@ function QuickPaymentForm() {
                 onRemoveRow={removeRow}
                 onRequestSave={handleSaveAll}
                 onExit={() => (saveButtonRef.current as unknown as { focus?: () => void } | null)?.focus?.()}
-                autoFocusFirst
               />
 
               <View className="mt-4 flex-row items-center justify-end" style={{ gap: 16 }}>

@@ -32,7 +32,7 @@ const MAX_SUGGESTIONS = 6;
 const ADD_PARTY_KEY = '__add-party__';
 
 // The order Enter walks through the boxes; the last one moves on to Save.
-const FIELDS = ['item', 'model', 'rate', 'renter', 'start', 'note'] as const;
+const FIELDS = ['start', 'item', 'model', 'rate', 'renter', 'note'] as const;
 type FieldName = (typeof FIELDS)[number];
 
 /** A titled white card, as on the Paid page: a small icon and heading, then what the card holds. */
@@ -248,7 +248,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         }
       }
     }
-    if (via !== 'tab') focus('start');
+    if (via !== 'tab') focus('note');
   }
 
   async function handleSave() {
@@ -350,7 +350,6 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
             onKeyPress={enterKey('item')}
             placeholder="Item name…"
             accessibilityLabel="Item"
-            autoFocus={!rental}
             accent={accent}
             inputClassName={suggestClass}
             inputStyle={suggestStyle('item')}
@@ -416,7 +415,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
           />
         </Box>
         <Box label="Rented on" basis={170}>
-          <KeyboardDateInput value={start} onChange={setStart} inputRef={setRef('start')} onEnter={() => afterField('start')} onRequestSave={handleSave} accent={accent} />
+          <KeyboardDateInput value={start} onChange={setStart} inputRef={setRef('start')} autoFocus={!rental} onEnter={() => afterField('start')} onRequestSave={handleSave} accent={accent} />
         </Box>
       </View>
 

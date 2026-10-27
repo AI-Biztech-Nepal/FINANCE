@@ -101,12 +101,15 @@ export function KeyboardDateInput({
   onRequestSave,
   accent,
   compact,
+  autoFocus,
 }: {
   value: string;
   onChange: (v: string) => void;
   inputRef?: Ref<TextInput>;
   onEnter?: () => void;
   onRequestSave?: () => void;
+  /** The caret starts here when the page opens. */
+  autoFocus?: boolean;
   accent: string;
   /** One text size down - the box and the line of helper text under it. */
   compact?: boolean;
@@ -192,6 +195,7 @@ export function KeyboardDateInput({
               onBlur={handleBlur}
               onKeyPress={handleKeyPress}
               selectTextOnFocus
+              autoFocus={autoFocus}
               placeholder="Select a date"
               placeholderTextColor="#9CA3AF"
               accessibilityLabel="Date"

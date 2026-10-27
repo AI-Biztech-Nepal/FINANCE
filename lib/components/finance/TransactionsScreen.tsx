@@ -1509,6 +1509,7 @@ function TransactionForm({
                   <KeyboardDateInput
                     value={expenseDate}
                     onChange={setExpenseDate}
+                    autoFocus
                     accent={accent}
                     onEnter={() => methodRef.current?.focus()}
                     onRequestSave={handleSaveAllExpenses}
@@ -1565,7 +1566,6 @@ function TransactionForm({
               onSelectContact={attachContactToExpenseRow}
               onRequestSave={handleSaveAllExpenses}
               onExit={() => (saveButtonRef.current as unknown as { focus?: () => void } | null)?.focus?.()}
-              autoFocusFirst
             />
 
             <View className="mt-4 flex-row items-center justify-end" style={{ gap: 16 }}>
@@ -1702,7 +1702,6 @@ function TransactionForm({
                     }}
                     placeholder={type === 'purchase' ? 'Vendor / supplier name' : 'Customer name'}
                     accessibilityLabel={partyLabel}
-                    autoFocus={!initial}
                     accent={accent}
                     compact
                     inputClassName="rounded-lg px-3 py-2.5 text-xs font-semibold text-gray-900"
@@ -1727,7 +1726,7 @@ function TransactionForm({
                     value={billNo}
                     onChangeText={setBillNo}
                     inputRef={billNoRef}
-                    onEnter={() => billDateRef.current?.focus()}
+                    onEnter={() => itemsTableRef.current?.focusRow(0)}
                     onRequestSave={handleSave}
                     accent={accent}
                     placeholder="e.g. 0234"
@@ -1742,7 +1741,8 @@ function TransactionForm({
                     onChange={setBillDate}
                     inputRef={billDateRef}
                     accent={accent}
-                    onEnter={() => itemsTableRef.current?.focusRow(0)}
+                    autoFocus={!initial}
+                    onEnter={() => vendorRef.current?.focus()}
                     onRequestSave={handleSave}
                     compact
                   />
