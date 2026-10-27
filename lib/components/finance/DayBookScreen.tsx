@@ -553,7 +553,8 @@ function EditEntryModal({ target, onClose }: { target: EditTarget | null; onClos
   // A popup like the others (the ledger's entry editor): the fields side by side, Remove / Cancel / Save under them.
   return (
     <>
-      <PopupCard title={`${locked ? 'Entry details' : 'Edit entry'} · ${target.title}`} onClose={onClose} maxWidth={1000}>
+      {/* A click on the dimmed area closes it (as this popup always did), and so do the cross, Cancel and Esc. */}
+      <PopupCard title={`${locked ? 'Entry details' : 'Edit entry'} · ${target.title}`} onClose={onClose} maxWidth={1000} closeOnOutside>
         {locked && (
           <View className="flex-row items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
             <Ionicons name="lock-closed-outline" size={16} color="#B45309" />
