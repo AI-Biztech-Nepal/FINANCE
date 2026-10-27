@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { readKey } from '../../utils/webKeys';
+import { highlightText } from './Highlight';
 
 export interface SuggestOption {
   key: string;
@@ -182,7 +183,7 @@ export function SuggestInput({
                   </>
                 ) : (
                   <Text className={`flex-1 text-gray-900 ${compact ? 'text-xs' : 'text-sm'}`} numberOfLines={1}>
-                    {o.label}
+                    {highlightText(o.label, value)}
                   </Text>
                 )}
                 {!!o.hint && <Text className={`ml-2 text-gray-400 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{o.hint}</Text>}

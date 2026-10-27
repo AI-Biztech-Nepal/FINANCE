@@ -43,6 +43,7 @@ import { nameCaps, capWords } from '../../utils/nameCaps';
 import { isValidPhone10 } from '../../utils/phone';
 import { localTodayIso } from '../../utils/localDate';
 import { journalOf } from '../../utils/journalVoucher';
+import { highlightText as highlight } from './Highlight';
 import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
@@ -591,21 +592,6 @@ function BulkBar({
 }
 
 /** The Ledger page: every word on it - table, cards, popups, top-bar controls - is in capitals. */
-/** The part of a name that matches the search, in the brand blue on a pale background. */
-function highlight(text: string, query: string) {
-  const q = query.trim();
-  if (!q) return text;
-  const at = text.toLowerCase().indexOf(q.toLowerCase());
-  if (at < 0) return text;
-  return (
-    <>
-      {text.slice(0, at)}
-      <Text style={{ color: '#1D4ED8', backgroundColor: '#DBEAFE' }}>{text.slice(at, at + q.length)}</Text>
-      {text.slice(at + q.length)}
-    </>
-  );
-}
-
 export function CustomersListScreen(props: { basePath: string }) {
   // Keyed on the visit: once the Ledger has been left for another page, the list comes back with
   // nothing open, nothing typed in the search and the figures read again.
@@ -1412,7 +1398,7 @@ function LedgerList({ basePath }: { basePath: string }) {
           </View>
           {!!typeAndContact && (
             <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-              {typeAndContact}
+              {highlight(typeAndContact, search)}
             </Text>
           )}
         </View>
@@ -1448,7 +1434,7 @@ function LedgerList({ basePath }: { basePath: string }) {
         width: 140,
         render: (d) => (
           <Text className="text-[12.5px] font-semibold text-gray-700" numberOfLines={1}>
-            {d.typeName ?? (d.row.kind === 'customer' ? '—' : 'Customer')}
+            {d.typeName ? highlight(d.typeName, search) : d.row.kind === 'customer' ? '—' : 'Customer'}
           </Text>
         ),
       },

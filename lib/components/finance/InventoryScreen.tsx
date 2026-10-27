@@ -34,6 +34,7 @@ import { compareItems, entryDay } from '../../utils/ledgerStatement';
 import { reportHtml, type PrintReport } from '../../utils/printReport';
 import { itemListOf, sellsVehicles } from '../../utils/accountFeatures';
 import { round2 } from '../../utils/money';
+import { highlightText } from './Highlight';
 import { tidyName } from '../../utils/nameCaps';
 import type { BusinessTransaction, Product } from '../../../types/database.types';
 
@@ -739,12 +740,12 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
   const itemCell = (r: InventoryRow, compact: boolean) => (
     <View style={{ minWidth: 0, gap: 2 }}>
       <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
-        {r.name}
+        {highlightText(r.name, search)}
       </Text>
       {compact && <Pill text={STATUS[r.status].label} color={STATUS[r.status].color} bg={STATUS[r.status].bg} />}
       {!!r.category && (
         <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-          {r.category}
+          {highlightText(r.category, search)}
         </Text>
       )}
       {compact && (

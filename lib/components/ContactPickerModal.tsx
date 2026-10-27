@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { View, TextInput, Pressable, FlatList, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, useCaps } from './finance/CapsText';
+import { highlightText } from './finance/Highlight';
 import { Ionicons } from '@expo/vector-icons';
 import { buildCustomerSuggestions, type CustomerSuggestion } from '../utils/customerSuggestions';
 import type { Customer } from '../../types/database.types';
@@ -141,8 +142,8 @@ export function ContactPickerModal({
                 renderItem={({ item: s }) => (
                   <Pressable onPress={() => handleSelect(s)} className="flex-row items-center justify-between border-b border-gray-100 px-2 py-2.5">
                     <View>
-                      <Text className="text-sm font-semibold text-gray-900">{s.name}</Text>
-                      {!!s.phone && <Text className="text-xs text-gray-500">{s.phone}</Text>}
+                      <Text className="text-sm font-semibold text-gray-900">{highlightText(s.name, search)}</Text>
+                      {!!s.phone && <Text className="text-xs text-gray-500">{highlightText(s.phone, search)}</Text>}
                     </View>
                     {!s.customer && <Ionicons name="person-outline" size={14} color="#9CA3AF" />}
                   </Pressable>

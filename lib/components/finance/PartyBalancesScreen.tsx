@@ -19,6 +19,7 @@ import { MONEY } from './moneyColors';
 import { journalOf } from '../../utils/journalVoucher';
 import { itemListOf, itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import { round2 } from '../../utils/money';
+import { highlightText } from './Highlight';
 import { PopupCard } from './FormKit';
 import { ExcelButton, PrintButton, exportReportDocument, printReportDocument } from './PrintButton';
 
@@ -504,7 +505,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
               >
                 <Ionicons name="chevron-forward" size={16} color="#6B7280" />
                 <Text className="flex-1 text-[14px] font-bold text-gray-900" numberOfLines={1}>
-                  {nameCaps(h.name)}
+                  {highlightText(nameCaps(h.name), search)}
                 </Text>
                 <Text className="text-[12px] text-gray-400">
                   {[h.ledgerType || null, entryWord(h.entries.length)].filter(Boolean).join(' · ')}

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useRole } from '../../hooks/useAuth';
 import { sellsVehicles } from '../../utils/accountFeatures';
 import { useConfirmNewParty } from './NewPartyConfirm';
+import { highlightText } from './Highlight';
 import { useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate, useSupabaseUpsert, useSupabaseDelete } from '../../hooks/useSupabase';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { useScreenHeader } from '../../hooks/useScreenHeader';
@@ -288,7 +289,7 @@ function ItemPickerModal({
                     >
                       <View className="flex-1 pr-2">
                         <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
-                          {row.product.name}
+                          {highlightText(row.product.name, search)}
                         </Text>
                         <Text className={`text-xs ${row.product.stock_level > 0 ? 'text-gray-500' : 'text-red-500'}`}>
                           {row.product.stock_level} in stock
@@ -303,7 +304,7 @@ function ItemPickerModal({
                     >
                       <View className="flex-1 pr-2">
                         <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
-                          {row.item.name}
+                          {highlightText(row.item.name, search)}
                         </Text>
                         <Text className="text-xs text-gray-400">Not in stock — used before</Text>
                       </View>

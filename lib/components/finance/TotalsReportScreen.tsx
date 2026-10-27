@@ -24,6 +24,7 @@ import { BackButton, BookPage, BookStat, BookStats, BookTable, Pill, ToolbarButt
 import { BalanceFigure, EditableDetails } from './CustomerDetailScreen';
 import { TransactionDetailModal } from './TransactionsScreen';
 import { tidyName } from '../../utils/nameCaps';
+import { highlightText } from './Highlight';
 import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import type { BusinessTransaction } from '../../../types/database.types';
 
@@ -920,7 +921,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   const detailsCell = (e: Entry, compact: boolean) => (
     <View style={{ minWidth: 0, gap: 2 }}>
       <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
-        {e.party || e.type.label}
+        {highlightText(e.party || e.type.label, search)}
       </Text>
       {compact && <Pill text={e.type.label} color={e.type.color} bg={e.type.bg} />}
       {(!!e.note || compact) && (
@@ -983,7 +984,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           label: pickWord.one,
           render: (e) => (
             <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
-              {e.category || e.party || '—'}
+              {highlightText(e.category || e.party || '—', search)}
             </Text>
           ),
         },
@@ -1000,7 +1001,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           render: (e) => (
             <View style={{ minWidth: 0, gap: 2 }}>
               <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
-                {e.category || e.party || '—'}
+                {highlightText(e.category || e.party || '—', search)}
               </Text>
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
                 {[e.itemNames || null, toBsHistoryLabel(e.date.slice(0, 10)), e.billNo ? `Bill ${e.billNo}` : null, e.ledgerType || null].filter(Boolean).join(' · ')}
@@ -1091,7 +1092,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                 >
                   <Ionicons name={isOpen ? 'chevron-down' : 'chevron-forward'} size={16} color={empty ? '#D1D5DB' : '#6B7280'} />
                   <Text className={`flex-1 text-[14px] font-bold ${empty ? 'text-gray-400' : 'text-gray-900'}`} numberOfLines={1}>
-                    {g.label}
+                    {highlightText(g.label, search)}
                   </Text>
                   <Text className="text-[12px] text-gray-400">
                     {empty ? 'No entries' : `${g.rows.length} ${g.rows.length === 1 ? 'entry' : 'entries'}`}
@@ -1115,7 +1116,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                           >
                             <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
                             <Text className="flex-1 text-[13px] font-semibold text-gray-900" numberOfLines={1}>
-                              {s.name}
+                              {highlightText(s.name, search)}
                             </Text>
                             <Text className="text-[11.5px] text-gray-400">
                               {single ? bsShortDate(s.latest) : `${s.rows.length} payments · last ${bsShortDate(s.latest)}`}
