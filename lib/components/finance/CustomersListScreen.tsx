@@ -765,14 +765,16 @@ function PartyLedgerPopup({
   });
 
   type Line = (typeof lines)[number];
+  // What it is and what it is for (the vehicle, the payment no.) on one line; the date, where shown, under it.
   const detailsCell = (l: Line, withDate: boolean) => (
     <View style={{ minWidth: 0, gap: 2 }}>
       <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
         {kindOf(l.item)}
+        {!!subOf(l.item) && <Text className="font-normal text-gray-500">{` · ${subOf(l.item)}`}</Text>}
       </Text>
-      {(!!subOf(l.item) || withDate) && (
+      {withDate && (
         <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-          {[withDate ? toBsHistoryLabel(l.item.day) : null, subOf(l.item)].filter(Boolean).join(' · ')}
+          {toBsHistoryLabel(l.item.day)}
         </Text>
       )}
     </View>
@@ -1076,10 +1078,11 @@ function LedgerList({ basePath }: { basePath: string }) {
       if (name.split(/\s+/).some((word) => word.startsWith(q))) return 1;
       return name.includes(q) || (d.row.phone ?? '').includes(q) ? 2 : 3;
     };
+    // A party shows when its name, phone or Ledger type (Employee, Vendor ...) has what is typed.
     return byStatus
       .filter(
         (d) =>
-          d.row.name.toLowerCase().includes(q) || (d.row.phone ?? '').includes(q)
+          d.row.name.toLowerCase().includes(q) || (d.row.phone ?? '').includes(q) || typeOf(d).toLowerCase().includes(q)
       )
       .sort((a, b) => rank(a) - rank(b));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1302,7 +1305,7 @@ function LedgerList({ basePath }: { basePath: string }) {
         onChangeText={setSearch}
         onFocus={() => setSearchFocused(true)}
         onBlur={() => setSearchFocused(false)}
-        placeholder="Search ledgers by name or phone"
+        placeholder="Search ledgers by name, phone or ledger type"
         placeholderTextColor="#94A3B8"
         className="flex-1 text-[15px] text-gray-900"
         style={{ outlineStyle: 'none' } as object}
