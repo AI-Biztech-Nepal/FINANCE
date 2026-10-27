@@ -21,8 +21,10 @@ function dayTime(date: string): number {
  * actually collected from a customer (or a sale settled on the spot), "paid"
  * is every expense, every manual Payment Out to a customer, every payment
  * made to a vendor and every purchase settled on the spot. A bill on credit
- * isn't cash until it's settled, so it doesn't count. */
-export function useYearCashTotals(userId: string | undefined) {
+ * isn't cash until it's settled, so it doesn't count.
+ *
+ * `tillDate`: every entry from the first one up to today instead of this year only. */
+export function useYearCashTotals(userId: string | undefined, { tillDate = false }: { tillDate?: boolean } = {}) {
   // `all`: these are sums over every entry; a plain read stops at 1000 rows.
   const { data: transactions } = useSupabaseQuery('business_transactions', {
     filters: userId ? { owner_id: userId } : {},
@@ -42,7 +44,8 @@ export function useYearCashTotals(userId: string | undefined) {
 
   return useMemo(() => {
     const year = new Date().getFullYear();
-    const inYear = (date: string) => new Date(dayTime(date)).getFullYear() === year;
+    const endOfToday = new Date().setHours(23, 59, 59, 999);
+    const inYear = (date: string) => (tillDate ? dayTime(date) <= endOfToday : new Date(dayTime(date)).getFullYear() === year);
     let received = 0;
     let paid = 0;
     for (const t of transactions ?? []) {
@@ -66,5 +69,5 @@ export function useYearCashTotals(userId: string | undefined) {
       if (e.entry_type === 'credit') paid += e.amount;
     }
     return { received, paid };
-  }, [transactions, customerEntries, vendorEntries]);
+  }, [transactions, customerEntries, vendorEntries, tillDate]);
 }

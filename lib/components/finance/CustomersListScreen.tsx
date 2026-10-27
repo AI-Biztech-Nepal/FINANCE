@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useAuthStore } from '../../hooks/useAuth';
+import { useRentalWageSync } from '../../hooks/useRentalWageSync';
 import { useSupabaseInsert, useSupabaseQuery } from '../../hooks/useSupabase';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { usePartyDestination } from '../../hooks/usePartyDestination';
@@ -924,6 +925,8 @@ function LedgerList({ basePath }: { basePath: string }) {
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const { add } = useLocalSearchParams<{ add?: string }>();
   const userId = useAuthStore((state) => state.session?.user.id);
+  // Employees' daily rental wages up to today (see useRentalWageSync).
+  useRentalWageSync(userId);
   const profile = useAuthStore((state) => state.profile);
   const queryClient = useQueryClient();
   // The search box filters the table as you type: every party whose name or phone contains what is

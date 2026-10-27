@@ -5,6 +5,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
+import { useRentalWageSync } from '../../hooks/useRentalWageSync';
 import {
   useSupabaseRow,
   useSupabaseQuery,
@@ -710,6 +711,8 @@ export function CustomerDetailScreen({ basePath }: { basePath: string }) {
 function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const [calendarMode] = useCalendarMode(); // the history's dates are drawn again when AD / BS changes
   const userId = useAuthStore((state) => state.session?.user.id);
+  // Employees' daily rental wages up to today (see useRentalWageSync).
+  useRentalWageSync(userId);
   // `all` on both ledger reads: the balance is a sum over every entry.
   const { data: entries } = useSupabaseQuery('customer_ledger_entries', {
     filters: { customer_id: id },
@@ -898,7 +901,16 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       const onCredit = e.entry_type === 'debit';
       lines.push({
         key: `vendor-${e.id}`,
-        label: journalOf(e.note) ? 'Journal' : onCredit ? (syncedFromBill ? TX_TYPE_LABEL.purchase : 'Bought on credit') : 'Paid',
+        // A rented vehicle's employee is owed a wage for each day it is out (0015_rental_employee_wages.sql).
+        label: journalOf(e.note)
+          ? 'Journal'
+          : e.source_type === 'rental_wage'
+            ? 'Daily wage'
+            : onCredit
+              ? syncedFromBill
+                ? TX_TYPE_LABEL.purchase
+                : 'Bought on credit'
+              : 'Paid',
         tone: OUT_TONE,
         detail: journalText(e.note) ?? e.note ?? (syncedFromBill ? '' : e.source === 'booking' ? 'From a credit purchase' : 'Manual entry'),
         reference: e.receipt_no ?? '',
