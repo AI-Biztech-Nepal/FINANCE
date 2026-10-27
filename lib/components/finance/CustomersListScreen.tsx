@@ -909,6 +909,12 @@ function LedgerList({ basePath }: { basePath: string }) {
     return { receivable, payable, net: receivable - payable };
   }, [itemsByParty]);
 
+  // A vehicle account reads Balance as the original price: everything billed with the party, before any
+  // payment - what is still to be received or paid after that is the Receivable and Payable.
+  const vehicles = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+  const priceOf = (d: PartyRowData) => round2(d.sales + d.purchases);
+  const totalPrice = useMemo(() => round2(analysed.reduce((sum, d) => sum + round2(d.sales + d.purchases), 0)), [analysed]);
+
   // An app user with no saved ledger is a customer: they sit under the Ledger type called Customer.
   const appUserType = useMemo(() => partyTypes.find((t) => /^customers?$/i.test(t.name.trim())), [partyTypes]);
   // The Ledger type a row is listed under, as a word to search by (nothing for a party with none).
@@ -1180,14 +1186,24 @@ function LedgerList({ basePath }: { basePath: string }) {
   // --- pieces both layouts share ---
   const summaryCards = (
     <BookStats>
-      <SummaryCard
-        label="Net balance"
-        value={`${cards.net < 0 ? '−' : ''}NPR ${bookMoney(Math.abs(cards.net))}`}
-        color={cards.net > 0 ? LEDGER_TONE.receivable.text : cards.net < 0 ? LEDGER_TONE.payable.text : LEDGER_TONE.settled.text}
-        accent={cards.net > 0 ? LEDGER_TONE.receivable.base : cards.net < 0 ? LEDGER_TONE.payable.base : LEDGER_TONE.settled.base}
-        active={filter === 'open'}
-        onPress={() => setFilter(filter === 'open' ? 'all' : 'open')}
-      />
+      {vehicles ? (
+        <SummaryCard
+          label="Balance"
+          caption="Original price"
+          value={`NPR ${bookMoney(totalPrice)}`}
+          color={LEDGER_TONE.settled.text}
+          accent={LEDGER_TONE.settled.base}
+        />
+      ) : (
+        <SummaryCard
+          label="Net balance"
+          value={`${cards.net < 0 ? '−' : ''}NPR ${bookMoney(Math.abs(cards.net))}`}
+          color={cards.net > 0 ? LEDGER_TONE.receivable.text : cards.net < 0 ? LEDGER_TONE.payable.text : LEDGER_TONE.settled.text}
+          accent={cards.net > 0 ? LEDGER_TONE.receivable.base : cards.net < 0 ? LEDGER_TONE.payable.base : LEDGER_TONE.settled.base}
+          active={filter === 'open'}
+          onPress={() => setFilter(filter === 'open' ? 'all' : 'open')}
+        />
+      )}
       <SummaryCard
         label="Total receivable"
         value={`NPR ${bookMoney(cards.receivable)}`}
@@ -1419,6 +1435,14 @@ function LedgerList({ basePath }: { basePath: string }) {
       if (d.row.kind === 'customer') setViewing(d);
     };
 
+    // A price: a plain dark figure - it is neither money to come nor money gone.
+    const priceText = (value: number, strong = false) =>
+      value === 0 ? (
+        <Text className="text-[12.5px] text-gray-300">—</Text>
+      ) : (
+        <Text className={`text-[12.5px] text-gray-900 ${strong ? 'font-extrabold' : 'font-bold'}`}>{bookMoney(value)}</Text>
+      );
+
     const columns: BookColumn<PartyRowData>[] = [
       {
         key: 'sn',
@@ -1518,7 +1542,17 @@ function LedgerList({ basePath }: { basePath: string }) {
             <Text className="text-[12.5px] text-gray-300">—</Text>
           ),
       },
-      { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (d) => <PartyBalance position={positionOf(d)} compact /> },
+      vehicles
+        ? {
+            // The original price: all that was billed with them, before any payment - what is still to be
+            // received or paid is in Receivable and Payable.
+            key: 'balance',
+            label: 'Balance',
+            width: 120,
+            align: 'right',
+            render: (d) => priceText(priceOf(d)),
+          }
+        : { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (d) => <PartyBalance position={positionOf(d)} compact /> },
     ];
 
     // The listed parties added up, column by column, in the line under the table - which stays in view while
@@ -1539,7 +1573,7 @@ function LedgerList({ basePath }: { basePath: string }) {
         totalReceived: total(sum((d) => d.totalReceived), LEDGER_TONE.receivable.text),
         receivable: total(sum((d) => (d.status === 'receivable' ? d.balance : 0)), LEDGER_TONE.receivable.text),
         payable: total(sum((d) => (d.status === 'payable' ? -d.balance : 0)), LEDGER_TONE.payable.text),
-        balance: <PartyBalance position={footerPosition} compact />,
+        balance: vehicles ? priceText(sum(priceOf), true) : <PartyBalance position={footerPosition} compact />,
       },
     };
 
@@ -1554,16 +1588,24 @@ function LedgerList({ basePath }: { basePath: string }) {
         {filtered.length === 0 && (narrowed || merged.length === 0) ? (
           emptyState
         ) : (
-          // Twenty parties show, then the table scrolls inside itself, its header and totals kept in view.
-          <BookTable
-            columns={columns}
-            rows={sortedRows}
-            rowKey={(d) => `${d.row.kind}-${d.row.id}`}
-            onRowPress={open}
-            stickyHeader
-            maxRows={20}
-            footer={tableFooter}
-          />
+          <View style={{ gap: 10 }}>
+            {/* Twenty parties show, then the table scrolls inside itself, its header and totals kept in view. */}
+            <BookTable
+              columns={columns}
+              rows={sortedRows}
+              rowKey={(d) => `${d.row.kind}-${d.row.id}`}
+              onRowPress={open}
+              stickyHeader
+              maxRows={20}
+              footer={tableFooter}
+            />
+            {vehicles && (
+              <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
+                Balance is the original price: everything billed with them, before any payment. Receivable is what is still to be received and
+                Payable what is still to be paid, after what has been received or paid.
+              </Text>
+            )}
+          </View>
         )}
 
         {typeMenu}
