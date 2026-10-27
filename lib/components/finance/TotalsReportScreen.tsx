@@ -918,8 +918,10 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   printNow.current = () => void printReportDocument(reportHtml(buildReport()));
   excelNow.current = () => void exportReportDocument(buildReport());
 
+  // A sale or purchase amount is plain black; only money paid (red) and received (green) is coloured.
+  const figureColor = kind === 'sale' || kind === 'purchase' ? '#111827' : meta.color;
   const amountCell = (e: Entry) => (
-    <Text className="text-[12.5px] font-bold" style={{ color: meta.color }} numberOfLines={1}>
+    <Text className="text-[12.5px] font-bold" style={{ color: figureColor }} numberOfLines={1}>
       {money(e.amount)}
     </Text>
   );
@@ -1032,7 +1034,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       ];
   // A payment's colour is its own direction (green in, red out), not the report's.
   const ledgerColumns = columnsFor('Type', (e) => (
-    <Text className="text-[12.5px] font-bold" style={{ color: e.type.color }} numberOfLines={1}>
+    <Text className="text-[12.5px] font-bold" style={{ color: e.type === PILL.sale || e.type === PILL.purchase ? '#111827' : e.type.color }} numberOfLines={1}>
       {money(e.amount)}
     </Text>
   ));
@@ -1051,12 +1053,12 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       )}
 
       <BookStats>
-        <BookStat label={totalLabel} value={`NPR ${money(stats.total)}`} color={meta.color} />
+        <BookStat label={totalLabel} value={`NPR ${money(stats.total)}`} color={figureColor} />
         <BookStat label="This month" value={`NPR ${money(stats.thisMonth)}`} color="#374151" />
         <BookStat label="Entries" value={String(shownEntries.length)} color="#374151" />
         <BookStat label="Largest" value={`NPR ${money(stats.largest)}`} color="#374151" />
         {stats.paymentCount > 0 && (
-          <BookStat label={kind === 'sale' ? 'Received on bills' : 'Paid on bills'} value={`NPR ${money(stats.payments)}`} color={meta.color} />
+          <BookStat label={kind === 'sale' ? 'Received on bills' : 'Paid on bills'} value={`NPR ${money(stats.payments)}`} color={kind === 'sale' ? MONEY.in.text : MONEY.out.text} />
         )}
       </BookStats>
 
@@ -1115,7 +1117,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                   <Text className="text-[12px] text-gray-400">
                     {empty ? 'No entries' : `${g.rows.length} ${g.rows.length === 1 ? 'entry' : 'entries'}`}
                   </Text>
-                  <Text className="text-right text-[14px] font-extrabold" style={{ minWidth: 84, color: empty ? '#D1D5DB' : meta.color }}>
+                  <Text className="text-right text-[14px] font-extrabold" style={{ minWidth: 84, color: empty ? '#D1D5DB' : figureColor }}>
                     {money(g.total)}
                   </Text>
                 </Pressable>
@@ -1139,7 +1141,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                             <Text className="text-[11.5px] text-gray-400">
                               {single ? bsShortDate(s.latest) : `${s.rows.length} payments · last ${bsShortDate(s.latest)}`}
                             </Text>
-                            <Text className="text-right text-[13px] font-bold" style={{ minWidth: 84, color: meta.color }}>
+                            <Text className="text-right text-[13px] font-bold" style={{ minWidth: 84, color: figureColor }}>
                               {money(s.total)}
                             </Text>
                           </Pressable>
@@ -1155,7 +1157,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
             <Text className="text-[12.5px] font-bold text-gray-600">
               {`${shownEntries.length} ${shownEntries.length === 1 ? 'entry' : 'entries'} · Total`}
             </Text>
-            <Text className="text-[14px] font-extrabold" style={{ color: meta.color }}>
+            <Text className="text-[14px] font-extrabold" style={{ color: figureColor }}>
               {money(stats.total)}
             </Text>
           </View>
@@ -1171,7 +1173,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           groupOf={grouped !== null ? undefined : (e) => bsMonthGroup(e.date)}
           footer={{
             label: `${shownEntries.length} ${shownEntries.length === 1 ? 'entry' : 'entries'} · Total`,
-            cells: { amount: <Text className="text-[13px] font-extrabold" style={{ color: meta.color }}>{money(stats.total)}</Text> },
+            cells: { amount: <Text className="text-[13px] font-extrabold" style={{ color: figureColor }}>{money(stats.total)}</Text> },
           }}
         />
       )}

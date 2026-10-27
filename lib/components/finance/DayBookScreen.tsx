@@ -373,7 +373,8 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
                 <AccountPill row={r} />
               </View>
               {num(r.discount, { width: COL.discount }, '#4B5563')}
-              {num(r.amount, { width: COL.amount }, KIND[r.kind].color)}
+              {/* A sale or purchase bill's amount is plain black: only money paid (red) and received (green) is coloured. */}
+              {num(r.amount, { width: COL.amount }, r.kind === 'sale' || r.kind === 'purchase' ? '#111827' : KIND[r.kind].color)}
               {withPurchase && num(r.purchasePrice, { width: COL.purchase }, '#4B5563')}
               {num(r.cashIn, { width: COL.cashIn }, '#047857', true)}
               {num(r.cashOut, { width: COL.cashOut }, '#B91C1C', true)}

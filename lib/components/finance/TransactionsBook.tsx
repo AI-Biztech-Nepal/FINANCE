@@ -385,7 +385,8 @@ export function TransactionsBook({
         { key: 'details', label: 'Transaction details', render: (r) => detailsCell(r, false) },
         { key: 'type', label: 'Type', width: 116, render: (r) => <Pill text={r.pill.label} color={r.pill.color} bg={r.pill.bg} /> },
         { key: 'discount', label: 'Discount', width: 76, align: 'right', render: (r) => num(r.discount, '#4B5563') },
-        { key: 'amount', label: 'Bill amount', width: 100, align: 'right', render: (r) => num(r.amount, r.pill.color) },
+        // A sale or purchase bill's amount is plain black; only money paid (red) and received (green) is coloured.
+        { key: 'amount', label: 'Bill amount', width: 100, align: 'right', render: (r) => num(r.amount, [PILL.sale, PILL.purchase, PILL.creditSale, PILL.creditPurchase].includes(r.pill) ? '#111827' : r.pill.color) },
         { key: 'cashIn', label: 'Cash in', width: 96, align: 'right', render: (r) => num(r.cashIn, '#047857', true) },
         { key: 'cashOut', label: 'Cash out', width: 96, align: 'right', render: (r) => num(r.cashOut, '#B91C1C', true) },
         { key: 'act', label: '', width: 40, align: 'right', render: trash },
@@ -499,15 +500,15 @@ export function TransactionsBook({
       <BookStats>
         {lockedType ? (
           <>
-            <BookStat label="Total" value={`NPR ${money(lockedTotal)}`} color={lockedType === 'sale' ? MONEY.in.text : MONEY.out.text} />
+            <BookStat label="Total" value={`NPR ${money(lockedTotal)}`} color={lockedType === 'sale' || lockedType === 'purchase' ? '#111827' : MONEY.out.text} />
             <BookStat label="Entries" value={String(lockedCount)} color="#374151" />
             <BookStat label="Average" value={`NPR ${money(lockedCount ? lockedTotal / lockedCount : 0)}`} color="#374151" />
             <BookStat label="Largest" value={`NPR ${money(stats.largest)}`} color="#374151" />
           </>
         ) : (
           <>
-            <BookStat label="Sales" value={`NPR ${money(stats.sums.sale)}`} color={MONEY.in.text} />
-            <BookStat label="Purchases" value={`NPR ${money(stats.sums.purchase)}`} color={MONEY.out.text} />
+            <BookStat label="Sales" value={`NPR ${money(stats.sums.sale)}`} color="#111827" />
+            <BookStat label="Purchases" value={`NPR ${money(stats.sums.purchase)}`} color="#111827" />
             <BookStat label="Expenses" value={`NPR ${money(stats.sums.expense)}`} color={MONEY.out.text} />
             <BookStat label="Entries" value={String(rows.length)} color="#374151" />
           </>
