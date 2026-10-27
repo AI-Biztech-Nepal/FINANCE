@@ -111,10 +111,10 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   const [customerName, setCustomerName] = useState(rental?.customer_name ?? '');
   const [rate, setRate] = useState(rental ? String(rental.rate_per_day) : '');
   const [start, setStart] = useState(rental?.start_date ?? today);
-  // The due-back and returned days are not on this form; a rental that already has them keeps them (and
-  // they still decide its days and status).
+  // The due-back day is not on this form; a rental that already has one keeps it. The day it came back is:
+  // rent and the employee's daily wage both stop on it.
   const end = rental?.end_date ?? '';
-  const returnedOn = rental?.returned_on ?? '';
+  const [returnedOn, setReturnedOn] = useState(rental?.returned_on ?? '');
   // The employee who goes out with it (a driver) and their wage for each day it is out: the database puts each
   // day's wage on their ledger (0015_rental_employee_wages.sql).
   const [employeeId, setEmployeeId] = useState<string | null>(rental?.employee_id ?? null);
@@ -320,6 +320,10 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       showAlert('Add the date', 'Pick the day it was rented.');
       return;
     }
+    if (returnedOn && returnedOn < start) {
+      showAlert('Check the dates', 'It cannot come back before the day it was rented.');
+      return;
+    }
     if (employeeName.trim() && !employeeId) {
       showAlert('Pick the employee', 'Choose the employee from the list (or add them as a new employee), so their wages reach their ledger.');
       return;
@@ -330,6 +334,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         { label: 'Item', value: [item.trim(), model.trim()].filter(Boolean).join(' · ') },
         ...(customerName.trim() ? [{ label: 'Rented to', value: customerName.trim() }] : []),
         { label: 'Rented on', value: toBsHistoryLabel(start) },
+        ...(returnedOn ? [{ label: 'Returned on', value: toBsHistoryLabel(returnedOn) }] : []),
         { label: 'Rate per day', value: `NPR ${formatMoney(Number(rate) || 0)}` },
         { label: 'Days', value: String(figures.days) },
         ...(employeeId
@@ -343,13 +348,14 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       total: { label: 'Rent', value: `NPR ${formatMoney(figures.total)}`, color: MONEY.in.base },
     });
     if (!ok) return;
-    // `payments`, `end_date` and `returned_on` are left out on purpose: a rental that already has them keeps them.
+    // `payments` and `end_date` are left out on purpose: a rental that already has them keeps them.
     const values = {
       car: item.trim(),
       model: model.trim() || null,
       customer_id: customerId,
       customer_name: customerName.trim() || null,
       start_date: start,
+      returned_on: returnedOn || null,
       rate_per_day: round2(Number(rate) || 0),
       employee_id: employeeId,
       employee_name: employeeId ? employeeName.trim() : null,
@@ -490,6 +496,20 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         </Box>
         <Box label="Rented on" basis={170}>
           <KeyboardDateInput value={start} onChange={setStart} inputRef={setRef('start')} autoFocus={!rental} onEnter={() => afterField('start')} onRequestSave={handleSave} accent={accent} />
+        </Box>
+        {/* Empty while it is still out. Rent and the employee's daily wage stop on this day. */}
+        <Box
+          label="Returned on"
+          basis={170}
+          action={
+            <Pressable onPress={() => setReturnedOn(returnedOn ? '' : today)} hitSlop={6}>
+              <Text className="text-[11px] font-semibold" style={{ color: accent }}>
+                {returnedOn ? 'Clear' : 'Today'}
+              </Text>
+            </Pressable>
+          }
+        >
+          <KeyboardDateInput value={returnedOn} onChange={setReturnedOn} onRequestSave={handleSave} accent={accent} />
         </Box>
       </View>
 
