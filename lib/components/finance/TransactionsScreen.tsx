@@ -1685,6 +1685,19 @@ function TransactionForm({
               style={{ boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 4px 12px rgba(16,24,40,0.03)', zIndex: 20 }}
             >
               <View className="flex-row" style={{ gap: 14 }}>
+                <View style={{ flex: 1.1, minWidth: 0 }}>
+                  <Text className="mb-1.5 text-[11px] font-semibold text-gray-600">Bill date</Text>
+                  <KeyboardDateInput
+                    value={billDate}
+                    onChange={setBillDate}
+                    inputRef={billDateRef}
+                    accent={accent}
+                    autoFocus={!initial}
+                    onEnter={() => vendorRef.current?.focus()}
+                    onRequestSave={handleSave}
+                    compact
+                  />
+                </View>
                 <View style={{ flex: 1.7, minWidth: 0 }}>
                   <View className="mb-1.5 flex-row items-center justify-between">
                     <Text className="text-[11px] font-semibold text-gray-600">{partyLabel}</Text>
@@ -1773,19 +1786,6 @@ function TransactionForm({
                     placeholder="e.g. 0234"
                     accessibilityLabel="Bill number"
                     className="rounded-lg px-3 py-2.5 text-xs font-semibold text-gray-900"
-                  />
-                </View>
-                <View style={{ flex: 1.1, minWidth: 0 }}>
-                  <Text className="mb-1.5 text-[11px] font-semibold text-gray-600">Bill date</Text>
-                  <KeyboardDateInput
-                    value={billDate}
-                    onChange={setBillDate}
-                    inputRef={billDateRef}
-                    accent={accent}
-                    autoFocus={!initial}
-                    onEnter={() => vendorRef.current?.focus()}
-                    onRequestSave={handleSave}
-                    compact
                   />
                 </View>
               </View>
