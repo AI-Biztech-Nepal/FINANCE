@@ -271,11 +271,12 @@ function ItemPickerModal({
               <TextInput
                 value={search}
                 onChangeText={setSearch}
-                // Enter takes the item typed when it exists, exactly as typed.
+                // Enter takes the item that exists: exactly as typed, else the first that starts with it, else the first match.
                 onSubmitEditing={() => {
                   const typed = search.trim().toLowerCase();
+                  if (!typed) return;
                   const nameOf = (row: (typeof matches)[number]) => (row.kind === 'product' ? row.product.name : row.item.name).trim().toLowerCase();
-                  const pick = matches.find((row) => nameOf(row) === typed);
+                  const pick = matches.find((row) => nameOf(row) === typed) ?? matches.find((row) => nameOf(row).startsWith(typed)) ?? matches[0];
                   if (!pick) return;
                   if (pick.kind === 'product') onPick(pick.product);
                   else onPickFinanceItem(pick.item);

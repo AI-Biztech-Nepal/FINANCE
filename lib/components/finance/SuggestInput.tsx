@@ -81,14 +81,20 @@ export function SuggestInput({
     onSelectOption(option, via);
   }
 
-  // Nothing highlighted with the arrows: Enter / Tab still takes the name typed when it exists - exactly as typed -
-  // so it never has to be picked by hand. A name that only starts like one that exists is not taken: it may be a
-  // new name. (An "Add ... as new" row is not a name that exists, so it is never taken this way.)
-  function autoPick(): SuggestOption | undefined {
+  // Nothing highlighted with the arrows: Enter takes the name that exists - the one exactly as typed, else the
+  // first that starts with what was typed, else the first the list has - so half a name and Enter is enough.
+  // Tab (`exactOnly`) only takes a name that is exactly as typed, so leaving a new name with Tab never swaps it
+  // for someone else. (An "Add ... as new" row is not a name that exists, so it is never taken this way; it is
+  // reached when nothing the list has matches.)
+  function autoPick(exactOnly = false): SuggestOption | undefined {
     const typed = value.trim().toLowerCase();
     // Nothing typed (a list opened on an empty box): Enter just moves on.
     if (!typed) return undefined;
-    return options.find((o) => o.kind !== 'add' && o.label.trim().toLowerCase() === typed);
+    const existing = options.filter((o) => o.kind !== 'add');
+    const label = (o: SuggestOption) => o.label.trim().toLowerCase();
+    const exact = existing.find((o) => label(o) === typed);
+    if (exact || exactOnly) return exact;
+    return existing.find((o) => label(o).startsWith(typed)) ?? existing[0];
   }
 
   function handleKeyPress(e: unknown) {
@@ -120,7 +126,7 @@ export function SuggestInput({
         }
       }
       if (k.key === 'Tab' && !k.shift) {
-        const pick = activeIndex >= 0 ? options[activeIndex] : autoPick();
+        const pick = activeIndex >= 0 ? options[activeIndex] : autoPick(true);
         if (pick) {
           choose(pick, 'tab');
           return;

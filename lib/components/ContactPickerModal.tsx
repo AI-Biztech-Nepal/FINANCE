@@ -130,10 +130,13 @@ export function ContactPickerModal({
               <TextInput
                 value={search}
                 onChangeText={setSearch}
-                // Enter takes the name typed when it exists, exactly as typed; a new name is added with the row below.
+                // Enter takes the name that exists: exactly as typed, else the first that starts with it, else the
+                // first match. A name nobody has is added with the row below.
                 onSubmitEditing={() => {
                   const typed = search.trim().toLowerCase();
-                  const pick = suggestions.find((s) => s.name.trim().toLowerCase() === typed);
+                  if (!typed) return;
+                  const name = (s: (typeof suggestions)[number]) => s.name.trim().toLowerCase();
+                  const pick = suggestions.find((s) => name(s) === typed) ?? suggestions.find((s) => name(s).startsWith(typed)) ?? suggestions[0];
                   if (pick) handleSelect(pick);
                 }}
                 placeholder={placeholder}
