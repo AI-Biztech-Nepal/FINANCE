@@ -5,6 +5,8 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useSupabaseQuery, useSupabaseInsert, useSupabaseUpdate, useSupabaseDelete } from '../../hooks/useSupabase';
+import { useQueryClient } from '@tanstack/react-query';
+import { renameStockItem } from '../../utils/renameStockItem';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { ConfirmSaveCard, type ConfirmSaveOptions } from './ConfirmSave';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
@@ -512,6 +514,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const createProduct = useSupabaseInsert('products');
   const updateProduct = useSupabaseUpdate('products');
+  const queryClient = useQueryClient();
   const deleteProduct = useSupabaseDelete('products');
   const [editing, setEditing] = useState<{ id: string | null; form: FormState; hint?: string } | null>(null);
   // "Save this product?" is asked inside the dialog itself (not as a second modal), holding the
@@ -895,6 +898,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     if (!editing || !userId || !confirming) return;
     if (createProduct.isPending || updateProduct.isPending) return;
     const { values } = confirming;
+    const oldName = editing.id ? (products ?? []).find((p) => p.id === editing.id)?.name : undefined;
     try {
       if (editing.id) await updateProduct.mutateAsync({ id: editing.id, values });
       else await createProduct.mutateAsync({ owner_id: userId, ...values });
@@ -904,6 +908,19 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       setConfirming(null);
       const msg = getErrorMessage(err);
       showAlert('Could not save', /duplicate key/i.test(msg) ? 'A product with this name or barcode already exists.' : msg);
+      return;
+    }
+    // A new name goes onto its bills, payments and rentals too, or the item would lose its vendor, model,
+    // what was paid and what is due (see renameStockItem).
+    if (editing.id && oldName && oldName.trim() !== values.name) {
+      try {
+        await renameStockItem(userId, editing.id, oldName, values.name, values.stock_level);
+      } catch (err) {
+        showAlert('Saved, but not renamed everywhere', `Some bills or payments still say "${oldName.trim()}": ${getErrorMessage(err)}`);
+      }
+      for (const table of ['business_transactions', 'customer_ledger_entries', 'vendor_ledger_entries', 'rentals', 'products']) {
+        queryClient.invalidateQueries({ queryKey: [table] });
+      }
     }
   }
 
