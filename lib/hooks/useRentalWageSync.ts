@@ -13,9 +13,14 @@ export function useRentalWageSync(userId: string | undefined) {
   useEffect(() => {
     if (!userId) return;
     let live = true;
-    void (supabase.rpc as unknown as (fn: string) => PromiseLike<{ error: unknown }>)('sync_rental_wages').then(({ error }) => {
-      if (live && !error) queryClient.invalidateQueries({ queryKey: ['vendor_ledger_entries'] });
-    });
+    // Called on the client itself: `rpc` reads the client's own settings, so it cannot be taken off it.
+    const client = supabase as unknown as { rpc: (fn: string) => PromiseLike<{ error: unknown }> };
+    client.rpc('sync_rental_wages').then(
+      ({ error }) => {
+        if (live && !error) queryClient.invalidateQueries({ queryKey: ['vendor_ledger_entries'] });
+      },
+      () => {}
+    );
     return () => {
       live = false;
     };

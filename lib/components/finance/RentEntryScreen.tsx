@@ -3,6 +3,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useIsWideWeb } from '../../hooks/useWideGrid';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useSupabaseDelete, useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate } from '../../hooks/useSupabase';
@@ -101,6 +102,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   const updateRental = useSupabaseUpdate('rentals');
   const deleteRental = useSupabaseDelete('rentals');
   const createCustomer = useSupabaseInsert('customers');
+  const queryClient = useQueryClient();
   const { confirm: confirmSave, dialog: confirmDialog } = useConfirmSave();
   // A new customer made from a typed name is checked first, with its name editable.
   const { askNewParty, dialog: newPartyDialog } = useConfirmNewParty();
@@ -320,6 +322,18 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       showAlert('Add the date', 'Pick the day it was rented.');
       return;
     }
+    // A vehicle is out with one renter at a time: one still out (no Returned on) cannot be rented again.
+    const carKey = item.trim().replace(/\s+/g, ' ').toLowerCase();
+    const alreadyOut = !returnedOn
+      ? (allRentals ?? []).find((r) => r.id !== rental?.id && !r.returned_on && r.car.trim().replace(/\s+/g, ' ').toLowerCase() === carKey)
+      : undefined;
+    if (alreadyOut) {
+      showAlert(
+        'Already rented out',
+        `${alreadyOut.car} is out${alreadyOut.customer_name ? ` with ${alreadyOut.customer_name}` : ''} since ${toBsHistoryLabel(alreadyOut.start_date)}. Open that rental and set its Returned on date first.`
+      );
+      return;
+    }
     if (returnedOn && returnedOn < start) {
       showAlert('Check the dates', 'It cannot come back before the day it was rented.');
       return;
@@ -366,9 +380,16 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
     try {
       if (rental) await updateRental.mutateAsync({ id: rental.id, values });
       else await createRental.mutateAsync({ owner_id: userId, ...values });
+      // Saving a rental rewrites its employee's daily wage lines in the database (0015): show them.
+      queryClient.invalidateQueries({ queryKey: ['vendor_ledger_entries'] });
       goBack();
     } catch (err) {
-      showAlert('Could not save', getErrorMessage(err));
+      const msg = getErrorMessage(err);
+      // The database's own guard (0016_rentals_one_out_per_vehicle.sql), for a rental saved elsewhere meanwhile.
+      showAlert(
+        'Could not save',
+        /rentals_one_out_per_car|duplicate key/i.test(msg) ? `${item.trim()} is already rented out. Set Returned on on that rental first.` : msg
+      );
     } finally {
       setSaving(false);
     }
@@ -384,6 +405,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         onPress: async () => {
           try {
             await deleteRental.mutateAsync(rental.id);
+            queryClient.invalidateQueries({ queryKey: ['vendor_ledger_entries'] });
             goBack();
           } catch (err) {
             showAlert('Could not remove', getErrorMessage(err));

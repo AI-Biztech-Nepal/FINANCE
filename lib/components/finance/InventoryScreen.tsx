@@ -7,6 +7,7 @@ import { useAuthStore } from '../../hooks/useAuth';
 import { useSupabaseQuery, useSupabaseInsert, useSupabaseUpdate, useSupabaseDelete } from '../../hooks/useSupabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { renameStockItem } from '../../utils/renameStockItem';
+import { deleteStockItem } from '../../utils/deleteStockItem';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { ConfirmSaveCard, type ConfirmSaveOptions } from './ConfirmSave';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
@@ -216,9 +217,12 @@ function StockItemPopup({
   onEdit,
   onEditPurchase,
   onAddPurchase,
+  onDelete,
   onClose,
 }: {
   row: InventoryRow;
+  /** Takes the item off the books: its bill lines and the stock item (see deleteStockItem). */
+  onDelete: () => void;
   /** Opens the product form: edit this product, or start tracking a bills-only item. */
   onEdit: () => void;
   /** Opens a Purchase bill on the bill form, filled in, to edit it. */
@@ -255,6 +259,11 @@ function StockItemPopup({
   const hsCode = [...moves].reverse().find((m) => m.hsCode)?.hsCode ?? '';
   const valueIn = moves.filter((m) => m.dir === 'in').reduce((sum, m) => sum + m.amount, 0);
   const valueOut = moves.filter((m) => m.dir === 'out').reduce((sum, m) => sum + m.amount, 0);
+  // Once it has been sold: the profit or loss on what was sold - what the sale bills brought in less what those
+  // units cost (their share of what was bought). Green and up for a profit, red and down for a loss. Never sold:
+  // the plain total, as before.
+  const soldCost = totalIn > 0 ? (valueIn / totalIn) * Math.min(totalOut, totalIn) : 0;
+  const profit = totalOut > 0 && totalIn > 0 ? Math.round((valueOut - soldCost) * 100) / 100 : null;
 
   const whenOf = (m: Movement | undefined) =>
     m ? [toBsHistoryLabel(m.day), m.party || null, `@ ${rs(m.rate)}`].filter(Boolean).join(' · ') : '—';
@@ -308,7 +317,7 @@ function StockItemPopup({
           money(l.amount),
           qty(l.net),
         ]),
-        footer: ['', '', '', '', 'Total', qty(totalIn), qty(totalOut), '', '', qty(net)],
+        footer: ['', '', '', '', 'Total', qty(totalIn), qty(totalOut), '', profit == null ? '' : `${profit >= 0 ? '+' : '-'}${money(Math.abs(profit))} ${profit >= 0 ? 'Profit' : 'Loss'}`, qty(net)],
         emptyText: 'No bill has this item yet.',
       },
     ],
@@ -395,11 +404,22 @@ function StockItemPopup({
           ),
         },
       ];
+  const profitCell =
+    profit == null ? (
+      <Text className="text-[13px] font-extrabold text-gray-900">{money(valueIn - valueOut)}</Text>
+    ) : (
+      <View className="flex-row items-center justify-end" style={{ gap: 4 }}>
+        <Ionicons name={profit >= 0 ? 'trending-up' : 'trending-down'} size={14} color={profit >= 0 ? '#047857' : '#B91C1C'} />
+        <Text className="text-[13px] font-extrabold" style={{ color: profit >= 0 ? '#047857' : '#B91C1C' }}>
+          {`${profit >= 0 ? '+' : '−'}${money(Math.abs(profit))} ${profit >= 0 ? 'Profit' : 'Loss'}`}
+        </Text>
+      </View>
+    );
   const footerCells = roomy
     ? {
         in: <Text className="text-[13px] font-extrabold" style={{ color: IN_TONE.color }}>{qty(totalIn)}</Text>,
         out: <Text className="text-[13px] font-extrabold" style={{ color: OUT_TONE.color }}>{qty(totalOut)}</Text>,
-        amount: <Text className="text-[13px] font-extrabold text-gray-900">{money(valueIn - valueOut)}</Text>,
+        amount: profitCell,
         net: <Text className="text-[13px] font-extrabold text-gray-900">{qty(net)}</Text>,
       }
     : { qty: <Text className="text-[13px] font-extrabold text-gray-900">{qty(net)}</Text> };
@@ -486,6 +506,9 @@ function StockItemPopup({
             <Text className="text-[13px] font-bold text-white">Track as a product</Text>
           </Pressable>
         )}
+        <Pressable onPress={onDelete} accessibilityRole="button" className="ml-auto rounded-lg border border-red-200 bg-red-50 px-4 py-2.5">
+          <Text className="text-[13px] font-bold text-red-600">Delete</Text>
+        </Pressable>
       </View>
     </PopupCard>
   );
@@ -945,6 +968,43 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     }
   }
 
+  // Deletes an item from the books - the purchase and sale bill lines that name it and the stock item - after
+  // saying what goes. Payments that name it stay (see deleteStockItem).
+  function confirmDeleteItem(r: InventoryRow, moves: Movement[]) {
+    if (!userId) return;
+    const bills = new Map(moves.map((m) => [m.tx.id, m.tx]));
+    const bought = moves.filter((m) => m.dir === 'in').reduce((s, m) => s + m.amount, 0);
+    const sold = moves.filter((m) => m.dir === 'out').reduce((s, m) => s + m.amount, 0);
+    const parts = [
+      bought > 0 ? `its purchase (NPR ${money(bought)}) - the vendor's payable goes down by it` : null,
+      sold > 0 ? `its sale (NPR ${money(sold)})` : null,
+    ].filter(Boolean);
+    showAlert(
+      `Delete ${r.name}?`,
+      `${r.name} is taken off your stock${parts.length ? `, with ${parts.join(' and ')}` : ''}${
+        bills.size ? ` - ${bills.size} ${bills.size === 1 ? 'bill' : 'bills'}` : ''
+      }. Payments that name it stay on the ledger. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteStockItem(userId, r.name, r.product?.id ?? null);
+              setViewingKey(null);
+            } catch (err) {
+              showAlert('Could not delete', getErrorMessage(err));
+            }
+            for (const table of ['business_transactions', 'customer_ledger_entries', 'vendor_ledger_entries', 'products', 'finance_items']) {
+              queryClient.invalidateQueries({ queryKey: [table] });
+            }
+          },
+        },
+      ]
+    );
+  }
+
   function confirmDelete(p: Product) {
     showAlert('Delete product?', `${p.name} will be removed from inventory. Past bills are not affected.`, [
       { text: 'Cancel', style: 'cancel' },
@@ -1207,6 +1267,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
             router.push(`${basePath}/transactions?${params.join('&')}` as never);
             setViewingKey(null);
           }}
+          onDelete={() => confirmDeleteItem(viewingRow, movementsByName.get(nameKey(viewingRow.name)) ?? [])}
           onClose={() => setViewingKey(null)}
         />
       )}
