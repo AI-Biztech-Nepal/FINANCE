@@ -25,11 +25,19 @@ revoke execute on function public.party_type_id_for(uuid, text) from public, ano
 create or replace function public.type_party_from_ledger()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
-  pid uuid;
+  pid  uuid;
+  kind text;
 begin
-  pid := case when tg_table_name = 'customer_ledger_entries' then new.customer_id else new.vendor_id end;
+  -- Read the party field through jsonb: a vendor entry has no customer_id and a customer entry no vendor_id.
+  if tg_table_name = 'customer_ledger_entries' then
+    pid := (to_jsonb(new) ->> 'customer_id')::uuid;
+    kind := 'Customer';
+  else
+    pid := (to_jsonb(new) ->> 'vendor_id')::uuid;
+    kind := 'Vendor';
+  end if;
   update customers
-     set party_type_id = party_type_id_for(new.owner_id, case when tg_table_name = 'customer_ledger_entries' then 'Customer' else 'Vendor' end)
+     set party_type_id = party_type_id_for(new.owner_id, kind)
    where id = pid and party_type_id is null;
   return new;
 end $$;
