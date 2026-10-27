@@ -211,6 +211,7 @@ function StockItemPopup({
   onOpenBill,
   onEdit,
   onEditPurchase,
+  onAddPurchase,
   onClose,
 }: {
   row: InventoryRow;
@@ -218,6 +219,8 @@ function StockItemPopup({
   onEdit: () => void;
   /** Opens a Purchase bill on the bill form, filled in, to edit it. */
   onEditPurchase: (tx: BusinessTransaction) => void;
+  /** Opens a new Purchase bill for an item that has none, with the item filled in. */
+  onAddPurchase: () => void;
   /** Oldest first. */
   moves: Movement[];
   businessName: string;
@@ -463,9 +466,19 @@ function StockItemPopup({
               <Text className="text-[13px] font-bold" style={{ color: '#1D4ED8' }}>{row.product ? 'Edit product' : 'Track as a product'}</Text>
             </Pressable>
           </>
+        ) : row.product ? (
+          // No purchase bill has this item, so there is none to edit: record the one it was bought with.
+          <>
+            <Pressable onPress={onAddPurchase} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
+              <Text className="text-[13px] font-bold text-white">Add purchase</Text>
+            </Pressable>
+            <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg border px-4 py-2.5" style={{ borderColor: '#1D4ED8' }}>
+              <Text className="text-[13px] font-bold" style={{ color: '#1D4ED8' }}>Edit product</Text>
+            </Pressable>
+          </>
         ) : (
           <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
-            <Text className="text-[13px] font-bold text-white">{row.product ? 'Edit product' : 'Track as a product'}</Text>
+            <Text className="text-[13px] font-bold text-white">Track as a product</Text>
           </Pressable>
         )}
       </View>
@@ -1168,6 +1181,22 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           onEdit={() => openEdit(viewingRow)}
           onEditPurchase={(tx) => {
             router.push(`${basePath}/transactions?type=${tx.type}&add=1&edit=${tx.id}` as never);
+            setViewingKey(null);
+          }}
+          onAddPurchase={() => {
+            // The bill comes with the item, the units already on the shelf and its cost price. Those units are
+            // already counted in the stock, so the form puts the stock back to what it is now once the bill is
+            // saved (see `keepStock`) - the bill would otherwise add them a second time.
+            const stock = viewingRow.stockLevel ?? 0;
+            const params = [
+              'type=purchase',
+              'add=1',
+              `item=${encodeURIComponent(viewingRow.name)}`,
+              `itemQty=${stock > 0 ? stock : 1}`,
+              `itemRate=${viewingRow.cost ?? ''}`,
+              `keepStock=${stock}`,
+            ];
+            router.push(`${basePath}/transactions?${params.join('&')}` as never);
             setViewingKey(null);
           }}
           onClose={() => setViewingKey(null)}

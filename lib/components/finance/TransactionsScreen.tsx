@@ -647,6 +647,7 @@ function TransactionForm({
   customers,
   products,
   voicePrefill,
+  itemPrefill,
   presetPartyId,
   onOpenRecent,
   onDone,
@@ -659,6 +660,8 @@ function TransactionForm({
   customers: Customer[];
   products: Product[];
   voicePrefill?: { amount?: string; party?: string; date?: string; note?: string } | null;
+  /** A new Purchase that opens with this item on it; `keepStock` is the stock to put it back to once saved. */
+  itemPrefill?: { name: string; qty: string; rate: string; keepStock: number | null } | null;
   /** A saved party to start the bill with - "New Sale" from their statement. */
   presetPartyId?: string;
   /** Opens an entry from the Recent list (web) - see RecentEntriesCard. */
@@ -1080,6 +1083,19 @@ function TransactionForm({
           await updateTx.mutateAsync({ id: initial.id, values });
         } else {
           await createTx.mutateAsync({ owner_id: userId, ...values });
+          // The bill was recorded for units already on the shelf, and saving it counted them again: put the
+          // item's stock back to what it was. A failure here doesn't undo the bill.
+          if (itemPrefill?.keepStock != null) {
+            const wanted = itemPrefill.name.trim().toLowerCase();
+            const product = products.find((p) => p.name.trim().toLowerCase() === wanted);
+            if (product && validItems.some((r) => r.description.trim().toLowerCase() === wanted)) {
+              try {
+                await updateProduct.mutateAsync({ id: product.id, values: { stock_level: itemPrefill.keepStock } });
+              } catch {
+                // the bill itself saved
+              }
+            }
+          }
         }
         onDone();
       } catch (err) {
@@ -1160,6 +1176,13 @@ function TransactionForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voicePrefill]);
+
+  // A new bill that opens with an item on it: that line is filled in, ready for the vendor to be picked.
+  useEffect(() => {
+    if (!itemPrefill || initial || !isBill) return;
+    setItems([{ description: itemPrefill.name, qty: itemPrefill.qty, rate: itemPrefill.rate }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemPrefill]);
 
   // Starts a new bill with the party it was opened for. The customer list can
   // still be loading on the first render, so this waits for it - and runs once,
@@ -3077,6 +3100,10 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
     voiceParty,
     voiceDate,
     voiceNote,
+    item: itemParam,
+    itemQty,
+    itemRate,
+    keepStock: keepStockParam,
   } = useLocalSearchParams<{
     type?: string;
     add?: string;
@@ -3086,6 +3113,12 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
     voiceParty?: string;
     voiceDate?: string;
     voiceNote?: string;
+    /** A new bill that opens with this item on it (Stock and Inventory's "Add purchase"). */
+    item?: string;
+    itemQty?: string;
+    itemRate?: string;
+    /** The item's stock to put back once that bill is saved: its units were already counted. */
+    keepStock?: string;
   }>();
   // Memoized on the actual param values (not recreated every render) so the
   // form's effect below can safely depend on this object's identity instead
@@ -3099,6 +3132,18 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
         ? { amount: voiceAmount, party: voiceParty, date: voiceDate, note: voiceNote }
         : null,
     [voiceAmount, voiceParty, voiceDate, voiceNote]
+  );
+  const itemPrefill = useMemo(
+    () =>
+      itemParam
+        ? {
+            name: itemParam,
+            qty: itemQty || '1',
+            rate: itemRate || '',
+            keepStock: keepStockParam != null && keepStockParam !== '' && !Number.isNaN(Number(keepStockParam)) ? Number(keepStockParam) : null,
+          }
+        : null,
+    [itemParam, itemQty, itemRate, keepStockParam]
   );
   const userId = useAuthStore((state) => state.session?.user.id);
   const role = useRole();
@@ -3544,6 +3589,7 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
                 customers={customers ?? []}
                 products={products ?? []}
                 voicePrefill={editingTx || formKey > 0 ? null : voicePrefill}
+                itemPrefill={editingTx || formKey > 0 ? null : itemPrefill}
                 presetPartyId={editingTx || formKey > 0 ? undefined : partyIdParam}
                 onOpenRecent={desktopWeb ? setViewingTx : undefined}
                 onDone={() => {
