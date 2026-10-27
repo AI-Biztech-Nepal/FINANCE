@@ -46,6 +46,7 @@ import { localTodayIso } from '../../utils/localDate';
 import { journalOf } from '../../utils/journalVoucher';
 import { highlightText as highlight } from './Highlight';
 import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
+import { ALL_TIME, PeriodPicker, type Period } from './PeriodPicker';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { pickPhoneContact } from '../../utils/pickPhoneContact';
@@ -934,6 +935,8 @@ function LedgerList({ basePath }: { basePath: string }) {
   // The search box filters the table as you type: every party whose name or phone contains what is
   // typed, those whose name starts with it first.
   const [search, setSearch] = useState('');
+  // The second box: the Ledger type (Customer, Vendor, Employee ...), on its own.
+  const [typeSearch, setTypeSearch] = useState('');
   // A name typed in the search that is not saved yet starts the New party form with it filled in.
   const [newPartyName, setNewPartyName] = useState('');
   const [showAddForm, setShowAddForm] = useState(add === '1');
@@ -957,7 +960,31 @@ function LedgerList({ basePath }: { basePath: string }) {
     enabled: !!userId,
   });
   const appCustomers = useAppCustomers(userId);
-  const { byParty: itemsByParty, referenceById, cashByParty } = useLedgerItems(userId);
+  const { byParty: allItemsByParty, referenceById } = useLedgerItems(userId);
+  // The period the Ledger reads (the Select Date sheet). What was billed, paid and received counts within it; what
+  // is still owed (Payable / Receivable, the cards) is as it stood at its last day. All Time: everything.
+  const [period, setPeriod] = useState<Period>(ALL_TIME);
+  const { itemsByParty, periodItemsByParty, cashByParty } = useMemo(() => {
+    const upTo = new Map<string, LedgerItem[]>();
+    const within = new Map<string, LedgerItem[]>();
+    const cash = new Map<string, { paid: number; received: number }>();
+    for (const [partyId, items] of allItemsByParty) {
+      const before = period.to ? items.filter((i) => i.day <= period.to) : items;
+      const inside = period.from ? before.filter((i) => i.day >= period.from) : before;
+      upTo.set(partyId, before);
+      within.set(partyId, inside);
+      // Money that moved in the period: received from them, paid to them (a journal voucher's halves are not money).
+      const c = { paid: 0, received: 0 };
+      for (const i of inside) {
+        if (journalOf(i.note)) continue;
+        if (i.side === 'customer' && i.entryType === 'credit') c.received += i.amount;
+        else if (i.side === 'customer' && i.entryType === 'debit' && i.manual) c.paid += i.amount;
+        else if (i.side === 'vendor' && i.entryType === 'credit') c.paid += i.amount;
+      }
+      cash.set(partyId, c);
+    }
+    return { itemsByParty: upTo, periodItemsByParty: within, cashByParty: cash };
+  }, [allItemsByParty, period]);
   const { nameById: partyTypeName, types: partyTypes } = usePartyTypes(userId);
   // A person typed Expense / Sales / Purchase opens on that report (see usePartyDestination).
   const hrefFor = usePartyDestination(userId, basePath);
@@ -1004,7 +1031,8 @@ function LedgerList({ basePath }: { basePath: string }) {
       merged.map((row) => {
         const all = row.kind === 'customer' ? itemsByParty.get(row.id) ?? [] : [];
         const totals = summarize(all);
-        const sides = sideTotals(all);
+        // Billed in the period; the balance is as it stood at the period's end.
+        const sides = sideTotals(row.kind === 'customer' ? periodItemsByParty.get(row.id) ?? [] : []);
         const balance = totals.closing;
         const latest = all.reduce<LedgerItem | null>((a, b) => (!a || compareItems(a, b) < 0 ? b : a), null);
         return {
@@ -1022,7 +1050,7 @@ function LedgerList({ basePath }: { basePath: string }) {
           totalReceived: round2(row.kind === 'customer' ? cashByParty.get(row.id)?.received ?? 0 : 0),
         };
       }),
-    [merged, itemsByParty, referenceById, cashByParty, today, partyTypeName]
+    [merged, itemsByParty, periodItemsByParty, referenceById, cashByParty, today, partyTypeName]
   );
 
   // The headline cards count the way the Finance dashboard does, so the two always
@@ -1064,35 +1092,37 @@ function LedgerList({ basePath }: { basePath: string }) {
   // typing "vendor" lists everyone filed under Vendor. The ones whose name (or any word of it) starts
   // with it come first, then the rest, each still A-Z.
   const filtered = useMemo(() => {
+    // A period picked: only the parties with something in it.
+    const active = period.from ? analysed.filter((d) => (periodItemsByParty.get(d.row.id) ?? []).length > 0) : analysed;
     const byStatus =
       filter === 'all'
-        ? analysed
+        ? active
         : filter === 'open'
-          ? analysed.filter((d) => d.status !== 'settled')
-          : analysed.filter((d) => d.status === filter);
+          ? active.filter((d) => d.status !== 'settled')
+          : active.filter((d) => d.status === filter);
     const q = search.trim().toLowerCase();
-    if (!q) return byStatus;
+    const t = typeSearch.trim().toLowerCase();
+    // The type box narrows to the parties whose Ledger type has what is typed in it.
+    const byType = t ? byStatus.filter((d) => typeOf(d).toLowerCase().includes(t)) : byStatus;
+    if (!q) return byType;
     const rank = (d: PartyRowData) => {
       const name = d.row.name.toLowerCase();
       if (name.startsWith(q)) return 0;
       if (name.split(/\s+/).some((word) => word.startsWith(q))) return 1;
       return name.includes(q) || (d.row.phone ?? '').includes(q) ? 2 : 3;
     };
-    // A party shows when its name, phone or Ledger type (Employee, Vendor ...) has what is typed.
-    return byStatus
-      .filter(
-        (d) =>
-          d.row.name.toLowerCase().includes(q) || (d.row.phone ?? '').includes(q) || typeOf(d).toLowerCase().includes(q)
-      )
+    // The name box: a party shows when its name or phone has what is typed.
+    return byType
+      .filter((d) => d.row.name.toLowerCase().includes(q) || (d.row.phone ?? '').includes(q))
       .sort((a, b) => rank(a) - rank(b));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysed, filter, search, appUserType]);
+  }, [analysed, filter, search, typeSearch, appUserType, period, periodItemsByParty]);
 
   // The Ledger is laid out by Ledger type - Customer, Vendor, Employee, Expense ... - each header with
   // how many parties it holds and what they add up to, and the parties inside it. Only a type with
   // someone in it is a header: one nobody is filed under is left out. A search or a status filter
   // lists (and opens) only the headers with a match.
-  const narrowed = !!search.trim() || filter !== 'all';
+  const narrowed = !!search.trim() || !!typeSearch.trim() || filter !== 'all' || !!period.from;
   const groups = useMemo((): LedgerGroup[] => {
     const byKey = new Map<string, LedgerGroup>();
     const slot = (key: string, label: string) => {
@@ -1287,38 +1317,56 @@ function LedgerList({ basePath }: { basePath: string }) {
   );
 
   // The search sits right under the figures: a wide, rounded box with the match count and a clear button.
-  const [searchFocused, setSearchFocused] = useState(false);
-  const searchBar = (
+  const [searchFocused, setSearchFocused] = useState<'name' | 'type' | null>(null);
+  // Two boxes side by side: the party's name (or phone), and its Ledger type. Both together narrow by both.
+  const searchBox = (
+    which: 'name' | 'type',
+    value: string,
+    onChange: (v: string) => void,
+    placeholder: string,
+    icon: keyof typeof Ionicons.glyphMap,
+    grow: number
+  ) => (
     <View
       className="flex-row items-center rounded-2xl bg-white px-4"
       style={{
+        flexGrow: grow,
+        flexBasis: 240,
+        minWidth: 0,
         height: 50,
         gap: 10,
         borderWidth: 1.5,
-        borderColor: searchFocused ? '#2563EB' : '#E2E8F0',
-        boxShadow: searchFocused ? '0 0 0 4px rgba(37,99,235,0.12)' : '0 1px 2px rgba(16,24,40,0.05)',
+        borderColor: searchFocused === which ? '#2563EB' : '#E2E8F0',
+        boxShadow: searchFocused === which ? '0 0 0 4px rgba(37,99,235,0.12)' : '0 1px 2px rgba(16,24,40,0.05)',
       }}
     >
-      <Ionicons name="search" size={19} color={searchFocused || search ? '#2563EB' : '#94A3B8'} />
+      <Ionicons name={icon} size={19} color={searchFocused === which || value ? '#2563EB' : '#94A3B8'} />
       <TextInput
-        value={search}
-        onChangeText={setSearch}
-        onFocus={() => setSearchFocused(true)}
-        onBlur={() => setSearchFocused(false)}
-        placeholder="Search ledgers by name, phone or ledger type"
+        value={value}
+        onChangeText={onChange}
+        onFocus={() => setSearchFocused(which)}
+        onBlur={() => setSearchFocused((f) => (f === which ? null : f))}
+        placeholder={placeholder}
         placeholderTextColor="#94A3B8"
         className="flex-1 text-[15px] text-gray-900"
         style={{ outlineStyle: 'none' } as object}
       />
-      {!!search.trim() && (
+      {!!value && (
+        <Pressable onPress={() => onChange('')} hitSlop={8} accessibilityLabel="Clear search">
+          <Ionicons name="close-circle" size={19} color="#94A3B8" />
+        </Pressable>
+      )}
+    </View>
+  );
+  const searchBar = (
+    <View className="flex-row flex-wrap items-center" style={{ gap: 10 }}>
+      <PeriodPicker value={period} onChange={setPeriod} />
+      {searchBox('name', search, setSearch, 'Search by ledger name or phone', 'search', 2)}
+      {searchBox('type', typeSearch, setTypeSearch, 'Search by ledger type (Customer, Vendor, Employee ...)', 'pricetags-outline', 1)}
+      {(!!search.trim() || !!typeSearch.trim()) && (
         <Text className="text-[12.5px] font-semibold" style={{ color: '#1E3A8A' }}>
           {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
         </Text>
-      )}
-      {!!search && (
-        <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
-          <Ionicons name="close-circle" size={19} color="#94A3B8" />
-        </Pressable>
       )}
     </View>
   );
@@ -1600,7 +1648,7 @@ function LedgerList({ basePath }: { basePath: string }) {
         width: 140,
         render: (d) => (
           <Text className="text-[12.5px] font-semibold text-gray-700" numberOfLines={1}>
-            {d.typeName ? highlight(d.typeName, search) : d.row.kind === 'customer' ? '—' : 'Customer'}
+            {d.typeName ? highlight(d.typeName, typeSearch) : d.row.kind === 'customer' ? '—' : 'Customer'}
           </Text>
         ),
       },
@@ -1761,11 +1809,15 @@ function LedgerList({ basePath }: { basePath: string }) {
     <View className="flex-1 bg-gray-50">
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }} keyboardShouldPersistTaps="handled">
         <View className="flex-row items-center gap-2">
-          <ToolbarSearch value={search} onChange={setSearch} placeholder="Search by name, phone or type" wide={false} />
+          <ToolbarSearch value={search} onChange={setSearch} placeholder="Search by name or phone" wide={false} />
           <Pressable onPress={openNewParty} className="h-11 w-11 items-center justify-center rounded-2xl bg-orange-500">
             <Ionicons name="add" size={22} color="white" />
           </Pressable>
         </View>
+        <View className="flex-row items-center" style={{ gap: 8 }}>
+          <PeriodPicker value={period} onChange={setPeriod} />
+        </View>
+        <ToolbarSearch value={typeSearch} onChange={setTypeSearch} placeholder="Search by ledger type" wide={false} />
 
         {summaryCards}
 

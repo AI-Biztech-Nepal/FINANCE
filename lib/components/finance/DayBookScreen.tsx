@@ -337,6 +337,7 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
       };
 
   return (
+<<<<<<< HEAD
     <BookTable
       columns={columns}
       rows={rows}
@@ -349,6 +350,95 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
       groupOf={dayLabel ? (((r: BookRow) => (r.kind === 'opening' ? undefined : dayLabel(r.date))) as unknown as (row: BookRow) => string) : undefined}
       footer={footer}
     />
+=======
+    <View className="overflow-hidden rounded-xl border border-gray-300 bg-white">
+      <View>
+          <View className="flex-row border-b border-gray-300 bg-gray-50">
+            {headCell('SN', { width: COL.sn })}
+            {headCell('Date', { width: COL.date })}
+            {headCell('Invoice no.', { width: COL.invoice })}
+            {headCell('Transaction details', { flex: 1 })}
+            {headCell('Type', { width: COL.type })}
+            {headCell('Discount', { width: COL.discount }, true)}
+            {headCell('Bill amount', { width: COL.amount }, true)}
+            {withPurchase && headCell('Purchase price', { width: COL.purchase }, true)}
+            {headCell('Cash in', { width: COL.cashIn }, true)}
+            {headCell('Cash out', { width: COL.cashOut }, true)}
+            <Text className="px-2.5 py-2 text-right text-xs font-bold text-gray-600" style={{ width: COL.balance }}>
+              Balance
+            </Text>
+          </View>
+
+          {rows.map((r, index) => (
+            <Fragment key={r.id}>
+            {dayBand(r, index)}
+            <Pressable
+              onPress={open(r)}
+              disabled={!r.edit && !r.bill && !r.journal}
+              className="flex-row border-b border-gray-200"
+              style={r.kind === 'opening' ? { backgroundColor: '#FAFAFA' } : undefined}
+            >
+              <Text className={`${cell} text-[12.5px] text-gray-500`} style={{ width: COL.sn }} numberOfLines={1}>
+                {r.kind === 'opening' ? '' : index}
+              </Text>
+              <View className={cell} style={{ width: COL.date, minWidth: 0 }}>{dateCell(r, false)}</View>
+              <Text
+                className={`${cell} text-[12.5px] font-semibold text-gray-700`}
+                style={{ width: COL.invoice, color: r.invoiceNo ? '#374151' : '#9CA3AF' }}
+                numberOfLines={1}
+              >
+                {r.invoiceNo ?? '—'}
+              </Text>
+              <View className={cell} style={{ flex: 1, minWidth: 0 }}>
+                <Text className={`text-[13px] text-gray-900 ${r.kind === 'opening' ? 'font-bold' : 'font-medium'}`} numberOfLines={1}>
+                  {r.details}
+                </Text>
+                {!!r.sub && (
+                  <Text className="text-xs text-gray-500" numberOfLines={r.kind === 'opening' ? undefined : 1}>
+                    {r.sub}
+                  </Text>
+                )}
+              </View>
+              <View className={cell} style={{ width: COL.type, gap: 3 }}>
+                <TypePill kind={r.kind} />
+                <AccountPill row={r} />
+              </View>
+              {num(r.discount, { width: COL.discount }, '#4B5563')}
+              {/* A sale or purchase bill's amount is plain black: only money paid (red) and received (green) is coloured. */}
+              {num(r.amount, { width: COL.amount }, r.kind === 'sale' || r.kind === 'purchase' ? '#111827' : KIND[r.kind].color)}
+              {withPurchase && num(r.purchasePrice, { width: COL.purchase }, '#4B5563')}
+              {num(r.cashIn, { width: COL.cashIn }, '#047857', true)}
+              {num(r.cashOut, { width: COL.cashOut }, '#B91C1C', true)}
+              <Text
+                className="px-2.5 py-2 text-right text-[13px] font-bold"
+                style={{ width: COL.balance, color: r.balance == null ? '#6B7280' : '#111827' }}
+              >
+                {money(r.balance)}
+              </Text>
+            </Pressable>
+            </Fragment>
+          ))}
+
+          <View className="flex-row bg-gray-50">
+            <Text className={`${cell} flex-1 text-right text-[12.5px] font-bold text-gray-700`}>
+              Opening {money(opening)} + In {money(totalIn)} − Out {money(totalOut)} = Closing balance
+            </Text>
+            <Text className={`${cell} text-right text-[13px] font-extrabold`} style={{ width: COL.cashIn, color: '#047857' }}>
+              {money(totalIn)}
+            </Text>
+            <Text className={`${cell} text-right text-[13px] font-extrabold`} style={{ width: COL.cashOut, color: '#B91C1C' }}>
+              {money(totalOut)}
+            </Text>
+            <Text
+              className="px-2.5 py-2 text-right text-[14px] font-extrabold"
+              style={{ width: COL.balance, color: closing >= 0 ? '#2563EB' : '#DC2626' }}
+            >
+              {money(closing)}
+            </Text>
+          </View>
+      </View>
+    </View>
+>>>>>>> d8dc822ec1774df10f11b6a9d9f2b5922a56c2c6
   );
 }
 

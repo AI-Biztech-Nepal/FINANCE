@@ -735,8 +735,43 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       })
       .filter((r): r is InventoryRow => r !== null);
 
+    // Anything else a purchase or sale bill names - an item whose stock item was renamed or never made - is listed
+    // too, as Bills only: nothing on a bill is left out of the stock list (and it can be deleted from here).
+    const listed = new Set([...seenNames, ...(financeItems ?? []).map((f) => nameKey(f.name))]);
+    const billRows: InventoryRow[] = [];
+    for (const [key, moves] of movementsByName) {
+      if (listed.has(key) || moves.length === 0) continue;
+      const latest = moves[moves.length - 1];
+      const name = latest.tx.items?.[Number(latest.key.split(':').pop())]?.description?.trim() || key;
+      const sold = soldByName.get(key) ?? 0;
+      const purchased = purchasedByName.get(key) ?? 0;
+      const cost = [...moves].reverse().find((m) => m.dir === 'in' && m.rate > 0)?.rate ?? null;
+      const billed = vehicles ? billedOf(key) : 0;
+      const paid = vehicles && billed > 0 ? round2(paidByCar.get(key) ?? 0) : null;
+      const soldFor = vehicles ? billedOf(key, 'out') : 0;
+      const revenue = moves.filter((m) => m.dir === 'out').reduce((sum, m) => sum + m.amount, 0);
+      billRows.push({
+        key: `b-${key}`,
+        name,
+        category: null,
+        price: soldFor > 0 ? round2(soldFor) : null,
+        cost,
+        stockLevel: null,
+        sold,
+        purchased,
+        paid,
+        dues: paid != null ? round2(billed - paid) : null,
+        vendor: vehicles ? tidyName([...moves].reverse().find((m) => m.dir === 'in' && m.party)?.party ?? '') : '',
+        profit: vehicles && cost != null && sold > 0 && revenue > 0 ? round2(revenue - cost * sold) : null,
+        profitEstimated: false,
+        model: [...moves].reverse().find((m) => m.dir === 'in' && m.model)?.model ?? '',
+        status: 'untracked',
+        value: null,
+      });
+    }
+
     const hasStock = (r: InventoryRow) => (r.stockLevel ?? 0) > 0;
-    return [...productRows, ...financeItemRows].sort(
+    return [...productRows, ...financeItemRows, ...billRows].sort(
       (a, b) => Number(hasStock(b)) - Number(hasStock(a)) || a.name.localeCompare(b.name)
     );
   }, [products, financeItems, movementsByName, vehicles, vendorLedger]);
