@@ -860,7 +860,12 @@ function TransactionForm({
     let finalName = name;
     if (confirmName) {
       const checked = await askNewParty({ name, kind: newPartyKind });
-      if (!checked) return false;
+      if (!checked) {
+        // Cancelled in the confirmation: the name is dropped, so it cannot be saved by accident.
+        setPartyName('');
+        setCustomerId(null);
+        return false;
+      }
       finalName = checked;
     }
     try {
@@ -1709,7 +1714,6 @@ function TransactionForm({
                     options={vendorOptions}
                     onSelectOption={async (opt, via) => {
                       if (opt.key === ADD_PARTY_KEY) {
-                        // Cancelled in the confirmation: the typed name stays and the caret stays in the box.
                         const added = await handleSelectPartyNew(tidyName(partyName.trim()), null, true);
                         if (added && via !== 'tab') billNoRef.current?.focus();
                         return;

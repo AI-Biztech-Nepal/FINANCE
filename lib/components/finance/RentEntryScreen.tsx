@@ -222,7 +222,12 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
     if (opt.key === ADD_PARTY_KEY) {
       if (!userId) return;
       const finalName = await askNewParty({ name: customerName.trim(), kind: 'customer' });
-      if (!finalName) return;
+      if (!finalName) {
+        // Cancelled in the confirmation: the name is dropped, so it cannot be saved by accident.
+        setCustomerName('');
+        setCustomerId(null);
+        return;
+      }
       try {
         const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
         setCustomerName(created.name);
@@ -239,7 +244,12 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       else {
         // A phone contact that is not saved yet is saved now, so the rental links to a real customer.
         const finalName = await askNewParty({ name: s.name, kind: 'customer' });
-        if (!finalName) return;
+        if (!finalName) {
+          // Cancelled in the confirmation: the name is dropped, so it cannot be saved by accident.
+          setCustomerName('');
+          setCustomerId(null);
+          return;
+        }
         try {
           const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: s.phone });
           setCustomerId(created.id);

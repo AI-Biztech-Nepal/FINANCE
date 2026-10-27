@@ -268,10 +268,12 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
                 onSelectOption={async (opt, via) => {
                   if (opt.key === ADD_PARTY_KEY) {
                     const created = await onCreateParty?.(row.partyName.trim());
-                    // Cancelled in the confirmation: the typed name stays and the caret stays in the box.
                     if (created) {
                       onUpdateRow(row.key, { partyName: created.name, customerId: created.id });
                       if (via !== 'tab') inputRefs.current[`${row.key}:1`]?.focus();
+                    } else {
+                      // Cancelled in the confirmation: the name is dropped, so it cannot be saved by accident.
+                      onUpdateRow(row.key, { partyName: '', customerId: null });
                     }
                     return;
                   }

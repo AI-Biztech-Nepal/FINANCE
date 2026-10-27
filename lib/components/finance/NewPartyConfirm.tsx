@@ -13,7 +13,8 @@ function NewPartyDialog({ kind, initial, onAdd, onCancel }: { kind: NewPartyKind
     if (name.trim()) onAdd(name.trim());
   };
   return (
-    <PopupCard title={`Add new ${kind}`} onClose={onCancel} maxWidth={460}>
+    // No cross: it has to be answered with Cancel (the name is dropped) or Add (it is saved).
+    <PopupCard title={`Add new ${kind}`} onClose={onCancel} maxWidth={460} hideClose>
       <Text className="text-[13px] text-gray-500">
         This {kind} is not saved yet. Check the name - fix it if it needs it - and add.
       </Text>

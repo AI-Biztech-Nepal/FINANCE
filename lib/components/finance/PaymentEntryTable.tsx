@@ -285,10 +285,12 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
                 onSelectOption={async (opt, via) => {
                   if (opt.key === ADD_PARTY_KEY) {
                     const created = await onCreateParty?.(row.customerName.trim());
-                    // Cancelled in the confirmation: the typed name stays and the caret stays in the box.
                     if (created) {
                       onUpdateRow(row.key, { customerName: created.name, selectedCustomer: created, pendingPhone: null });
                       if (via !== 'tab') inputRefs.current[`${row.key}:${order[1]}`]?.focus();
+                    } else {
+                      // Cancelled in the confirmation: the name is dropped, so it cannot be saved by accident.
+                      onUpdateRow(row.key, { customerName: '', selectedCustomer: null, pendingPhone: null });
                     }
                     return;
                   }
