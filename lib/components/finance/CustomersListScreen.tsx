@@ -1610,11 +1610,14 @@ function LedgerList({ basePath }: { basePath: string }) {
       );
     };
 
+    // The last transaction: its date, and under it how long ago and its number (Payment no. 005 ...).
     const lastCell = (d: PartyRowData) =>
       d.totals.lastDay ? (
-        <View>
+        <View style={{ minWidth: 0 }}>
           <Text className="text-[12.5px] text-gray-700">{toBsHistoryLabel(d.totals.lastDay)}</Text>
-          <Text className="text-[11px] text-gray-400">{relativeDay(d.totals.lastDay, today)}</Text>
+          <Text className="text-[11px] text-gray-400" numberOfLines={1}>
+            {[relativeDay(d.totals.lastDay, today), d.lastReference ? `${d.lastReference.kind} ${d.lastReference.no}` : null].filter(Boolean).join(' · ')}
+          </Text>
         </View>
       ) : (
         <Text className="text-[12.5px] text-gray-300">—</Text>
@@ -1652,26 +1655,7 @@ function LedgerList({ basePath }: { basePath: string }) {
           </Text>
         ),
       },
-      { key: 'last', label: 'Last transaction', width: 125, render: lastCell },
-      {
-        // The number on that last transaction, with what it is the number of underneath.
-        key: 'reference',
-        label: 'Ref No.',
-        width: 120,
-        render: (d) =>
-          d.lastReference ? (
-            <View style={{ minWidth: 0 }}>
-              <Text className="text-[12.5px] font-semibold text-gray-700" numberOfLines={1}>
-                {d.lastReference.no}
-              </Text>
-              <Text className="text-[10.5px] text-gray-400" numberOfLines={1}>
-                {d.lastReference.kind}
-              </Text>
-            </View>
-          ) : (
-            <Text className="text-[12.5px] text-gray-300">—</Text>
-          ),
-      },
+      { key: 'last', label: 'Last transaction', width: 190, render: lastCell },
       vehicles
         ? {
             // The original price: all that was billed with them, before any payment - what is still to be

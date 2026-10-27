@@ -1503,8 +1503,22 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
     ? [
         { key: 'sn', label: 'SN', width: 52, render: (_g, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'vehicle', label: 'Vehicle', render: (g) => <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>{g.name}</Text> },
-        { key: 'last', label: 'Last Transaction', width: 140, render: (g) => <Text className="text-[12.5px] text-gray-700">{g.lastDay ? toBsHistoryLabel(g.lastDay) : '—'}</Text> },
-        { key: 'ref', label: 'Ref No.', width: 110, render: (g) => <Text className="text-[12.5px] text-gray-600" numberOfLines={1}>{g.refs.join(', ') || '—'}</Text> },
+        {
+          // The last date, with the line's reference numbers under it.
+          key: 'last',
+          label: 'Last Transaction',
+          width: 180,
+          render: (g) => (
+            <View style={{ minWidth: 0 }}>
+              <Text className="text-[12.5px] text-gray-700">{g.lastDay ? toBsHistoryLabel(g.lastDay) : '—'}</Text>
+              {g.refs.length > 0 && (
+                <Text className="text-[11px] text-gray-400" numberOfLines={1}>
+                  {`Ref ${g.refs.join(', ')}`}
+                </Text>
+              )}
+            </View>
+          ),
+        },
         { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (g) => fig(g.billed, '#111827') },
         { key: 'paid', label: 'Total Paid', width: 110, align: 'right', render: (g) => fig(g.paid, MONEY.out.text) },
         { key: 'received', label: 'Total Received', width: 120, align: 'right', render: (g) => fig(g.received, MONEY.in.text) },
@@ -1627,8 +1641,18 @@ function VehicleEntries({
     ? [
         { key: 'sn', label: 'SN', width: 52, render: (_l, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'details', label: 'Details', render: details },
-        { key: 'date', label: 'Date', width: 140, render: (l) => <Text className="text-[12.5px] text-gray-700">{l.row.dateLabel}</Text> },
-        { key: 'ref', label: 'Ref No.', width: 100, render: (l) => <Text className="text-[12.5px] text-gray-600">{l.row.reference || '—'}</Text> },
+        {
+          // The date, with the entry's number under it.
+          key: 'date',
+          label: 'Date',
+          width: 150,
+          render: (l) => (
+            <View style={{ minWidth: 0 }}>
+              <Text className="text-[12.5px] text-gray-700">{l.row.dateLabel}</Text>
+              {!!l.row.reference && <Text className="text-[11px] text-gray-400">{`Ref ${l.row.reference}`}</Text>}
+            </View>
+          ),
+        },
         { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (l) => fig(l.part.billed, '#111827') },
         { key: 'paid', label: 'Total Paid', width: 110, align: 'right', render: (l) => fig(l.part.paid, MONEY.out.text) },
         { key: 'received', label: 'Total Received', width: 120, align: 'right', render: (l) => fig(l.part.received, MONEY.in.text) },
