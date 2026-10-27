@@ -17,7 +17,7 @@ import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { useFreshLedgerArea } from '../../hooks/useFreshLedgerArea';
 import { journalOf } from '../../utils/journalVoucher';
-import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
+import { itemListOf, itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import { formatMoney, round2 } from '../../utils/money';
 import { BankAccountPickerModal } from './BankAccountPickerModal';
 import { EntryWhenFields, PartyMoveField, PaymentMethodButton, stampOf, timeOf, useEntryParty, useEntryWhen } from './EntryEditParts';
@@ -942,6 +942,60 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const statementAsc = useMemo<HistoryRow[]>(() => withRunningBalance(allLines, 0), [allLines]);
   const rows = useMemo(() => [...statementAsc].reverse(), [statementAsc]);
 
+  // A vehicle account: one line per vehicle on this person's ledger - what it was bought for (a vendor) or sold for
+  // (a customer), what has been paid or received on it, and what is left. A bill names its vehicles as items (a
+  // bill of one vehicle counts in full, else each vehicle's own line); a payment names its vehicle first in its
+  // remark (the Paid and Received pages write it so). Payments that name no billed vehicle are summed apart.
+  const vehicleSides = useMemo(() => {
+    if (!showItems) return [];
+    const txById = new Map((linkedTransactions ?? []).map((t) => [t.id, t]));
+    const key = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+    type Side = 'vendor' | 'customer';
+    const lines = new Map<string, VehicleLine>();
+    const loose: Record<Side, number> = { vendor: 0, customer: 0 };
+    const lineFor = (side: Side, name: string, day: string) => {
+      const k = `${side}|${key(name)}`;
+      let l = lines.get(k);
+      if (!l) {
+        l = { key: k, side, name: name.trim(), day, billed: 0, paid: 0 };
+        lines.set(k, l);
+      }
+      if (day < l.day) l.day = day;
+      return l;
+    };
+    type Entry = { entry_type: string; source: string; source_type: string | null; source_id: string | null; note: string | null; amount: number; entry_date: string | null; created_at: string };
+    const bills = (side: Side, list: Entry[]) => {
+      for (const e of list) {
+        if (journalOf(e.note) || e.entry_type !== 'debit' || e.source !== 'booking' || e.source_type !== 'business_transaction' || !e.source_id) continue;
+        const t = txById.get(e.source_id);
+        if (!t) continue;
+        const day = entryDay(e.entry_date, e.created_at);
+        const cars = itemListOf(t.items);
+        if (cars.length === 1) lineFor(side, cars[0], day).billed += Number(e.amount);
+        else for (const i of t.items ?? []) if (i.description?.trim()) lineFor(side, i.description, day).billed += Number(i.amount) || 0;
+      }
+    };
+    const payments = (side: Side, list: Entry[]) => {
+      for (const e of list) {
+        if (journalOf(e.note) || e.entry_type !== 'credit') continue;
+        const line = e.note ? lines.get(`${side}|${key(e.note.split(' · ')[0])}`) : undefined;
+        if (line) line.paid += Number(e.amount);
+        else loose[side] += Number(e.amount);
+      }
+    };
+    bills('vendor', (vendorEntries ?? []) as Entry[]);
+    bills('customer', (entries ?? []) as Entry[]);
+    payments('vendor', (vendorEntries ?? []) as Entry[]);
+    payments('customer', (entries ?? []) as Entry[]);
+    return (['vendor', 'customer'] as Side[])
+      .map((side) => ({
+        side,
+        lines: [...lines.values()].filter((l) => l.side === side).sort((a, b) => a.day.localeCompare(b.day) || a.name.localeCompare(b.name)),
+        loose: round2(loose[side]),
+      }))
+      .filter((g) => g.lines.length > 0);
+  }, [showItems, linkedTransactions, entries, vendorEntries]);
+
   // Only one entry form is open at a time: a person with no entries yet is offered both
   // (Add Entry for the customer side, Payment Out for the vendor side), and opening one
   // closes the other rather than stacking two forms.
@@ -1274,6 +1328,10 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
           <AddVendorEntryForm vendorId={id} ownerId={userId} onDone={() => setShowAddVendorEntry(false)} />
         )}
 
+        {vehicleSides.map((g) => (
+          <VehicleSummary key={g.side} side={g.side} lines={g.lines} loose={g.loose} full={tableMode} />
+        ))}
+
         {historyView}
       </KeyboardAwareScrollView>
       {/* Editing an entry: the form shows itself as a popup (see EntryShell). Keyed on the
@@ -1308,5 +1366,104 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
         editOnPage
       />
     </>
+  );
+}
+
+interface VehicleLine {
+  key: string;
+  side: 'vendor' | 'customer';
+  name: string;
+  /** The first day the vehicle shows on this ledger (its bill). */
+  day: string;
+  billed: number;
+  paid: number;
+}
+
+/** One line per vehicle on a person's ledger: bought (or sold) for, paid (or received), and what is left. */
+function VehicleSummary({ side, lines, loose, full }: { side: 'vendor' | 'customer'; lines: VehicleLine[]; loose: number; full: boolean }) {
+  const vendor = side === 'vendor';
+  const billedLabel = vendor ? 'Bought for' : 'Sold for';
+  const paidLabel = vendor ? 'Paid' : 'Received';
+  const owedColor = vendor ? MONEY.out.text : MONEY.in.text;
+  const fig = (v: number, color = '#111827') => (
+    <Text className="text-[12.5px] font-bold" style={{ color }} numberOfLines={1}>
+      {v ? formatMoney(v) : '—'}
+    </Text>
+  );
+  const left = (l: VehicleLine) => {
+    const v = round2(l.billed - l.paid);
+    return v > 0 ? (
+      <Text className="text-[12.5px] font-extrabold" style={{ color: owedColor }} numberOfLines={1}>
+        {formatMoney(v)}
+      </Text>
+    ) : (
+      <Text className="text-[12px] font-bold" style={{ color: '#047857' }} numberOfLines={1}>
+        {v === 0 ? 'Cleared' : `Paid ahead ${formatMoney(-v)}`}
+      </Text>
+    );
+  };
+  const billed = round2(lines.reduce((s, l) => s + l.billed, 0));
+  const paid = round2(lines.reduce((s, l) => s + l.paid, 0));
+  const columns: BookColumn<VehicleLine>[] = full
+    ? [
+        { key: 'sn', label: 'SN', width: 52, render: (_l, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
+        { key: 'vehicle', label: 'Vehicle', render: (l) => <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>{l.name}</Text> },
+        { key: 'day', label: vendor ? 'Bought on' : 'Sold on', width: 140, render: (l) => <Text className="text-[12.5px] text-gray-600">{toBsHistoryLabel(l.day)}</Text> },
+        { key: 'billed', label: billedLabel, width: 130, align: 'right', render: (l) => fig(l.billed) },
+        { key: 'paid', label: paidLabel, width: 130, align: 'right', render: (l) => fig(l.paid, vendor ? MONEY.out.text : MONEY.in.text) },
+        { key: 'left', label: 'Remaining', width: 150, align: 'right', render: left },
+      ]
+    : [
+        {
+          key: 'vehicle',
+          label: 'Vehicle',
+          render: (l) => (
+            <View style={{ minWidth: 0, gap: 2 }}>
+              <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>{l.name}</Text>
+              <Text className="text-[11px] text-gray-400" numberOfLines={1}>
+                {`${billedLabel} ${formatMoney(l.billed)} · ${paidLabel} ${formatMoney(l.paid)}`}
+              </Text>
+            </View>
+          ),
+        },
+        { key: 'left', label: 'Remaining', width: 120, align: 'right', render: left },
+      ];
+  const total = round2(billed - paid);
+  return (
+    <View style={{ gap: 6 }}>
+      <Text className="text-[12px] font-bold capitalize tracking-wide text-gray-500">
+        {vendor ? 'Vehicles bought from them' : 'Vehicles sold to them'}
+      </Text>
+      <BookTable
+        columns={columns}
+        rows={lines}
+        rowKey={(l) => l.key}
+        footer={{
+          label: `${lines.length} ${lines.length === 1 ? 'vehicle' : 'vehicles'} · Total`,
+          cells: full
+            ? {
+                billed: fig(billed),
+                paid: fig(paid, vendor ? MONEY.out.text : MONEY.in.text),
+                left: (
+                  <Text className="text-[13px] font-extrabold" style={{ color: total > 0 ? owedColor : '#047857' }}>
+                    {total > 0 ? formatMoney(total) : total === 0 ? 'Cleared' : `Paid ahead ${formatMoney(-total)}`}
+                  </Text>
+                ),
+              }
+            : {
+                left: (
+                  <Text className="text-[13px] font-extrabold" style={{ color: total > 0 ? owedColor : '#047857' }}>
+                    {formatMoney(Math.max(0, total))}
+                  </Text>
+                ),
+              },
+        }}
+      />
+      {loose > 0 && (
+        <Text className="text-[11.5px] text-gray-500">
+          {`Also ${vendor ? 'paid' : 'received'} NPR ${formatMoney(loose)} without naming one of these vehicles - see the statement below.`}
+        </Text>
+      )}
+    </View>
   );
 }
