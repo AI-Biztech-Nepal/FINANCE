@@ -398,6 +398,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
             onFocus={() => setFocusedField('renter')}
             onBlur={() => setFocusedField((f) => (f === 'renter' ? null : f))}
             onKeyPress={enterKey('renter')}
+            enterAddsNew
             placeholder="Who has it?"
             accessibilityLabel="Rented to"
             accent={accent}

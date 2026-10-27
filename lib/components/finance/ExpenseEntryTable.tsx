@@ -268,8 +268,11 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
                 onSelectOption={async (opt, via) => {
                   if (opt.key === ADD_PARTY_KEY) {
                     const created = await onCreateParty?.(row.partyName.trim());
-                    if (created) onUpdateRow(row.key, { partyName: created.name, customerId: created.id });
-                    if (via !== 'tab') inputRefs.current[`${row.key}:1`]?.focus();
+                    // Cancelled in the confirmation: the typed name stays and the caret stays in the box.
+                    if (created) {
+                      onUpdateRow(row.key, { partyName: created.name, customerId: created.id });
+                      if (via !== 'tab') inputRefs.current[`${row.key}:1`]?.focus();
+                    }
                     return;
                   }
                   const s = suggestions.find((x) => x.key === opt.key);
@@ -284,6 +287,7 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
                 onFocus={() => setFocusedCell({ key: row.key, col: 0 })}
                 onBlur={() => setFocusedCell((cur) => (cur?.key === row.key && cur.col === 0 ? null : cur))}
                 onKeyPress={(e) => handleKeyPress(e, row, rowIndex, 0)}
+                enterAddsNew
                 placeholder="Who was this paid to?"
                 accessibilityLabel={`Paid to, row ${rowIndex + 1}`}
                 autoFocus={autoFocusFirst && rowIndex === 0}

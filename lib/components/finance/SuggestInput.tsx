@@ -39,6 +39,9 @@ interface Props {
   compact?: boolean;
   /** Show the list as soon as the box is focused, even before anything is typed (a pick-from-all box). */
   showWhenEmpty?: boolean;
+  /** Enter on a name nobody has takes the list's "Add ... as new" row - the owner then asks for confirmation -
+   * instead of passing the typed name on unchecked. */
+  enterAddsNew?: boolean;
 }
 
 /** A text box with a typeahead list that is fully driven from the keyboard:
@@ -64,6 +67,7 @@ export function SuggestInput({
   adornmentWidth = 0,
   compact,
   showWhenEmpty,
+  enterAddsNew,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(-1);
@@ -77,15 +81,14 @@ export function SuggestInput({
     onSelectOption(option, via);
   }
 
-  // Nothing highlighted with the arrows: Enter / Tab still takes the name typed when it is there - the one
-  // that is exactly what was typed, or the only one the list has - so it never has to be picked by hand.
-  // (An "Add ... as new" row is not a name that exists, so it is never taken this way.)
+  // Nothing highlighted with the arrows: Enter / Tab still takes the name typed when it exists - exactly as typed -
+  // so it never has to be picked by hand. A name that only starts like one that exists is not taken: it may be a
+  // new name. (An "Add ... as new" row is not a name that exists, so it is never taken this way.)
   function autoPick(): SuggestOption | undefined {
-    const existing = options.filter((o) => o.kind !== 'add');
     const typed = value.trim().toLowerCase();
     // Nothing typed (a list opened on an empty box): Enter just moves on.
     if (!typed) return undefined;
-    return existing.find((o) => o.label.trim().toLowerCase() === typed) ?? (existing.length === 1 ? existing[0] : undefined);
+    return options.find((o) => o.kind !== 'add' && o.label.trim().toLowerCase() === typed);
   }
 
   function handleKeyPress(e: unknown) {
@@ -106,6 +109,13 @@ export function SuggestInput({
         if (pick) {
           k.prevent();
           choose(pick, 'enter');
+          return;
+        }
+        // A name nobody has: Enter asks to add it, rather than letting it through unchecked.
+        const add = enterAddsNew && activeIndex < 0 ? options.find((o) => o.kind === 'add') : undefined;
+        if (add) {
+          k.prevent();
+          choose(add, 'enter');
           return;
         }
       }

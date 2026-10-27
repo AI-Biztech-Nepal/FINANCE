@@ -271,11 +271,11 @@ function ItemPickerModal({
               <TextInput
                 value={search}
                 onChangeText={setSearch}
-                // Enter takes the item typed when it is there - the one that is exactly it, or the only match.
+                // Enter takes the item typed when it exists, exactly as typed.
                 onSubmitEditing={() => {
                   const typed = search.trim().toLowerCase();
                   const nameOf = (row: (typeof matches)[number]) => (row.kind === 'product' ? row.product.name : row.item.name).trim().toLowerCase();
-                  const pick = matches.find((row) => nameOf(row) === typed) ?? (matches.length === 1 ? matches[0] : undefined);
+                  const pick = matches.find((row) => nameOf(row) === typed);
                   if (!pick) return;
                   if (pick.kind === 'product') onPick(pick.product);
                   else onPickFinanceItem(pick.item);
@@ -841,32 +841,35 @@ function TransactionForm({
   // seemed to "take", then Save would refuse with "Pick a customer". Create
   // a real customer here too when this is a bill, same as Quick Payment
   // already does.
-  async function handleSelectPartyNew(name: string, phone: string | null, confirmName = false) {
+  /** Resolves to whether a party is now picked (false when the confirmation was cancelled or the save failed). */
+  async function handleSelectPartyNew(name: string, phone: string | null, confirmName = false): Promise<boolean> {
     setShowPartyPicker(false);
     if (!phone && !isBill) {
       setPartyName(name);
       setCustomerId(null);
-      return;
+      return true;
     }
     if (phone) {
       const existing = customers.find((c) => c.phone === phone);
       if (existing) {
         selectCustomer(existing);
-        return;
+        return true;
       }
     }
     // A name typed in the box is checked first; one the picker's own step already confirmed is not asked again.
     let finalName = name;
     if (confirmName) {
       const checked = await askNewParty({ name, kind: newPartyKind });
-      if (!checked) return;
+      if (!checked) return false;
       finalName = checked;
     }
     try {
       const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone });
       selectCustomer(created);
+      return true;
     } catch (err) {
       showAlert('Could not add customer', getErrorMessage(err));
+      return false;
     }
   }
 
@@ -1706,8 +1709,9 @@ function TransactionForm({
                     options={vendorOptions}
                     onSelectOption={async (opt, via) => {
                       if (opt.key === ADD_PARTY_KEY) {
-                        if (via !== 'tab') billNoRef.current?.focus();
-                        await handleSelectPartyNew(tidyName(partyName.trim()), null, true);
+                        // Cancelled in the confirmation: the typed name stays and the caret stays in the box.
+                        const added = await handleSelectPartyNew(tidyName(partyName.trim()), null, true);
+                        if (added && via !== 'tab') billNoRef.current?.focus();
                         return;
                       }
                       const s = vendorSuggestions.find((x) => x.key === opt.key);
@@ -1732,6 +1736,7 @@ function TransactionForm({
                       if (k.ctrl) handleSave();
                       else billNoRef.current?.focus();
                     }}
+                    enterAddsNew
                     placeholder={type === 'purchase' ? 'Vendor / supplier name' : 'Customer name'}
                     accessibilityLabel={partyLabel}
                     accent={accent}
