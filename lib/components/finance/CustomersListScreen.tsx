@@ -1572,8 +1572,9 @@ function LedgerList({ basePath }: { basePath: string }) {
         <Text className="text-[12.5px] text-gray-300">—</Text>
       );
 
+    // A name opens that person's own ledger page (their entries there open in a popup).
     const open = (d: PartyRowData) => {
-      if (d.row.kind === 'customer') setViewing(d);
+      if (d.row.kind === 'customer') router.push(hrefFor(d.row.id) as any);
     };
 
     // A price: a plain dark figure - it is neither money to come nor money gone.
@@ -1793,7 +1794,9 @@ function LedgerList({ basePath }: { basePath: string }) {
               <PartyCard
                 key={`${d.row.kind}-${d.row.id}`}
                 data={d}
-                onOpen={() => setViewing(d)}
+                onOpen={() => {
+                  if (d.row.kind === 'customer') router.push(hrefFor(d.row.id) as any);
+                }}
                 today={today}
                 selecting={selecting}
                 selected={selected.has(d.row.id)}
