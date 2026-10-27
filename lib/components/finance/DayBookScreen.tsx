@@ -18,7 +18,7 @@ import { dateLabels, useCalendarMode } from '../../hooks/useCalendarMode';
 import { shortDateLabel, toBsHistoryLabel } from '../../utils/nepaliDate';
 import { formatMoney, round2 } from '../../utils/money';
 import { DateFilterButton, DayStepButton } from './DateRangeFilter';
-import { useBookToolbar } from './BookKit';
+import { BookTable, useBookToolbar, type BookColumn } from './BookKit';
 import { MONEY } from './moneyColors';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { ENTRY_KINDS } from './entryKinds';
@@ -158,7 +158,7 @@ function amountText(n: number | null | undefined): string {
 // columns need about this much window to fit beside the sidebar - narrower
 // than that and the table falls back to the compact four-column form rather
 // than cutting off Cash in / Cash out / Balance.
-const COL = { sn: 52, date: 140, type: 104, invoice: 150, discount: 76, amount: 104, purchase: 112, cashIn: 100, cashOut: 100, balance: 112 };
+const COL = { sn: 52, date: 140, type: 116, invoice: 150, discount: 76, amount: 100, purchase: 112, cashIn: 96, cashOut: 96, balance: 112 };
 const FULL_TABLE_MIN_WINDOW = 1280;
 
 function TypePill({ kind }: { kind: Kind }) {
@@ -189,8 +189,10 @@ function AccountPill({ row }: { row: BookRow }) {
 /** Every entry of the day (or week / month) in one cash-book table, in date and
  * time order: opening balance first, then cash in / paid out / expenses (which
  * move the running balance) mixed with the sales and purchase bills and
- * transfers (which don't), closing balance last. `dayLabel` is given for a
- * view of more than one day, and puts a date band above each day's entries. */
+ * transfers (which don't), closing balance last. It is the same table as the
+ * Statement's (BookTable, the same columns, widths and styles), with the
+ * running Balance after Cash out. `dayLabel` is given for a view of more than
+ * one day, and puts a date band above each day's entries. */
 function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabel, onOpenRow, withPurchase }: {
   rows: BookRow[];
   /** A vehicle account: a Purchase price column - what the vehicle each entry is about was bought for. */
@@ -199,213 +201,154 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
   totalIn: number;
   totalOut: number;
   closing: number;
-  /** Show every column; otherwise Time | Details | Amount | Balance. */
+  /** Show every column; otherwise Date | Details | Amount | Balance. */
   full: boolean;
   dayLabel?: (date: string) => string;
   onOpenRow: (row: BookRow) => void;
 }) {
-  const cell = 'px-2.5 py-2 border-r border-gray-200';
   const [calendarMode] = useCalendarMode();
-  // The Date column: the day, with the time under it (the opening line has neither).
+  // SN, then the date with its time under it (the opening line has neither), as on the Statement.
+  const snCell = (r: BookRow, index: number) => <Text className="text-[12.5px] text-gray-500">{r.kind === 'opening' ? '' : index}</Text>;
   const dateCell = (r: BookRow, short: boolean) =>
     r.kind === 'opening' ? null : (
-      <>
+      <View style={{ minWidth: 0 }}>
         <Text className={`${short ? 'text-[11.5px]' : 'text-[12.5px]'} font-medium text-gray-800`} numberOfLines={1}>
           {short ? shortDateLabel(r.date) : dateLabels(r.date, calendarMode)[0]}
         </Text>
-        <Text className="text-[11px] text-gray-400">{r.time}</Text>
-      </>
-    );
-  const dayBand = (r: BookRow, index: number) =>
-    dayLabel && r.kind !== 'opening' && rows[index - 1]?.date !== r.date ? (
-      <View className="border-b border-gray-200 bg-gray-50 px-2.5 py-1.5">
-        <Text className="text-xs font-bold capitalize tracking-wide text-gray-500">{dayLabel(r.date)}</Text>
+        <Text className={short ? 'text-[10.5px] text-gray-400' : 'text-[11px] text-gray-400'}>{r.time}</Text>
       </View>
-    ) : null;
-  const headCell = (label: string, style: object, right = false) => (
-    <Text className={`${cell} text-xs font-bold text-gray-600 ${right ? 'text-right' : ''}`} style={style}>
-      {label}
+    );
+  const num = (value: number | null, color: string, bold = false) =>
+    value == null ? (
+      <Text className="text-[12.5px] text-gray-400">—</Text>
+    ) : (
+      <Text className={`text-[12.5px] ${bold ? 'font-bold' : 'font-medium'}`} style={{ color }} numberOfLines={1}>
+        {money(value)}
+      </Text>
+    );
+  const balanceCell = (r: BookRow) => (
+    <Text className="text-[13px] font-bold" style={{ color: r.balance == null ? '#6B7280' : '#111827' }} numberOfLines={1}>
+      {money(r.balance)}
     </Text>
   );
-  const num = (value: number | null, style: object, color = '#111827', bold = false) => (
-    <Text
-      className={`${cell} text-right text-[12.5px] ${bold ? 'font-bold' : 'font-medium'}`}
-      style={[style, { color: value == null ? '#6B7280' : color }]}
-      numberOfLines={1}
-    >
-      {value == null ? '—' : money(value)}
-    </Text>
+  const detailsCell = (r: BookRow, compact: boolean) => (
+    <View style={{ minWidth: 0, gap: 2 }}>
+      <Text className={`text-[13px] text-gray-900 ${r.kind === 'opening' ? 'font-bold' : 'font-medium'}`} numberOfLines={compact ? 2 : 1}>
+        {r.details}
+      </Text>
+      {compact && (
+        <View className="flex-row flex-wrap" style={{ gap: 4 }}>
+          <TypePill kind={r.kind} />
+          <AccountPill row={r} />
+        </View>
+      )}
+      {!!r.sub && (
+        <Text className="text-[11px] text-gray-400" numberOfLines={r.kind === 'opening' ? undefined : compact ? 2 : 1}>
+          {r.sub}
+        </Text>
+      )}
+      {compact && (r.invoiceNo != null || !!r.discount || (withPurchase && r.purchasePrice != null)) && (
+        <Text className="text-[11px] text-gray-400">
+          {[
+            r.invoiceNo ? `Invoice no. ${r.invoiceNo}` : null,
+            r.discount ? `Discount ${money(r.discount)}` : null,
+            withPurchase && r.purchasePrice != null ? `Purchase price ${money(r.purchasePrice)}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+      )}
+    </View>
   );
-  // Tapping an entry opens it for editing; the opening-balance line and
-  // anything without a record behind it stays inert.
-  const open = (r: BookRow) => (r.edit || r.bill || r.journal ? () => onOpenRow(r) : undefined);
 
-  if (!full) {
-    // Narrow: SN | Date (and time) | Details (type, notes, invoice no.) | Amount | Balance.
-    return (
-      <View className="overflow-hidden rounded-xl border border-gray-300 bg-white">
-        <View className="flex-row border-b border-gray-300 bg-gray-50">
-          {headCell('SN', { width: 34 })}
-          {headCell('Date', { width: 84 })}
-          {headCell('Transaction details', { flex: 1 })}
-          {headCell('Amount', { width: 82 }, true)}
-          <Text className="px-2.5 py-2 text-right text-xs font-bold text-gray-600" style={{ width: 84 }}>
-            Balance
-          </Text>
-        </View>
-        {rows.map((r, index) => {
-          const cash = r.cashIn ?? r.cashOut;
-          const amountText = r.cashIn != null ? `+${money(r.cashIn)}` : r.cashOut != null ? `−${money(r.cashOut)}` : money(r.amount);
-          const amountColor = r.cashIn != null ? '#047857' : r.cashOut != null ? '#B91C1C' : '#6B7280';
-          return (
-            <Fragment key={r.id}>
-            {dayBand(r, index)}
-            <Pressable onPress={open(r)} disabled={!r.edit && !r.bill && !r.journal} className="flex-row border-b border-gray-200">
-              <Text className={`${cell} text-xs text-gray-500`} style={{ width: 34 }} numberOfLines={1}>
-                {r.kind === 'opening' ? '' : index}
+  const columns: BookColumn<BookRow>[] = full
+    ? [
+        { key: 'sn', label: 'SN', width: COL.sn, render: (r, index) => snCell(r, index) },
+        { key: 'date', label: 'Date', width: COL.date, render: (r) => dateCell(r, false) },
+        {
+          // The bill's own number - not an amount; anything that is not a bill has none.
+          key: 'invoice',
+          label: 'Invoice no.',
+          width: COL.invoice,
+          render: (r) =>
+            r.invoiceNo ? (
+              <Text className="text-[12.5px] font-semibold text-gray-700" numberOfLines={1}>
+                {r.invoiceNo}
               </Text>
-              <View className={cell} style={{ width: 84 }}>{dateCell(r, true)}</View>
-              <View className={cell} style={{ flex: 1, gap: 2 }}>
-                <Text className={`text-[13px] text-gray-900 ${r.kind === 'opening' ? 'font-bold' : 'font-medium'}`} numberOfLines={2}>
-                  {r.details}
-                </Text>
-                <View className="flex-row flex-wrap" style={{ gap: 4 }}>
-                  <TypePill kind={r.kind} />
-                  <AccountPill row={r} />
-                </View>
-                {!!r.sub && (
-                  <Text className="text-xs text-gray-500" numberOfLines={r.kind === 'opening' ? undefined : 2}>
-                    {r.sub}
-                  </Text>
-                )}
-                {(r.invoiceNo != null || !!r.discount || (withPurchase && r.purchasePrice != null)) && (
-                  <Text className="text-xs text-gray-500">
-                    {[
-                      r.invoiceNo ? `Invoice no. ${r.invoiceNo}` : null,
-                      r.discount ? `Discount ${money(r.discount)}` : null,
-                      withPurchase && r.purchasePrice != null ? `Purchase price ${money(r.purchasePrice)}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Text>
-                )}
-              </View>
-              <Text
-                className={`${cell} text-right text-[12.5px] ${cash != null ? 'font-bold' : 'font-medium'}`}
-                style={{ width: 82, color: r.kind === 'opening' ? '#6B7280' : amountColor }}
-              >
-                {r.kind === 'opening' ? '—' : amountText}
+            ) : (
+              <Text className="text-[12.5px] text-gray-400">—</Text>
+            ),
+        },
+        { key: 'details', label: 'Transaction details', render: (r) => detailsCell(r, false) },
+        {
+          key: 'type',
+          label: 'Type',
+          width: COL.type,
+          render: (r) => (
+            <View style={{ gap: 3 }}>
+              <TypePill kind={r.kind} />
+              <AccountPill row={r} />
+            </View>
+          ),
+        },
+        { key: 'discount', label: 'Discount', width: COL.discount, align: 'right', render: (r) => num(r.discount, '#4B5563') },
+        { key: 'amount', label: 'Bill amount', width: COL.amount, align: 'right', render: (r) => num(r.amount, KIND[r.kind].color) },
+        ...(withPurchase ? [{ key: 'purchase', label: 'Purchase price', width: COL.purchase, align: 'right' as const, render: (r: BookRow) => num(r.purchasePrice, '#4B5563') }] : []),
+        { key: 'cashIn', label: 'Cash in', width: COL.cashIn, align: 'right', render: (r) => num(r.cashIn, '#047857', true) },
+        { key: 'cashOut', label: 'Cash out', width: COL.cashOut, align: 'right', render: (r) => num(r.cashOut, '#B91C1C', true) },
+        { key: 'balance', label: 'Balance', width: COL.balance, align: 'right', render: balanceCell },
+      ]
+    : [
+        { key: 'sn', label: 'SN', width: 34, render: (r, index) => snCell(r, index) },
+        { key: 'date', label: 'Date', width: 84, render: (r) => dateCell(r, true) },
+        { key: 'details', label: 'Transaction details', render: (r) => detailsCell(r, true) },
+        {
+          key: 'amount',
+          label: 'Amount',
+          width: 92,
+          align: 'right',
+          render: (r) => {
+            if (r.kind === 'opening') return <Text className="text-[12.5px] text-gray-400">—</Text>;
+            const signed = r.cashIn != null ? `+${money(r.cashIn)}` : r.cashOut != null ? `−${money(r.cashOut)}` : money(r.amount);
+            const color = r.cashIn != null ? '#047857' : r.cashOut != null ? '#B91C1C' : '#6B7280';
+            return (
+              <Text className="text-[12.5px] font-bold" style={{ color }}>
+                {signed}
               </Text>
-              <Text
-                className="px-2.5 py-2 text-right text-[12.5px] font-semibold"
-                style={{ width: 84, color: r.balance == null ? '#6B7280' : '#111827' }}
-              >
-                {money(r.balance)}
-              </Text>
-            </Pressable>
-            </Fragment>
-          );
-        })}
-        <View className="flex-row bg-gray-50">
-          <Text className={`${cell} flex-1 text-right text-[12.5px] font-bold text-gray-700`}>Closing balance</Text>
-          <Text
-            className="px-2.5 py-2 text-right text-[14px] font-extrabold"
-            style={{ width: 84, color: closing >= 0 ? '#2563EB' : '#DC2626' }}
-          >
-            {money(closing)}
-          </Text>
-        </View>
-      </View>
-    );
-  }
+            );
+          },
+        },
+        { key: 'balance', label: 'Balance', width: 92, align: 'right', render: balanceCell },
+      ];
+
+  const closingColor = closing >= 0 ? '#2563EB' : '#DC2626';
+  const footer = full
+    ? {
+        label: `Opening ${money(opening)} + In ${money(totalIn)} − Out ${money(totalOut)} = Closing balance`,
+        cells: {
+          cashIn: <Text className="text-[13px] font-extrabold" style={{ color: '#047857' }}>{money(totalIn)}</Text>,
+          cashOut: <Text className="text-[13px] font-extrabold" style={{ color: '#B91C1C' }}>{money(totalOut)}</Text>,
+          balance: <Text className="text-[14px] font-extrabold" style={{ color: closingColor }}>{money(closing)}</Text>,
+        },
+      }
+    : {
+        label: 'Closing balance',
+        cells: { balance: <Text className="text-[14px] font-extrabold" style={{ color: closingColor }}>{money(closing)}</Text> },
+      };
 
   return (
-    <View className="overflow-hidden rounded-xl border border-gray-300 bg-white">
-      <View>
-          <View className="flex-row border-b border-gray-300 bg-gray-50">
-            {headCell('SN', { width: COL.sn })}
-            {headCell('Date', { width: COL.date })}
-            {headCell('Invoice no.', { width: COL.invoice })}
-            {headCell('Transaction details', { flex: 1 })}
-            {headCell('Type', { width: COL.type })}
-            {headCell('Discount', { width: COL.discount }, true)}
-            {headCell('Bill amount', { width: COL.amount }, true)}
-            {withPurchase && headCell('Purchase price', { width: COL.purchase }, true)}
-            {headCell('Cash in', { width: COL.cashIn }, true)}
-            {headCell('Cash out', { width: COL.cashOut }, true)}
-            <Text className="px-2.5 py-2 text-right text-xs font-bold text-gray-600" style={{ width: COL.balance }}>
-              Balance
-            </Text>
-          </View>
-
-          {rows.map((r, index) => (
-            <Fragment key={r.id}>
-            {dayBand(r, index)}
-            <Pressable
-              onPress={open(r)}
-              disabled={!r.edit && !r.bill && !r.journal}
-              className="flex-row border-b border-gray-200"
-              style={r.kind === 'opening' ? { backgroundColor: '#FAFAFA' } : undefined}
-            >
-              <Text className={`${cell} text-[12.5px] text-gray-500`} style={{ width: COL.sn }} numberOfLines={1}>
-                {r.kind === 'opening' ? '' : index}
-              </Text>
-              <View className={cell} style={{ width: COL.date, minWidth: 0 }}>{dateCell(r, false)}</View>
-              <Text
-                className={`${cell} text-[12.5px] font-semibold text-gray-700`}
-                style={{ width: COL.invoice, color: r.invoiceNo ? '#374151' : '#9CA3AF' }}
-                numberOfLines={1}
-              >
-                {r.invoiceNo ?? '—'}
-              </Text>
-              <View className={cell} style={{ flex: 1, minWidth: 0 }}>
-                <Text className={`text-[13px] text-gray-900 ${r.kind === 'opening' ? 'font-bold' : 'font-medium'}`} numberOfLines={1}>
-                  {r.details}
-                </Text>
-                {!!r.sub && (
-                  <Text className="text-xs text-gray-500" numberOfLines={r.kind === 'opening' ? undefined : 1}>
-                    {r.sub}
-                  </Text>
-                )}
-              </View>
-              <View className={cell} style={{ width: COL.type, gap: 3 }}>
-                <TypePill kind={r.kind} />
-                <AccountPill row={r} />
-              </View>
-              {num(r.discount, { width: COL.discount }, '#4B5563')}
-              {num(r.amount, { width: COL.amount }, KIND[r.kind].color)}
-              {withPurchase && num(r.purchasePrice, { width: COL.purchase }, '#4B5563')}
-              {num(r.cashIn, { width: COL.cashIn }, '#047857', true)}
-              {num(r.cashOut, { width: COL.cashOut }, '#B91C1C', true)}
-              <Text
-                className="px-2.5 py-2 text-right text-[13px] font-bold"
-                style={{ width: COL.balance, color: r.balance == null ? '#6B7280' : '#111827' }}
-              >
-                {money(r.balance)}
-              </Text>
-            </Pressable>
-            </Fragment>
-          ))}
-
-          <View className="flex-row bg-gray-50">
-            <Text className={`${cell} flex-1 text-right text-[12.5px] font-bold text-gray-700`}>
-              Opening {money(opening)} + In {money(totalIn)} − Out {money(totalOut)} = Closing balance
-            </Text>
-            <Text className={`${cell} text-right text-[13px] font-extrabold`} style={{ width: COL.cashIn, color: '#047857' }}>
-              {money(totalIn)}
-            </Text>
-            <Text className={`${cell} text-right text-[13px] font-extrabold`} style={{ width: COL.cashOut, color: '#B91C1C' }}>
-              {money(totalOut)}
-            </Text>
-            <Text
-              className="px-2.5 py-2 text-right text-[14px] font-extrabold"
-              style={{ width: COL.balance, color: closing >= 0 ? '#2563EB' : '#DC2626' }}
-            >
-              {money(closing)}
-            </Text>
-          </View>
-      </View>
-    </View>
+    <BookTable
+      columns={columns}
+      rows={rows}
+      rowKey={(r) => r.id}
+      // Tapping an entry opens it for editing; the opening-balance line and anything without a record behind it stays inert.
+      onRowPress={onOpenRow}
+      rowPressable={(r) => !!(r.edit || r.bill || r.journal)}
+      highlight={(r) => r.kind === 'opening'}
+      // A date band above each day's entries, when the view spans more than one day (the opening line has none).
+      groupOf={dayLabel ? (((r: BookRow) => (r.kind === 'opening' ? undefined : dayLabel(r.date))) as unknown as (row: BookRow) => string) : undefined}
+      footer={footer}
+    />
   );
 }
 
