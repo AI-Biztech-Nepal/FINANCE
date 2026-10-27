@@ -470,6 +470,88 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
         { key: 'left', label: 'Remaining', width: 110, align: 'right', render: remaining },
       ];
 
+  // Laid out as the Purchase Report's table: SN, the last entry's date and its no., who, the vehicles, their Ledger
+  // type, and what is owed. A line opens that person's entries in a popup.
+  const lastOf = (h: Heading) => h.entries.reduce<LogEntry | null>((a, e) => (!a || e.day > a.day ? e : a), null);
+  const carsOf = (h: Heading) => [...new Set(h.entries.map((e) => e.car).filter((c): c is string => !!c))].join(', ');
+  const headingColumns: BookColumn<Heading>[] = layout.full
+    ? [
+        { key: 'sn', label: 'SN', width: 56, render: (_h, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
+        { key: 'date', label: 'Date', width: 140, render: (h) => <Text className="text-[12.5px] text-gray-600">{lastOf(h) ? toBsHistoryLabel(lastOf(h)!.day) : '—'}</Text> },
+        {
+          key: 'who',
+          label: meta.who,
+          render: (h) => (
+            <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
+              {highlightText(nameCaps(h.name), search)}
+            </Text>
+          ),
+        },
+        ...(showItems
+          ? [
+              {
+                key: 'item',
+                label: 'Item',
+                width: 240,
+                render: (h: Heading) => (
+                  <Text className="text-[13px] text-gray-700" numberOfLines={1}>
+                    {carsOf(h) || '—'}
+                  </Text>
+                ),
+              },
+            ]
+          : []),
+        {
+          key: 'ledger',
+          label: 'Ledger type',
+          width: 150,
+          render: (h) => (h.ledgerType ? <Pill text={h.ledgerType} color="#374151" bg="#F3F4F6" /> : <Text className="text-[12.5px] text-gray-300">—</Text>),
+        },
+        { key: 'entries', label: 'Entries', width: 80, align: 'right', render: (h) => <Text className="text-[12.5px] text-gray-600">{h.entries.length}</Text> },
+        {
+          key: 'amount',
+          label: 'Amount',
+          width: 130,
+          align: 'right',
+          render: (h) => (
+            <Text className="text-[12.5px] font-bold" style={{ color: meta.color }}>
+              {money(h.balance)}
+            </Text>
+          ),
+        },
+        { key: 'act', label: '', width: 34, align: 'right', render: () => <Ionicons name="chevron-forward" size={14} color="#D1D5DB" /> },
+      ]
+    : [
+        { key: 'sn', label: 'SN', width: 38, render: (_h, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
+        {
+          key: 'who',
+          label: meta.who,
+          render: (h) => (
+            <View style={{ minWidth: 0, gap: 2 }}>
+              <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
+                {highlightText(nameCaps(h.name), search)}
+              </Text>
+              <Text className="text-[11px] text-gray-400" numberOfLines={1}>
+                {[showItems ? carsOf(h) || null : null, lastOf(h) ? toBsHistoryLabel(lastOf(h)!.day) : null, h.ledgerType || null, `${h.entries.length} entries`]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            </View>
+          ),
+        },
+        {
+          key: 'amount',
+          label: 'Amount',
+          width: 96,
+          align: 'right',
+          render: (h) => (
+            <Text className="text-[12.5px] font-bold" style={{ color: meta.color }}>
+              {money(h.balance)}
+            </Text>
+          ),
+        },
+      ];
+
   return (
     <BookPage wide={layout.wide}>
       {toolbar}
@@ -492,39 +574,17 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
           <Text className="mt-2 text-gray-500">{needle ? `No name matches "${search.trim()}".` : meta.empty}</Text>
         </View>
       ) : (
-        // Every heading, each a card - the name, how many entries and what they add up to. Tap one to
-        // open the log of entries inside it.
-        <View style={{ gap: 10 }}>
-          {shown.map((h) => (
-            <View key={h.partyId} className="overflow-hidden rounded-xl border border-gray-300 bg-white">
-              <Pressable
-                onPress={() => setView(h)}
-                accessibilityRole="button"
-                className="flex-row items-center px-3.5 py-3"
-                style={{ gap: 10, backgroundColor: '#FFFFFF' }}
-              >
-                <Ionicons name="chevron-forward" size={16} color="#6B7280" />
-                <Text className="flex-1 text-[14px] font-bold text-gray-900" numberOfLines={1}>
-                  {highlightText(nameCaps(h.name), search)}
-                </Text>
-                <Text className="text-[12px] text-gray-400">
-                  {[h.ledgerType || null, entryWord(h.entries.length)].filter(Boolean).join(' · ')}
-                </Text>
-                <Text className="text-right text-[14px] font-extrabold" style={{ minWidth: 84, color: meta.color }}>
-                  {money(h.balance)}
-                </Text>
-              </Pressable>
-            </View>
-          ))}
-          <View className="flex-row items-center justify-end px-1" style={{ gap: 10 }}>
-            <Text className="text-[12.5px] font-bold text-gray-600">
-              {`${shown.length} ${shown.length === 1 ? meta.who.toLowerCase() : `${meta.who.toLowerCase()}s`} · Total`}
-            </Text>
-            <Text className="text-[14px] font-extrabold" style={{ color: meta.color }}>
-              {money(shownTotal)}
-            </Text>
-          </View>
-        </View>
+        // One table, as the Purchase Report's (see headingColumns). A line opens that person's entries.
+        <BookTable
+          columns={headingColumns}
+          rows={shown}
+          rowKey={(h) => h.partyId}
+          onRowPress={setView}
+          footer={{
+            label: `${shown.length} ${shown.length === 1 ? meta.who.toLowerCase() : `${meta.who.toLowerCase()}s`} · Total`,
+            cells: { amount: <Text className="text-[13px] font-extrabold" style={{ color: meta.color }}>{money(shownTotal)}</Text> },
+          }}
+        />
       )}
 
       <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">{meta.note}</Text>

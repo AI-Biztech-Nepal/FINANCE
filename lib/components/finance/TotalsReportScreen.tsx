@@ -140,7 +140,9 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   const profile = useAuthStore((state) => state.profile);
   // The Purchase Report of an account that buys vehicles says which one, beside the vendor.
   const vehicleAccount = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
-  const showItem = (kind === 'purchase' || kind === 'sale') && vehicleAccount;
+  // Every report but Expenses names the vehicle: a bill's item, a payment's remark (it starts with the vehicle).
+  const showItem = kind !== 'expense' && vehicleAccount;
+  const vehicleOfNote = (note: string | null | undefined) => (note ?? '').split(' · ')[0].trim();
   const showModel = kind === 'purchase' && vehicleAccount;
   // ... and its sale / purchase bills read with the item on them in place of the remark.
   const itemForRemark = (kind === 'purchase' || kind === 'sale') && vehicleAccount;
@@ -414,6 +416,8 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
             type: { label: category, color: tone.text, bg: tone.bg },
             nav: { kind: 'party', partyId: ledgerId },
             category,
+            billNo: e.receipt_no?.trim() || '',
+            ledgerType: ledgerTypeById.get(ledgerId) ?? '',
             subject: name,
             // On the ledger's own page a row goes to its ledger, where it can be edited.
             href: partyId ? `${basePath}/customer/${ledgerId}` : hrefFor(ledgerId),
@@ -490,6 +494,9 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           note: t.note ?? '',
           type: t.type === 'sale' ? PILL.sale : PILL.purchase,
           nav: { kind: 'transactions', type: t.type === 'sale' ? 'sale' : 'purchase' },
+          billNo: t.bill_no?.trim() || '',
+          ledgerType: (t.customer_id ? ledgerTypeById.get(t.customer_id) : undefined) ?? '',
+          itemNames: showItem ? itemNamesOf(t.items) : undefined,
         });
       }
       if (kind === 'paid' && t.type === 'expense') {
@@ -503,6 +510,8 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           note: [t.party_name ? category : null, t.note].filter(Boolean).join(' · '),
           type: PILL.expense,
           nav: { kind: 'transactions', type: 'expense' },
+          billNo: t.bill_no?.trim() || '',
+          ledgerType: (t.customer_id ? ledgerTypeById.get(t.customer_id) : undefined) ?? '',
         });
       }
     }
@@ -517,6 +526,9 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           note: e.note ?? '',
           type: e.source === 'booking' ? PILL.jobPayment : PILL.paymentReceived,
           nav: { kind: 'party', partyId: e.customer_id },
+          billNo: e.receipt_no?.trim() || '',
+          ledgerType: ledgerTypeById.get(e.customer_id) ?? '',
+          itemNames: showItem ? vehicleOfNote(e.note) : undefined,
         });
       }
       if (kind === 'paid' && e.entry_type === 'debit' && e.source === 'manual') {
@@ -528,6 +540,9 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           note: e.note ?? '',
           type: PILL.paymentOut,
           nav: { kind: 'party', partyId: e.customer_id },
+          billNo: e.receipt_no?.trim() || '',
+          ledgerType: ledgerTypeById.get(e.customer_id) ?? '',
+          itemNames: showItem ? vehicleOfNote(e.note) : undefined,
         });
       }
     }
@@ -542,6 +557,9 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
             note: e.note ?? '',
             type: PILL.paidVendor,
             nav: { kind: 'party', partyId: e.vendor_id },
+            billNo: e.receipt_no?.trim() || '',
+            ledgerType: ledgerTypeById.get(e.vendor_id) ?? '',
+            itemNames: showItem ? vehicleOfNote(e.note) : undefined,
           });
         }
       }
@@ -796,9 +814,9 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       { label: 'Amount (NPR)', align: 'right' as const },
     ];
     const entryWord = (n: number) => `${n} ${n === 1 ? 'entry' : 'entries'}`;
-    // A Sales / Purchase report's bills read as they do on screen: SN, date, bill no., who, their
+    // Every report prints as it shows: the Purchase Report's table - SN, date, bill no., who, the vehicle, their
     // ledger type, amount.
-    const billLog = kind === 'sale' || kind === 'purchase';
+    const billLog = true;
     const billColumnsPrint = [
       { label: 'SN' },
       { label: 'Date' },
@@ -833,46 +851,14 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       narrowed = true;
       const onlyTotal = only.rows.reduce((sum, e) => sum + e.amount, 0);
       sections.push(logSection(`${only.name} - NPR ${money(onlyTotal)} - ${entryWord(only.rows.length)}`, only.rows, onlyTotal));
-    } else if (grouped && billLog) {
-      // Sales / Purchase: one table of bills, as on screen.
+    } else if (grouped) {
+      // One table, as on screen.
       sections.push({
         columns: billColumnsPrint,
         rows: shownEntries.map(billRowPrint),
         footer: billFooter(stats.total),
         emptyText: 'Nothing here yet.',
       });
-    } else if (grouped) {
-      const withRows = grouped.groups.filter((g) => g.rows.length > 0);
-      const opened = withRows.filter((g) => openKeys.has(g.key));
-      if (opened.length === 0) {
-        sections.push({
-          columns: [{ label: pickWord.one }, { label: 'Entries', align: 'right' }, { label: 'Amount (NPR)', align: 'right' }],
-          rows: withRows.map((g) => [g.label, String(g.rows.length), money(g.total)]),
-          footer: ['Total', String(shownEntries.length), money(stats.total)],
-          emptyText: 'Nothing here yet.',
-        });
-      } else {
-        narrowed = true;
-        for (const g of opened) {
-          const subjects = kind === 'expense' ? subjectsOf(g.rows) : [];
-          if (subjects.length > 1) {
-            // A heading opened as it shows on screen: one line for each bike / person.
-            sections.push({
-              heading: `${g.label} - NPR ${money(g.total)} - ${entryWord(g.rows.length)}`,
-              columns: [
-                { label: 'Name' },
-                { label: 'Payments', align: 'right' },
-                { label: 'Last payment' },
-                { label: 'Amount (NPR)', align: 'right' },
-              ],
-              rows: subjects.map((x) => [x.name, String(x.rows.length), toBsHistoryLabel(x.latest.slice(0, 10)), money(x.total)]),
-              footer: ['Total', String(g.rows.length), '', money(g.total)],
-            });
-          } else {
-            sections.push(logSection(`${g.label} - NPR ${money(g.total)} - ${entryWord(g.rows.length)}`, g.rows, g.total));
-          }
-        }
-      }
     } else {
       sections.push({
         columns: printColumns,
@@ -1062,17 +1048,6 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
         )}
       </BookStats>
 
-      {grouped !== null && kind !== 'sale' && kind !== 'purchase' && openableKeys.length > 1 && (
-        <View className="flex-row items-center justify-end px-1">
-          <Pressable
-            onPress={() => setOpenKeys(allOpen ? new Set() : new Set(openableKeys))}
-            accessibilityRole="button"
-            hitSlop={6}
-          >
-            <Text className="text-[12.5px] font-semibold text-blue-700">{allOpen ? 'Close all' : 'Open all'}</Text>
-          </Pressable>
-        </View>
-      )}
 
       {shownEntries.length === 0 && !(grouped !== null && kind !== 'sale' && kind !== 'purchase' && grouped.groups.length > 0) ? (
         <View className="items-center rounded-xl border border-gray-300 bg-white py-10">
@@ -1087,84 +1062,10 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                 : 'Nothing here yet.'}
           </Text>
         </View>
-      ) : grouped !== null && kind !== 'sale' && kind !== 'purchase' ? (
-        // Expenses / Total Received / Total Paid: every heading, each a card - its name, how many entries
-        // and what they add up to. A heading with names inside it opens to show them, and a name's payments
-        // are a popup; one with none is itself the popup. A name appears once however many entries it has.
-        <View style={{ gap: 10 }}>
-          {grouped.groups.map((g) => {
-            const empty = g.rows.length === 0;
-            // Expenses: inside a heading each bike / person is one line, the payments to it added up. With
-            // more than one of them the heading has children - a tap opens them, and a child's payments
-            // are the popup. With one or none (Total Received / Paid) it has no child: a tap is the popup.
-            const subjects = kind === 'expense' ? subjectsOf(g.rows) : [];
-            const hasChildren = subjects.length > 1;
-            const isOpen = !empty && hasChildren && openKeys.has(g.key);
-            return (
-              <View key={g.key} className="overflow-hidden rounded-xl border border-gray-300 bg-white">
-                <Pressable
-                  onPress={() => (hasChildren ? toggleGroup(g.key) : setSubjectView({ name: g.label, rows: g.rows }))}
-                  disabled={empty}
-                  accessibilityRole="button"
-                  accessibilityState={hasChildren ? { expanded: isOpen } : undefined}
-                  className="flex-row items-center px-3.5 py-3"
-                  style={{ gap: 10, backgroundColor: isOpen ? '#F9FAFB' : '#FFFFFF' }}
-                >
-                  <Ionicons name={isOpen ? 'chevron-down' : 'chevron-forward'} size={16} color={empty ? '#D1D5DB' : '#6B7280'} />
-                  <Text className={`flex-1 text-[14px] font-bold ${empty ? 'text-gray-400' : 'text-gray-900'}`} numberOfLines={1}>
-                    {highlightText(g.label, search)}
-                  </Text>
-                  <Text className="text-[12px] text-gray-400">
-                    {empty ? 'No entries' : `${g.rows.length} ${g.rows.length === 1 ? 'entry' : 'entries'}`}
-                  </Text>
-                  <Text className="text-right text-[14px] font-extrabold" style={{ minWidth: 84, color: empty ? '#D1D5DB' : figureColor }}>
-                    {money(g.total)}
-                  </Text>
-                </Pressable>
-                {isOpen && (
-                  <View className="border-t border-gray-200">
-                    {subjects.map((s, i) => {
-                      const single = s.rows.length === 1;
-                      return (
-                        <View key={s.key} className={i > 0 ? 'border-t border-gray-100' : ''}>
-                          {/* One payment opens as it is; several open on a card of their own - the same table, scrollable. */}
-                          <Pressable
-                            onPress={() => (single ? open(s.rows[0]) : setSubjectView({ name: s.name, rows: s.rows }))}
-                            accessibilityRole="button"
-                            className="flex-row items-center py-2.5 pl-9 pr-3.5"
-                            style={{ gap: 10, backgroundColor: '#FFFFFF' }}
-                          >
-                            <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
-                            <Text className="flex-1 text-[13px] font-semibold text-gray-900" numberOfLines={1}>
-                              {highlightText(s.name, search)}
-                            </Text>
-                            <Text className="text-[11.5px] text-gray-400">
-                              {single ? bsShortDate(s.latest) : `${s.rows.length} payments · last ${bsShortDate(s.latest)}`}
-                            </Text>
-                            <Text className="text-right text-[13px] font-bold" style={{ minWidth: 84, color: figureColor }}>
-                              {money(s.total)}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            );
-          })}
-          <View className="flex-row items-center justify-end px-1" style={{ gap: 10 }}>
-            <Text className="text-[12.5px] font-bold text-gray-600">
-              {`${shownEntries.length} ${shownEntries.length === 1 ? 'entry' : 'entries'} · Total`}
-            </Text>
-            <Text className="text-[14px] font-extrabold" style={{ color: figureColor }}>
-              {money(stats.total)}
-            </Text>
-          </View>
-        </View>
       ) : (
-        // Everything else is one table. Sales / Purchase: the bills, with no headings in between -
-        // the customer / vendor is a column - newest first. The other pages keep their month rows.
+        // Every report is one table, laid out as the Purchase Report's: SN, date, bill / receipt no., who it was with
+        // (or the category), the vehicle, the Ledger type and the amount - newest first. A person's own page keeps
+        // its month rows.
         <BookTable
           columns={grouped !== null ? billColumns : columns}
           rows={shownEntries}

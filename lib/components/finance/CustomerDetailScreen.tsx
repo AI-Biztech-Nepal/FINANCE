@@ -1329,6 +1329,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
         rowKey={(row) => row.key}
         onRowPress={openRow}
         rowPressable={(row) => !!row.tx || row.manual}
+        stickyHeader
       />
     ) : (
       <View>
@@ -1539,6 +1540,7 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
       rows={groups}
       rowKey={(g) => g.key}
       onRowPress={onOpen}
+      stickyHeader
       footer={{
         label: `${groups.length} ${groups.length === 1 ? 'line' : 'lines'} · Total`,
         cells: full
@@ -1663,6 +1665,7 @@ function VehicleEntries({
       rows={lines}
       rowKey={(l) => l.row.key}
       onRowPress={(l) => onOpenRow(l.row)}
+      stickyHeader
       rowPressable={(l) => !!l.row.tx || l.row.manual}
       footer={{
         label: `${lines.length} ${lines.length === 1 ? 'entry' : 'entries'} · Total`,
