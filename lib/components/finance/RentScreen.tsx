@@ -135,9 +135,9 @@ export function RentScreen({ basePath }: { basePath: string }) {
       <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
         {x.r.car}
       </Text>
-      {!!x.r.model && !compact && (
+      {(!!x.r.model || !!x.r.note) && !compact && (
         <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-          {x.r.model}
+          {[x.r.model, x.r.note].filter(Boolean).join(' · ')}
         </Text>
       )}
       {compact && (

@@ -25,7 +25,7 @@ import { BalanceFigure, EditableDetails } from './CustomerDetailScreen';
 import { TransactionDetailModal } from './TransactionsScreen';
 import { tidyName } from '../../utils/nameCaps';
 import { highlightText } from './Highlight';
-import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
+import { itemNamesOf, modelNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import type { BusinessTransaction } from '../../../types/database.types';
 
 /** Total Received / Total Paid are money that actually moved; Sales / Purchase / Expense are the bills themselves, paid or not. */
@@ -76,6 +76,8 @@ interface Entry {
   billNo?: string;
   /** What the bill is for - its items - where the report names it beside the vendor (see sellsVehicles). */
   itemNames?: string;
+  /** The model numbers entered on the bill's items, where the report shows them (a vehicle account's Purchase Report). */
+  modelNames?: string;
   /** The Ledger type (Vendor, Customer, Employee ...) of who it was with; '' when they have none. */
   ledgerType?: string;
   /** Where tapping it goes, when that is not the person's ledger page (see usePartyDestination). */
@@ -138,7 +140,8 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   const profile = useAuthStore((state) => state.profile);
   // The Purchase Report of an account that buys vehicles says which one, beside the vendor.
   const vehicleAccount = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
-  const showItem = kind === 'purchase' && vehicleAccount;
+  const showItem = (kind === 'purchase' || kind === 'sale') && vehicleAccount;
+  const showModel = kind === 'purchase' && vehicleAccount;
   // ... and its sale / purchase bills read with the item on them in place of the remark.
   const itemForRemark = (kind === 'purchase' || kind === 'sale') && vehicleAccount;
   const [viewingTx, setViewingTx] = useState<BusinessTransaction | null>(null);
@@ -362,6 +365,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
             subject: kind === 'expense' ? tidyName(t.party_name?.trim()) || category || 'Uncategorized' : undefined,
             billNo: t.bill_no?.trim() || '',
             itemNames: showItem ? itemNamesOf(t.items) : undefined,
+            modelNames: showModel ? modelNamesOf(t.items) : undefined,
             ledgerType: (t.customer_id ? ledgerTypeById.get(t.customer_id) : undefined) ?? '',
           };
         });
@@ -564,6 +568,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     kind,
     partyId,
     showItem,
+    showModel,
     itemForRemark,
   ]);
 
@@ -625,7 +630,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       // Searched by name: who it was with, the category it is filed under, the bike / person paid, the item bought.
       if (!needle || partyId) return inPeriodEntries;
       return inPeriodEntries.filter((e) =>
-        [e.party, e.category, e.subject, e.itemNames].some((v) => !!v && v.toLowerCase().includes(needle))
+        [e.party, e.category, e.subject, e.itemNames, e.modelNames].some((v) => !!v && v.toLowerCase().includes(needle))
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -800,6 +805,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       { label: 'Bill No.' },
       { label: pickWord.one },
       ...(showItem ? [{ label: 'Item' }] : []),
+      ...(showModel ? [{ label: 'Model' }] : []),
       { label: 'Ledger type' },
       { label: 'Amount (NPR)', align: 'right' as const },
     ];
@@ -809,10 +815,11 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       e.billNo || '-',
       e.category || e.party || '-',
       ...(showItem ? [e.itemNames || '-'] : []),
+      ...(showModel ? [e.modelNames || '-'] : []),
       e.ledgerType || '-',
       money(e.amount),
     ];
-    const billFooter = (total: number) => ['', '', '', '', ...(showItem ? [''] : []), 'Total', money(total)];
+    const billFooter = (total: number) => ['', '', '', '', ...(showItem ? [''] : []), ...(showModel ? [''] : []), 'Total', money(total)];
     const logSection = (heading: string, rows: Entry[], total: number): PrintSection =>
       billLog
         ? { heading, columns: billColumnsPrint, rows: rows.map(billRowPrint), footer: billFooter(total) }
@@ -965,6 +972,16 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       </Text>
     ),
   };
+  const modelColumn: BookColumn<Entry> = {
+    key: 'model',
+    label: 'Model',
+    width: 130,
+    render: (e) => (
+      <Text className="text-[13px] text-gray-700" numberOfLines={1}>
+        {e.modelNames || '—'}
+      </Text>
+    ),
+  };
   const billColumns: BookColumn<Entry>[] = layout.full
     ? [
         { key: 'sn', label: 'SN', width: 56, render: (_e, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
@@ -989,6 +1006,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           ),
         },
         ...(showItem ? [itemColumn] : []),
+        ...(showModel ? [modelColumn] : []),
         { key: 'ledger', label: 'Ledger type', width: 150, render: ledgerTypePill },
         { key: 'amount', label: 'Amount', width: 130, align: 'right', render: amountCell },
         { key: 'act', label: '', width: 34, align: 'right', render: chevron },
@@ -1004,7 +1022,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                 {highlightText(e.category || e.party || '—', search)}
               </Text>
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-                {[e.itemNames || null, toBsHistoryLabel(e.date.slice(0, 10)), e.billNo ? `Bill ${e.billNo}` : null, e.ledgerType || null].filter(Boolean).join(' · ')}
+                {[[e.itemNames, e.modelNames].filter(Boolean).join(' · ') || null, toBsHistoryLabel(e.date.slice(0, 10)), e.billNo ? `Bill ${e.billNo}` : null, e.ledgerType || null].filter(Boolean).join(' · ')}
               </Text>
             </View>
           ),

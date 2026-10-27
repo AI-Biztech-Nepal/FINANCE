@@ -75,6 +75,8 @@ interface InventoryRow {
    * would make at its selling price (`profitEstimated`). Null when it cannot be worked out. */
   profit: number | null;
   profitEstimated: boolean;
+  /** The model number on the item's latest purchase bill that has one; '' when none was entered. */
+  model: string;
   status: StockStatus;
   /** Stock on hand at cost price; null when there's no stock level or no cost. */
   value: number | null;
@@ -96,6 +98,8 @@ interface Movement {
   rate: number;
   amount: number;
   hsCode: string;
+  /** The model number entered on that bill line. */
+  model: string;
 }
 
 /** Quantities and prices keep their decimals (2.5 kg, Rs 12.50); `money` would round. */
@@ -258,6 +262,7 @@ function StockItemPopup({
     ['Category', row.category || '—'],
     ['Status', STATUS[row.status].label],
     ['HS code', hsCode || '—'],
+    ['Model', row.model || '—'],
     ['Cost price', rs(row.cost)],
     ['Selling price', rs(row.price)],
     ['Stock value (cost)', row.value != null ? `NPR ${money(row.value)}` : '—'],
@@ -584,6 +589,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           rate: r,
           amount: Number(item.amount) || q * r,
           hsCode: item.hs_code ?? '',
+          model: item.model?.trim() ?? '',
         });
         map.set(key, list);
       });
@@ -669,6 +675,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
         vendor,
         profit,
         profitEstimated,
+        model: [...moves].reverse().find((m) => m.dir === 'in' && m.model)?.model ?? '',
         status: stock <= 0 ? 'out' : 'ok',
         value: cost != null && stock > 0 ? stock * cost : null,
         product,
@@ -698,6 +705,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           vendor: '',
           profit: null,
           profitEstimated: false,
+          model: '',
           status: 'untracked',
           value: null,
         };
@@ -725,7 +733,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (filter === 'out' && r.status !== 'out') return false;
-      return !q || r.name.toLowerCase().includes(q) || (r.category ?? '').toLowerCase().includes(q);
+      return !q || r.name.toLowerCase().includes(q) || (r.category ?? '').toLowerCase().includes(q) || r.model.toLowerCase().includes(q);
     });
   }, [rows, search, filter]);
 
@@ -759,9 +767,9 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
         {highlightText(r.name, search)}
       </Text>
       {compact && <Pill text={STATUS[r.status].label} color={STATUS[r.status].color} bg={STATUS[r.status].bg} />}
-      {!!r.category && (
+      {(!!r.category || !!r.model) && (
         <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-          {highlightText(r.category, search)}
+          {highlightText([r.category, r.model].filter(Boolean).join(' · '), search)}
         </Text>
       )}
       {compact && (

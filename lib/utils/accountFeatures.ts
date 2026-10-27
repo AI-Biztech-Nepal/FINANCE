@@ -28,6 +28,20 @@ export function itemListOf(items: BillItem[] | null | undefined): string[] {
   return names;
 }
 
+/** The model numbers entered on a bill's items, each once, as one line: "2015, 2016". Empty when none was entered. */
+export function modelNamesOf(items: BillItem[] | null | undefined): string {
+  const seen = new Set<string>();
+  const models: string[] = [];
+  for (const item of items ?? []) {
+    const model = item.model?.trim();
+    if (model && !seen.has(model.toLowerCase())) {
+      seen.add(model.toLowerCase());
+      models.push(model);
+    }
+  }
+  return models.join(', ');
+}
+
 /** The same, as one line: "Honda Shine, Bajaj Pulsar". */
 export function itemNamesOf(items: BillItem[] | null | undefined): string {
   return itemListOf(items).join(', ');

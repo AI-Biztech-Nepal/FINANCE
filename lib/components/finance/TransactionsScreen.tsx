@@ -2436,7 +2436,7 @@ function TransactionRow({
 
 // The widths of the bill's item columns - the Total column is as wide as the Amount column
 // above it, so the sums line up under the figures they add up.
-const BILL_COL = { sn: 38, hs: 72, qty: 46, rate: 72, amount: 88 };
+const BILL_COL = { sn: 38, hs: 72, model: 96, qty: 46, rate: 72, amount: 88 };
 
 /** One cell of the bill's item table. It is a View of its own so that its rule (the line on
  * its right edge - the last cell has none) shows the same everywhere - a border on a Text does
@@ -2658,13 +2658,18 @@ function BillEditPopup({
 
 /** A bill's items ruled like the printed bill: what its amount is made of, with the sums under it. */
 function BillItemsReadOnly({ tx }: { tx: BusinessTransaction }) {
+  // Only a bill that has them gets the columns, so older bills look as they did.
+  const showHs = tx.items.some((item) => !!item.hs_code);
+  const showModel = tx.items.some((item) => !!item.model);
   return (
     <View className="overflow-hidden rounded-lg border border-gray-300 bg-white">
       <View className="flex-row bg-gray-50">
         <BillCell head align="center" width={BILL_COL.sn}>
           S.N.
         </BillCell>
+        {showHs && <BillCell head width={BILL_COL.hs}>HS Code</BillCell>}
         <BillCell head>Item</BillCell>
+        {showModel && <BillCell head width={BILL_COL.model}>Model No.</BillCell>}
         <BillCell head align="right" width={BILL_COL.qty}>
           Qty
         </BillCell>
@@ -2680,7 +2685,17 @@ function BillItemsReadOnly({ tx }: { tx: BusinessTransaction }) {
           <BillCell align="center" width={BILL_COL.sn} textClass="text-gray-500">
             {idx + 1}
           </BillCell>
+          {showHs && (
+            <BillCell width={BILL_COL.hs} textClass="text-gray-500">
+              {item.hs_code ?? ''}
+            </BillCell>
+          )}
           <BillCell textClass="text-gray-900">{item.description}</BillCell>
+          {showModel && (
+            <BillCell width={BILL_COL.model} textClass="text-gray-700">
+              {item.model ?? ''}
+            </BillCell>
+          )}
           <BillCell align="right" width={BILL_COL.qty}>
             {item.qty}
           </BillCell>
