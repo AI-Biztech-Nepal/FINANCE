@@ -189,10 +189,10 @@ export function ReportScreen({ basePath }: { basePath: string }) {
     const beforeStart = new Map<string, number>(); // units in less units out, before the first day
     const afterEnd = new Map<string, number>(); // the same, after the last day
     const lastRate = new Map<string, number>();
-    const bills = [...(transactions ?? [])]
+    const stockBills = [...(transactions ?? [])]
       .filter((t) => t.type === 'sale' || t.type === 'purchase')
       .sort((a, b) => dayOf(a).localeCompare(dayOf(b)));
-    for (const t of bills) {
+    for (const t of stockBills) {
       const day = dayOf(t);
       for (const line of t.items ?? []) {
         const k = key(line.description);
