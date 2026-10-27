@@ -942,27 +942,29 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const statementAsc = useMemo<HistoryRow[]>(() => withRunningBalance(allLines, 0), [allLines]);
   const rows = useMemo(() => [...statementAsc].reverse(), [statementAsc]);
 
-  // A vehicle account reads this page as one line per vehicle, in the Ledger table's own columns: what it was
+  // Every ledger reads as one line per vehicle (item), in the Ledger table's own columns: what it was
   // bought or sold for (Balance), what has been paid or received on it, and what is left (Payable / Receivable).
   // A bill names its vehicles as items (a bill of one vehicle counts in full, else each vehicle's own line); a
   // payment names its vehicle first in its remark (the Paid and Received pages write it so). Anything that names
   // no vehicle on a bill here is a line of its own, so the totals still match the name card. A line opens its
   // entries in a popup; an entry there opens as it does everywhere (a bill's detail, a payment's edit form).
   const vehicleGroups = useMemo<VehicleGroup[] | null>(() => {
-    if (!showItems) return null;
     const key = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
     const groups = new Map<string, VehicleGroup>();
     const list: VehicleGroup[] = [];
     const groupFor = (k: string, name: string) => {
       let g = groups.get(k);
       if (!g) {
-        g = { key: k, name, billed: 0, paid: 0, received: 0, lastDay: '', refs: [], rows: [] };
+        g = { key: k, name, billed: 0, paid: 0, received: 0, lastDay: '', refs: [], rows: [], parts: new Map() };
         groups.set(k, g);
         list.push(g);
       }
       return g;
     };
-    const add = (g: VehicleGroup, r: HistoryRow) => {
+    // Adds a line to the vehicle, with what it put on this vehicle (a bill of several vehicles puts each its own line).
+    const add = (g: VehicleGroup, r: HistoryRow, part: Partial<VehiclePart>) => {
+      const was = g.parts.get(r.key) ?? { billed: 0, paid: 0, received: 0 };
+      g.parts.set(r.key, { billed: was.billed + (part.billed ?? 0), paid: was.paid + (part.paid ?? 0), received: was.received + (part.received ?? 0) });
       if (!g.rows.includes(r)) g.rows.push(r);
       if (r.day > g.lastDay) g.lastDay = r.day;
       if (r.reference && !g.refs.includes(r.reference)) g.refs.push(r.reference);
@@ -979,13 +981,13 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       if (cars.length === 1) {
         const g = groupFor(`${side}|${key(cars[0])}`, cars[0]);
         g.billed += r.amount;
-        add(g, r);
+        add(g, r, { billed: r.amount });
       } else {
         for (const i of t.items ?? []) {
           if (!i.description?.trim()) continue;
           const g = groupFor(`${side}|${key(i.description)}`, i.description.trim());
           g.billed += Number(i.amount) || 0;
-          add(g, r);
+          add(g, r, { billed: Number(i.amount) || 0 });
         }
       }
     }
@@ -998,19 +1000,26 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       const named = e.note ? groups.get(`${side}|${key(e.note.split(' · ')[0])}`) : undefined;
       const g = named ?? groupFor(`row|${r.key}`, [r.label, r.detail].filter(Boolean).join(' · '));
       const amount = Number(e.amount);
-      if (r.vendor) {
-        if (e.entry_type === 'credit') g.paid += amount;
-        else g.billed += amount; // owed to them without a bill (a daily wage ...)
-      } else if (e.entry_type === 'credit') g.received += amount;
-      else if (e.source === 'manual') g.paid += amount; // money paid out to a customer
-      else g.billed += amount;
-      add(g, r);
+      // Owed to a vendor without a bill (a daily wage ...); money paid back to a customer.
+      const part: Partial<VehiclePart> = r.vendor
+        ? e.entry_type === 'credit'
+          ? { paid: amount }
+          : { billed: amount }
+        : e.entry_type === 'credit'
+          ? { received: amount }
+          : e.source === 'manual'
+            ? { paid: amount }
+            : { billed: amount };
+      g.billed += part.billed ?? 0;
+      g.paid += part.paid ?? 0;
+      g.received += part.received ?? 0;
+      add(g, r, part);
     }
     for (const g of list) {
       g.side = g.key.startsWith('v|') || (g.key.startsWith('row|') && !!g.rows[0]?.vendor) ? 'vendor' : 'customer';
     }
     return list;
-  }, [showItems, statementAsc]);
+  }, [statementAsc]);
   const [openGroup, setOpenGroup] = useState<VehicleGroup | null>(null);
 
   // Only one entry form is open at a time: a person with no entries yet is offered both
@@ -1352,40 +1361,14 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
         )}
       </KeyboardAwareScrollView>
       {openGroup && (
-        <PopupCard title={openGroup.name} onClose={() => setOpenGroup(null)} maxWidth={900} closeOnOutside>
-          <BookTable
-            columns={[
-              { key: 'date', label: 'Date', width: 140, render: (r) => <Text className="text-[12.5px] text-gray-700">{r.dateLabel}</Text> },
-              {
-                key: 'details',
-                label: 'Details',
-                render: (r) => (
-                  <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
-                    {r.label}
-                    {!!r.detail && <Text className="font-normal text-gray-500">{` · ${r.detail}`}</Text>}
-                  </Text>
-                ),
-              },
-              { key: 'ref', label: 'Ref No.', width: 100, render: (r) => <Text className="text-[12.5px] text-gray-600">{r.reference || '—'}</Text> },
-              {
-                key: 'amount',
-                label: 'Amount',
-                width: 130,
-                align: 'right',
-                render: (r) => (
-                  <Text className="text-[12.5px] font-bold" style={{ color: r.amountColor }}>
-                    {formatMoney(r.amount)}
-                  </Text>
-                ),
-              },
-            ]}
-            rows={openGroup.rows}
-            rowKey={(r) => r.key}
-            onRowPress={(r) => {
+        <PopupCard title={openGroup.name} onClose={() => setOpenGroup(null)} maxWidth={1180} closeOnOutside>
+          <VehicleEntries
+            group={openGroup}
+            full={tableMode}
+            onOpenRow={(r) => {
               setOpenGroup(null);
               openRow(r);
             }}
-            rowPressable={(r) => !!r.tx || r.manual}
           />
         </PopupCard>
       )}
@@ -1436,7 +1419,15 @@ interface VehicleGroup {
   received: number;
   lastDay: string;
   refs: string[];
+  /** Its entries, oldest first, and what each put on this vehicle. */
   rows: HistoryRow[];
+  parts: Map<string, VehiclePart>;
+}
+
+interface VehiclePart {
+  billed: number;
+  paid: number;
+  received: number;
 }
 
 /** A vehicle account's ledger page: one line per vehicle, in the Ledger table's columns. */
@@ -1515,6 +1506,97 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
               const left = round2(sum(payable) - sum(receivable));
               return { left: fig(Math.abs(left), left >= 0 ? MONEY.out.text : MONEY.in.text) };
             })(),
+      }}
+    />
+  );
+}
+
+/** A vehicle's entries, oldest first, in the vehicle table's columns: what each put on it, and what is left on the
+ * vehicle after it. An entry opens as it does everywhere (a bill's detail, a payment's edit form). */
+function VehicleEntries({ group, full, onOpenRow }: { group: VehicleGroup; full: boolean; onOpenRow: (r: HistoryRow) => void }) {
+  const vendor = group.side === 'vendor';
+  let running = 0;
+  // Oldest first (the bills were gathered before the payments), so "left" runs as the money came.
+  const ordered = [...group.rows].sort((a, b) => a.day.localeCompare(b.day) || a.createdAt.localeCompare(b.createdAt));
+  const lines = ordered.map((r) => {
+    const part = group.parts.get(r.key) ?? { billed: 0, paid: 0, received: 0 };
+    running = round2(running + (vendor ? part.billed - part.paid + part.received : part.billed + part.paid - part.received));
+    return {
+      row: r,
+      part,
+      payable: vendor ? Math.max(0, running) : Math.max(0, -running),
+      receivable: vendor ? Math.max(0, -running) : Math.max(0, running),
+    };
+  });
+  type Line = (typeof lines)[number];
+  const fig = (v: number, color: string) =>
+    v ? (
+      <Text className="text-[12.5px] font-bold" style={{ color }} numberOfLines={1}>
+        {formatMoney(v)}
+      </Text>
+    ) : (
+      <Text className="text-[12.5px] text-gray-300">—</Text>
+    );
+  const details = (l: Line) => (
+    <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
+      {l.row.label}
+      {!!l.row.detail && <Text className="font-normal text-gray-500">{` · ${l.row.detail}`}</Text>}
+    </Text>
+  );
+  const last = lines[lines.length - 1];
+  const sum = (f: (l: Line) => number) => round2(lines.reduce((s, l) => s + f(l), 0));
+  const columns: BookColumn<Line>[] = full
+    ? [
+        { key: 'sn', label: 'SN', width: 52, render: (_l, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
+        { key: 'details', label: 'Details', render: details },
+        { key: 'date', label: 'Date', width: 140, render: (l) => <Text className="text-[12.5px] text-gray-700">{l.row.dateLabel}</Text> },
+        { key: 'ref', label: 'Ref No.', width: 100, render: (l) => <Text className="text-[12.5px] text-gray-600">{l.row.reference || '—'}</Text> },
+        { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (l) => fig(l.part.billed, '#111827') },
+        { key: 'paid', label: 'Total Paid', width: 110, align: 'right', render: (l) => fig(l.part.paid, MONEY.out.text) },
+        { key: 'received', label: 'Total Received', width: 120, align: 'right', render: (l) => fig(l.part.received, MONEY.in.text) },
+        { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (l) => fig(l.payable, MONEY.out.text) },
+        { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (l) => fig(l.receivable, MONEY.in.text) },
+      ]
+    : [
+        {
+          key: 'details',
+          label: 'Details',
+          render: (l) => (
+            <View style={{ minWidth: 0, gap: 2 }}>
+              {details(l)}
+              <Text className="text-[11px] text-gray-400" numberOfLines={1}>
+                {[l.row.dateLabel, l.row.reference || null].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+          ),
+        },
+        {
+          key: 'amount',
+          label: 'Amount',
+          width: 110,
+          align: 'right',
+          render: (l) => fig(l.part.billed || l.part.paid || l.part.received, l.part.billed ? '#111827' : l.part.paid ? MONEY.out.text : MONEY.in.text),
+        },
+        { key: 'left', label: 'Left', width: 110, align: 'right', render: (l) => (l.payable ? fig(l.payable, MONEY.out.text) : fig(l.receivable, MONEY.in.text)) },
+      ];
+  return (
+    <BookTable
+      columns={columns}
+      rows={lines}
+      rowKey={(l) => l.row.key}
+      onRowPress={(l) => onOpenRow(l.row)}
+      rowPressable={(l) => !!l.row.tx || l.row.manual}
+      footer={{
+        label: `${lines.length} ${lines.length === 1 ? 'entry' : 'entries'} · Total`,
+        cells: full
+          ? {
+              balance: fig(sum((l) => l.part.billed), '#111827'),
+              paid: fig(sum((l) => l.part.paid), MONEY.out.text),
+              received: fig(sum((l) => l.part.received), MONEY.in.text),
+              payable: fig(last?.payable ?? 0, MONEY.out.text),
+              receivable: fig(last?.receivable ?? 0, MONEY.in.text),
+            }
+          : { left: last?.payable ? fig(last.payable, MONEY.out.text) : fig(last?.receivable ?? 0, MONEY.in.text) },
       }}
     />
   );
