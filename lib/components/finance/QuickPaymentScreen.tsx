@@ -45,7 +45,7 @@ function makeRowKey() {
 }
 
 function emptyPaymentRow(): PaymentRow {
-  return { key: makeRowKey(), customerName: '', selectedCustomer: null, pendingPhone: null, amount: '', note: '', item: '', model: '' };
+  return { key: makeRowKey(), customerName: '', selectedCustomer: null, pendingPhone: null, amount: '', note: '', item: '' };
 }
 
 export function QuickPaymentScreen() {
@@ -90,7 +90,7 @@ function QuickPaymentForm() {
     orderBy: { column: 'name' },
     enabled: !!userId,
   });
-  // A vehicle account's Paid table also names the car each payment is for (its number) and its model.
+  // A vehicle account's Paid table also names the car each payment is for (its number).
   const profile = useAuthStore((state) => state.profile);
   const withCar = isOut && sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
   const { data: purchaseBills } = useSupabaseQuery('business_transactions', {
@@ -111,19 +111,6 @@ function QuickPaymentForm() {
     }
     return map;
   }, [purchaseBills]);
-  // The model number entered on the purchase bill of each car (the latest bill that has one).
-  const modelByCar = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const bill of purchaseBills ?? []) {
-      for (const item of bill.items ?? []) {
-        const car = item.description?.trim().toLowerCase();
-        const model = item.model?.trim();
-        if (car && model && !map.has(car)) map.set(car, model);
-      }
-    }
-    return map;
-  }, [purchaseBills]);
-  const modelFor = (car: string) => modelByCar.get(car.trim().toLowerCase()) ?? '';
   // What is still owed on each car: what its purchase bill billed (the whole bill when it is the only car
   // on it, else the car's own line) less the payments whose remark starts with that car - the way the
   // Payable Report reads them. Keyed by vendor ("id:..." or, for a bill with no saved vendor, "name:...") and car.
@@ -482,7 +469,6 @@ function QuickPaymentForm() {
         amount: scanned.amount ? String(scanned.amount) : '',
         note: scanned.note ?? '',
         item: '',
-        model: '',
       },
     ]);
     if (scanned.date) setDate(scanned.date);
@@ -516,7 +502,7 @@ function QuickPaymentForm() {
       title: `Save ${validRows.length === 1 ? 'this' : `these ${validRows.length}`} ${isOut ? 'Paid' : 'Received'} ${validRows.length === 1 ? 'entry' : 'entries'}?`,
       rows: [
         ...validRows.slice(0, 5).map((r) => ({
-          label: [r.customerName.trim(), r.item.trim(), r.model.trim()].filter(Boolean).join(' · '),
+          label: [r.customerName.trim(), r.item.trim()].filter(Boolean).join(' · '),
           value: `NPR ${formatMoney(Number(r.amount))}`,
         })),
         ...(validRows.length > 5 ? [{ label: `+ ${validRows.length - 5} more` }] : []),
@@ -553,8 +539,8 @@ function QuickPaymentForm() {
           owner_id: userId,
           entry_type: entryType,
           amount: round2(Number(row.amount)),
-          // The car and its model go first in the remark, so the ledger and Total Paid name them.
-          note: [row.item.trim(), row.model.trim(), row.note.trim()].filter(Boolean).join(' · ') || null,
+          // The car goes first in the remark, so the ledger and Total Paid name it.
+          note: [row.item.trim(), row.note.trim()].filter(Boolean).join(' · ') || null,
           source: 'manual',
           bank_account_id: bankAccountId,
           entry_date: date || null,
@@ -817,7 +803,6 @@ function QuickPaymentForm() {
                 onUpdateRow={updateRow}
                 withCar={withCar}
                 carOptionsFor={carOptionsFor}
-                modelFor={modelFor}
                 itemDueOf={withCar ? itemDueOf : undefined}
                 dueOf={payTarget === 'vendor' ? dueOf : undefined}
                 onCreateParty={async (name) => {

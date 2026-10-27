@@ -19,9 +19,8 @@ export interface PaymentRow {
   pendingPhone: string | null;
   amount: string;
   note: string;
-  /** The car (its number) a payment is for, and its model - only on a vehicle account (see `withCar`). */
+  /** The car (its number) a payment is for - only on a vehicle account (see `withCar`). */
   item: string;
-  model: string;
 }
 
 export interface PaymentEntryTableHandle {
@@ -29,8 +28,8 @@ export interface PaymentEntryTableHandle {
   focusRow: (rowKey: string, col?: 0 | 1 | 2) => void;
 }
 
-// 0 party, 1 amount, 2 remarks; 3 item and 4 model sit between the party and the amount when `withCar`.
-type Col = 0 | 1 | 2 | 3 | 4;
+// 0 party, 1 amount, 2 remarks; 3 item sits between the party and the amount when `withCar`.
+type Col = 0 | 1 | 2 | 3;
 const MAX_SUGGESTIONS = 6;
 const ADD_PARTY_KEY = '__add-party__';
 
@@ -54,12 +53,10 @@ interface Props {
   autoFocusFirst?: boolean;
   /** Saves a typed name as a new customer / vendor on the spot. The "Add ... as new ..." row only shows when this is given. */
   onCreateParty?: (name: string) => Promise<Customer | null>;
-  /** A vehicle account: each row also names the car it pays for (Item) and its Model. */
+  /** A vehicle account: each row also names the car it pays for (Item). */
   withCar?: boolean;
   /** The cars to pick for a row's vendor - only theirs - narrowed by what is typed. */
   carOptionsFor?: (vendor: Customer | null, typed: string) => SuggestOption[];
-  /** The model number already entered for a car (on its purchase bill); '' when there is none. */
-  modelFor?: (item: string) => string;
   /** What is still owed to a saved vendor (negative = paid ahead). When given, the vendor box shows it. */
   dueOf?: (partyId: string) => number;
   /** What is still owed on one car of a vendor; null when it is not one of theirs. When given, the Item box shows it. */
@@ -67,7 +64,7 @@ interface Props {
 }
 
 function rowHasContent(row: PaymentRow): boolean {
-  return !!(row.customerName.trim() || row.amount.trim() || row.note.trim() || row.item.trim() || row.model.trim());
+  return !!(row.customerName.trim() || row.amount.trim() || row.note.trim() || row.item.trim());
 }
 
 export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(function PaymentEntryTable(
@@ -89,14 +86,13 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
     onCreateParty,
     withCar,
     carOptionsFor,
-    modelFor,
     dueOf,
     itemDueOf,
   },
   ref
 ) {
   // The order Enter / Tab walk along a row.
-  const order: Col[] = withCar ? [0, 3, 4, 1, 2] : [0, 1, 2];
+  const order: Col[] = withCar ? [0, 3, 1, 2] : [0, 1, 2];
   const amountWidth = withCar ? 140 : 160;
   const inputRefs = useRef<Record<string, TextInput | null>>({});
   const pendingFocus = useRef<{ key: string; col: Col } | null>(null);
@@ -241,14 +237,9 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
           {partyLabel}
         </Text>
         {withCar && (
-          <>
-            <Text className="px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500" style={{ flex: 1 }}>
-              Item
-            </Text>
-            <Text className="px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500" style={{ flex: 1 }}>
-              Model
-            </Text>
-          </>
+          <Text className="px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500" style={{ flex: 1.2 }}>
+            Item
+          </Text>
         )}
         <Text
           className="px-2.5 text-right text-[11px] font-bold capitalize tracking-wider text-gray-500"
@@ -348,17 +339,15 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
             {withCar && (
               <>
                 {/* The car this payment is for: only the cars bought from this vendor. */}
-                <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flex: 1.2, minWidth: 0 }}>
                   <SuggestInput
                     value={row.item}
                     onChangeText={(v) => onUpdateRow(row.key, { item: v })}
                     options={focusedCell?.key === row.key && focusedCell.col === 3 ? carOptionsFor?.(linked, row.item) ?? [] : []}
                     showWhenEmpty
                     onSelectOption={(opt, via) => {
-                      // The car's model comes with it when its purchase bill has one; else what is typed stays.
-                      const model = modelFor?.(opt.label) ?? '';
-                      onUpdateRow(row.key, { item: opt.label, ...(model ? { model } : {}) });
-                      if (via !== 'tab') inputRefs.current[`${row.key}:4`]?.focus();
+                      onUpdateRow(row.key, { item: opt.label });
+                      if (via !== 'tab') inputRefs.current[`${row.key}:1`]?.focus();
                     }}
                     inputRef={(el) => {
                       inputRefs.current[`${row.key}:3`] = el;
@@ -389,24 +378,6 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
                         );
                       })()
                     : null}
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <TextInput
-                    ref={(el) => {
-                      inputRefs.current[`${row.key}:4`] = el;
-                    }}
-                    value={row.model}
-                    onChangeText={(v) => onUpdateRow(row.key, { model: v })}
-                    onFocus={() => setFocusedCell({ key: row.key, col: 4 })}
-                    onBlur={() => setFocusedCell((cur) => (cur?.key === row.key && cur.col === 4 ? null : cur))}
-                    onKeyPress={(e) => handleKeyPress(e, row, rowIndex, 4)}
-                    placeholder="Model"
-                    placeholderTextColor="#B2B8C1"
-                    accessibilityLabel={`Model, row ${rowIndex + 1}`}
-                    selectTextOnFocus
-                    className={cellClass}
-                    style={cellStyle(row.key, 4)}
-                  />
                 </View>
               </>
             )}
