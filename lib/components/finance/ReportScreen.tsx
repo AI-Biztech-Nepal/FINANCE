@@ -173,10 +173,10 @@ export function ReportScreen({ basePath }: { basePath: string }) {
     const sum = (list: [string, number][]) => list.reduce((a, [, v]) => a + v, 0);
     // The stock held now, at cost. Stock has no history, so the period's opening stock is taken as the
     // same figure: stock moves through the purchase and sale bills themselves.
-    // Stock has no history of its own, but every unit in and out is on a bill: the stock on a day is what is on
-    // the shelf now, less what came in since (purchases), plus what went out since (sales). Opening stock is
-    // that on the period's first day, closing stock the day after its last; each valued at cost - the product's
-    // cost price, else what its latest purchase bill paid.
+    // Stock has no history of its own, but every unit in and out is on a bill. Opening stock is what the bills put
+    // on the shelf before the period's first day (purchases less sales); closing stock is what is on the shelf now,
+    // less what came in after the period's last day, plus what went out after it. Each valued at cost - the
+    // product's cost price, else what its latest purchase bill paid.
     const dayOf = (t: { bill_date: string | null; created_at: string }) => {
       if (t.bill_date) return t.bill_date.slice(0, 10);
       const c = new Date(t.created_at);
@@ -186,7 +186,7 @@ export function ReportScreen({ basePath }: { basePath: string }) {
     const start = period === 'all' ? '' : period === 'range' ? range.from : `${year}-01-01`;
     const end = period === 'all' ? '' : period === 'range' ? range.to : `${year}-12-31`;
     const key = (n: string | null | undefined) => (n ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
-    const sinceStart = new Map<string, number>(); // units in less units out, on or after the first day
+    const beforeStart = new Map<string, number>(); // units in less units out, before the first day
     const afterEnd = new Map<string, number>(); // the same, after the last day
     const lastRate = new Map<string, number>();
     const bills = [...(transactions ?? [])]
@@ -198,7 +198,7 @@ export function ReportScreen({ basePath }: { basePath: string }) {
         const k = key(line.description);
         if (!k) continue;
         const q = (Number(line.qty) || 0) * (t.type === 'purchase' ? 1 : -1);
-        if (!start || day >= start) sinceStart.set(k, (sinceStart.get(k) ?? 0) + q);
+        if (start && day < start) beforeStart.set(k, (beforeStart.get(k) ?? 0) + q);
         if (end && day > end) afterEnd.set(k, (afterEnd.get(k) ?? 0) + q);
         if (t.type === 'purchase' && Number(line.rate) > 0) lastRate.set(k, Number(line.rate));
       }
@@ -210,7 +210,9 @@ export function ReportScreen({ basePath }: { basePath: string }) {
       const cost = p.purchase_price != null ? Number(p.purchase_price) : lastRate.get(k);
       if (cost == null) continue;
       const now = Number(p.stock_level) || 0;
-      opening += Math.max(0, now - (sinceStart.get(k) ?? 0)) * cost;
+      // Opening: only what the bills put on the shelf before the first day - stock no bill explains (an opening
+      // quantity typed on the product, a purchase bill since deleted) is not taken to have been there already.
+      opening += Math.max(0, beforeStart.get(k) ?? 0) * cost;
       closing += Math.max(0, now - (afterEnd.get(k) ?? 0)) * cost;
     }
     const sales = items;
