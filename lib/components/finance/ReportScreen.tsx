@@ -1,5 +1,6 @@
 // lib/components/finance/ReportScreen.tsx
 import { useMemo, useRef, useState } from 'react';
+import { withFrom } from '../../hooks/useCameFrom';
 import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../hooks/useAuth';
@@ -127,7 +128,8 @@ export function ReportScreen({ basePath }: { basePath: string }) {
   });
   const { width } = useWindowDimensions();
   const twoSided = width >= 900;
-  const go = (path: string) => router.push(`${basePath}${path}` as never);
+  // What a line opens is marked as opened from here, so it shows a way back (see useCameFrom).
+  const go = (path: string) => router.push(withFrom(`${basePath}${path}`, 'profit-loss') as never);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(['sales', 'purchase', 'direct', 'indirect']));
   const toggleGroup = (k: string) =>
     setOpenGroups((prev) => {
@@ -322,7 +324,8 @@ export function ReportScreen({ basePath }: { basePath: string }) {
             <SideHead title="Particulars" />
             <Group id="sales" open={openGroups} onToggle={toggleGroup} label="Sales accounts" amount={pl.sales}
               rows={[['Sales - items', pl.items]]} onOpen={() => go('/sales-report')} />
-            <Line label="Closing stock" amount={pl.closing} onPress={() => go('/inventory')} />
+            {/* What is left on the shelf: the stock list, in-stock items only. */}
+            <Line label="Closing stock" amount={pl.closing} onPress={() => go('/inventory?filter=in')} />
             {grossProfit < 0 ? <Line label="Gross loss c/o" amount={-grossProfit} tone="loss" bold /> : null}
             <TotalLine amount={tradingTotal} />
             {grossProfit >= 0 ? <Line label="Gross profit b/f" amount={grossProfit} tone="profit" bold /> : null}

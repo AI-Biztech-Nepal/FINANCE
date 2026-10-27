@@ -4,6 +4,7 @@ import { View, Text, Pressable } from 'react-native';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
+import { useCameFrom } from '../../hooks/useCameFrom';
 import { useSupabaseQuery, useSupabaseRow } from '../../hooks/useSupabase';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { isStaffLedgerType, reportKindOfType, usePartyDestination } from '../../hooks/usePartyDestination';
@@ -136,6 +137,7 @@ function dayOf(date: string): string {
 export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; basePath: string; partyId?: string }) {
   const meta = KIND_META[kind];
   const layout = useBookLayout();
+  const cameFrom = useCameFrom(basePath);
   const userId = useAuthStore((state) => state.session?.user.id);
   const profile = useAuthStore((state) => state.profile);
   // The Purchase Report of an account that buys vehicles says which one, beside the vendor.
@@ -291,7 +293,8 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     {
       title: partyId ? personTitle : undefined,
       wide: layout.wide,
-      left: layout.wide && !partyId ? undefined : () => <BackButton onPress={goBack} />,
+      // Opened from the Profit & Loss: a way back to it, on a wide screen too.
+      left: layout.wide && !partyId && !cameFrom ? undefined : () => <BackButton onPress={cameFrom?.back ?? goBack} label={cameFrom?.label} />,
       // The date control, Print and Excel (and Open ledger) are more than a narrow bar holds.
       inBarMinWidth: 1240,
       right: (inBar) => (
@@ -313,7 +316,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
         </>
       ),
     },
-    [partyId, basePath, range.from, range.to, restingLabel, search]
+    [partyId, basePath, range.from, range.to, restingLabel, search, cameFrom?.label]
   );
 
   // "Received" = every payment actually collected from a customer, whether

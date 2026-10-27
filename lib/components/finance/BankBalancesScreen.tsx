@@ -4,6 +4,7 @@ import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
+import { useCameFrom } from '../../hooks/useCameFrom';
 import { useSupabaseInsert, useSupabaseDelete } from '../../hooks/useSupabase';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { useAccountBalances, type AccountActivityItem } from '../../hooks/useAccountBalances';
@@ -12,7 +13,7 @@ import { DateField } from '../DateTimeFields';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { showAlert, getErrorMessage } from '../../utils/alert';
-import { ToolbarButton, useBarActions, useBookLayout } from './BookKit';
+import { BackButton, ToolbarButton, useBarActions, useBookLayout } from './BookKit';
 import { localTodayIso } from '../../utils/localDate';
 import { useReportActions } from './PrintButton';
 import type { PrintReport, PrintSection } from '../../utils/printReport';
@@ -198,6 +199,7 @@ export function TransferForm({ userId, onDone, bare = false }: { userId: string;
  * Finance's Shortcuts, not from here. */
 export function BankBalancesScreen({ basePath }: { basePath: string }) {
   const layout = useBookLayout();
+  const cameFrom = useCameFrom(basePath);
   const userId = useAuthStore((state) => state.session?.user.id);
   const profile = useAuthStore((state) => state.profile);
   const balances = useAccountBalances(userId);
@@ -257,6 +259,8 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
   useBarActions(
     {
       wide: layout.wide,
+      // Opened from the Balance Sheet: a way back to it, on a wide screen too.
+      left: cameFrom ? () => <BackButton onPress={cameFrom.back} label={cameFrom.label} /> : undefined,
       right: userId
         ? () => (
             <>
@@ -266,7 +270,7 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
           )
         : undefined,
     },
-    [showTransfer, userId]
+    [showTransfer, userId, cameFrom?.label]
   );
 
   return (

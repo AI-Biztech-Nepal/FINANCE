@@ -9,6 +9,7 @@
 // no history, so earlier columns use today's stock). Equity is the balancing figure, so the sheet always
 // balances - the check at the bottom states it.
 import { useMemo, useState } from 'react';
+import { withFrom } from '../../hooks/useCameFrom';
 import { View, Text, Pressable, ScrollView, Modal, Platform, useWindowDimensions, type TextStyle } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -253,7 +254,8 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
   const { width } = useWindowDimensions();
   const wide = Platform.OS === 'web' && width >= WEB_SIDEBAR_MIN_WIDTH;
   const twoColumns = width >= 980;
-  const go = (path: string) => router.push(`${basePath}${path}` as never);
+  // What a line opens is marked as opened from here, so it shows a way back (see useCameFrom).
+  const go = (path: string) => router.push(withFrom(`${basePath}${path}`, 'balance-sheet') as never);
 
   const [asOnKey, setAsOnKey] = useState<AsOn>('today');
   const [compareKey, setCompareKey] = useState<Compare>('fy_start');

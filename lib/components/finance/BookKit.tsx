@@ -81,7 +81,21 @@ export function ToolbarButton({ label, icon, onPress }: { label: string; icon: k
   );
 }
 
-export function BackButton({ onPress }: { onPress: () => void }) {
+/** `label`: where it goes back to ("Balance Sheet"), beside the arrow. */
+export function BackButton({ onPress, label }: { onPress: () => void; label?: string }) {
+  if (label) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityLabel={`Back to ${label}`}
+        className="h-9 flex-row items-center rounded-lg border border-gray-200 pl-2 pr-3"
+        style={{ gap: 4 }}
+      >
+        <Ionicons name="chevron-back" size={18} color="#374151" />
+        <Text className="text-[13px] font-semibold text-gray-700">{label}</Text>
+      </Pressable>
+    );
+  }
   return (
     <Pressable onPress={onPress} accessibilityLabel="Back" className="h-9 w-9 items-center justify-center rounded-lg border border-gray-200">
       <Ionicons name="chevron-back" size={18} color="#374151" />
@@ -130,10 +144,13 @@ export function ToolbarSearch({
  * on a wide screen the sidebar does that job) and its main action go up there
  * too, so the page needs no title row of its own. `right` is registered when
  * `deps` change; read callbacks through a ref if they must be current. */
-export function useBarActions({ wide, right }: { wide: boolean; right?: () => ReactNode }, deps: readonly unknown[]) {
+export function useBarActions(
+  { wide, right, left }: { wide: boolean; right?: () => ReactNode; left?: () => ReactNode },
+  deps: readonly unknown[]
+) {
   useScreenHeader(
-    { headerLeft: wide ? undefined : () => <BackButton onPress={() => router.back()} />, headerRight: right },
-    [wide, !!right, ...deps]
+    { headerLeft: left ?? (wide ? undefined : () => <BackButton onPress={() => router.back()} />), headerRight: right },
+    [wide, !!right, !!left, ...deps]
   );
 }
 

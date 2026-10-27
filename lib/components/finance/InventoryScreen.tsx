@@ -1,9 +1,10 @@
 // lib/components/finance/InventoryScreen.tsx
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, Text, TextInput, Pressable, Modal, ScrollView, useWindowDimensions } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
+import { useCameFrom } from '../../hooks/useCameFrom';
 import { useSupabaseQuery, useSupabaseInsert, useSupabaseUpdate, useSupabaseDelete } from '../../hooks/useSupabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { renameStockItem } from '../../utils/renameStockItem';
@@ -42,7 +43,7 @@ import { tidyName } from '../../utils/nameCaps';
 import type { BusinessTransaction, Product } from '../../../types/database.types';
 
 type StockStatus = 'ok' | 'out' | 'untracked';
-type StatusFilter = 'all' | 'out';
+type StatusFilter = 'all' | 'in' | 'out';
 
 const STATUS = {
   ok: { label: 'In stock', color: '#047857', bg: '#ECFDF5' },
@@ -52,6 +53,7 @@ const STATUS = {
 
 const FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: 'All' },
+  { key: 'in', label: 'In stock' },
   { key: 'out', label: 'Out' },
 ];
 
@@ -526,6 +528,7 @@ function StockItemPopup({
  * opens that history. Read-only: products are managed by admins, not from here. */
 export function InventoryScreen({ basePath }: { basePath: string }) {
   const layout = useBookLayout();
+  const cameFrom = useCameFrom(basePath);
   const userId = useAuthStore((state) => state.session?.user.id);
   const profile = useAuthStore((state) => state.profile);
   const bankAccounts = useBankAccounts(userId);
@@ -552,7 +555,9 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     enabled: !!userId && vehicles,
   });
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<StatusFilter>('all');
+  // `?filter=in` (Closing stock on the Profit & Loss): only what is still on the shelf.
+  const { filter: filterParam } = useLocalSearchParams<{ filter?: string }>();
+  const [filter, setFilter] = useState<StatusFilter>(filterParam === 'in' || filterParam === 'out' ? filterParam : 'all');
   const createProduct = useSupabaseInsert('products');
   const updateProduct = useSupabaseUpdate('products');
   const queryClient = useQueryClient();
@@ -576,7 +581,8 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     {
       wide: layout.wide,
       inBarMinWidth: 1320,
-      left: layout.wide ? undefined : () => <BackButton onPress={() => router.back()} />,
+      // Opened from the Balance Sheet or the Profit & Loss: a way back to it, on a wide screen too.
+      left: layout.wide && !cameFrom ? undefined : () => <BackButton onPress={cameFrom?.back ?? (() => router.back())} label={cameFrom?.label} />,
       right: (inBar) => (
         <>
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Search your products" wide={inBar} />
@@ -586,7 +592,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
         </>
       ),
     },
-    [search, filter, reportButtons]
+    [search, filter, reportButtons, cameFrom?.label]
   );
 
   // Every bill line of every item, by item name: a Purchase brings units in, a Sale takes them out.
@@ -791,6 +797,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (filter === 'out' && r.status !== 'out') return false;
+      if (filter === 'in' && !((r.stockLevel ?? 0) > 0)) return false;
       return !q || r.name.toLowerCase().includes(q) || (r.category ?? '').toLowerCase().includes(q) || r.model.toLowerCase().includes(q);
     });
   }, [rows, search, filter]);
@@ -1096,7 +1103,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     return {
       title: 'Stock and Inventory',
       businessName: profile?.business_name ?? profile?.full_name ?? '',
-      subtitle: [filter === 'out' ? 'Out of stock' : null, search.trim() ? `Matching "${search.trim()}"` : null].filter(Boolean).join(' · ') || undefined,
+      subtitle: [filter === 'out' ? 'Out of stock' : filter === 'in' ? 'In stock' : null, search.trim() ? `Matching "${search.trim()}"` : null].filter(Boolean).join(' · ') || undefined,
       printedOn: toBsHistoryLabel(localTodayIso()),
       summary: [
         { label: 'In stock', value: String(stats.items) },
@@ -1251,7 +1258,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       {toolbar}
 
       <BookStats>
-        <BookStat label="In stock" value={String(stats.items)} color="#374151" />
+        <BookStat label="In stock" value={String(stats.items)} color="#374151" onPress={() => setFilter((f) => (f === 'in' ? 'all' : 'in'))} />
         {vehicles ? (
           <BookStat label="Profit / Loss" value={`NPR ${profitText(stats.profit)}`} color={profitColor(stats.profit)} />
         ) : (
