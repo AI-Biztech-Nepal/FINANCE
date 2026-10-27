@@ -229,6 +229,10 @@ export interface Rental {
   /** The day it actually came back; null while it is still out. */
   returned_on: string | null;
   rate_per_day: number;
+  /** The employee who went out with it (a driver), and their wage for each day it is out (see 0015_rental_employee_wages.sql). */
+  employee_id: string | null;
+  employee_name: string | null;
+  wage_per_day: number;
   payments: RentalPayment[];
   note: string | null;
   created_at: string;

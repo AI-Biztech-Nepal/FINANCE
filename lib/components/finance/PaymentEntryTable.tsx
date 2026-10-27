@@ -55,11 +55,11 @@ interface Props {
   onCreateParty?: (name: string) => Promise<Customer | null>;
   /** A vehicle account: each row also names the car it pays for (Item). */
   withCar?: boolean;
-  /** The cars to pick for a row's vendor - only theirs - narrowed by what is typed. */
+  /** The cars to pick for a row's party - only theirs (bought from a vendor, sold to a customer) - narrowed by what is typed. */
   carOptionsFor?: (vendor: Customer | null, typed: string) => SuggestOption[];
   /** What is still owed to a saved vendor (negative = paid ahead). When given, the vendor box shows it. */
   dueOf?: (partyId: string) => number;
-  /** What is still owed on one car of a vendor; null when it is not one of theirs. When given, the Item box shows it. */
+  /** What is still owed on one car of the party; null when it is not one of theirs. When given, the Item box shows it. */
   itemDueOf?: (vendor: Customer | null, item: string) => number | null;
 }
 
@@ -344,7 +344,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
 
             {withCar && (
               <>
-                {/* The car this payment is for: only the cars bought from this vendor. */}
+                {/* The car this payment is for: only this party's cars (bought from a vendor, sold to a customer). */}
                 <View style={{ flex: 1.2, minWidth: 0 }}>
                   <SuggestInput
                     value={row.item}
@@ -368,7 +368,7 @@ export const PaymentEntryTable = forwardRef<PaymentEntryTableHandle, Props>(func
                     inputStyle={cellStyle(row.key, 3)}
                     compact
                   />
-                  {/* What is left to pay on this car, under it - as the vendor's due is under the vendor. */}
+                  {/* What is left to pay on this car, under it - as the party's due is under the party. */}
                   {itemDueOf
                     ? (() => {
                         const due = itemDueOf(linked, row.item);

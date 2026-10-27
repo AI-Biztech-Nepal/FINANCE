@@ -33,6 +33,8 @@ const REPORT_FAMILY: WebNavItem[] = [
   { href: '/(store)/sales-report', label: 'Sales Report', icon: 'trending-up' },
   { href: '/(store)/purchase-report', label: 'Purchase Report', icon: 'cart' },
   { href: '/(store)/expense-report', label: 'Expenses Report', icon: 'receipt' },
+  { href: '/(store)/to-receive', label: 'Receivable Report', icon: 'people' },
+  { href: '/(store)/to-give', label: 'Payable Report', icon: 'storefront' },
   { href: '/(store)/received', label: 'Total Received', icon: 'arrow-down-circle' },
   { href: '/(store)/paid', label: 'Total Paid', icon: 'arrow-up-circle' },
 ];

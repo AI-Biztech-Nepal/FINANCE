@@ -90,34 +90,43 @@ function QuickPaymentForm() {
     orderBy: { column: 'name' },
     enabled: !!userId,
   });
-  // A vehicle account's Paid table also names the car each payment is for (its number).
+  // A vehicle account's Paid and Received tables also name the car each payment is for (its number): on Paid,
+  // the cars bought from that vendor; on Received, the cars sold to that customer.
   const profile = useAuthStore((state) => state.profile);
-  const withCar = isOut && sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+  const withCar = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
   const { data: purchaseBills } = useSupabaseQuery('business_transactions', {
     filters: userId ? { owner_id: userId, type: 'purchase' } : {},
     orderBy: { column: 'created_at', ascending: false },
     all: true,
     enabled: !!userId && withCar,
   });
-  // The cars bought from each vendor, newest bill first - by the saved vendor, or by the name on a bill
-  // made out to one with no link.
+  const { data: saleBills } = useSupabaseQuery('business_transactions', {
+    filters: userId ? { owner_id: userId, type: 'sale' } : {},
+    orderBy: { column: 'created_at', ascending: false },
+    all: true,
+    enabled: !!userId && withCar && !isOut,
+  });
+  // The bills that name a party's cars: what was bought from a vendor, or sold to a customer.
+  const partyBills = isOut ? purchaseBills : saleBills;
+  // The cars on each party's bills, newest bill first - by the saved party, or by the name on a bill made out
+  // to one with no link.
   const carsByVendor = useMemo(() => {
     const map = new Map<string, string[]>();
-    for (const bill of purchaseBills ?? []) {
+    for (const bill of partyBills ?? []) {
       const key = bill.customer_id ? `id:${bill.customer_id}` : `name:${(bill.party_name ?? '').trim().toLowerCase()}`;
       const list = map.get(key) ?? [];
       for (const name of itemListOf(bill.items)) if (!list.includes(name)) list.push(name);
       map.set(key, list);
     }
     return map;
-  }, [purchaseBills]);
-  // What is still owed on each car: what its purchase bill billed (the whole bill when it is the only car
-  // on it, else the car's own line) less the payments whose remark starts with that car - the way the
-  // Payable Report reads them. Keyed by vendor ("id:..." or, for a bill with no saved vendor, "name:...") and car.
+  }, [partyBills]);
+  // What is still owed on each car: what its bill billed (the whole bill when it is the only car on it, else
+  // the car's own line) less the payments whose remark starts with that car - the way the Payable Report reads
+  // them. Keyed by party ("id:..." or, for a bill with no saved party, "name:...") and car.
   const carBilled = useMemo(() => {
     const map = new Map<string, number>();
     const add = (key: string, amount: number) => map.set(key, (map.get(key) ?? 0) + amount);
-    for (const bill of purchaseBills ?? []) {
+    for (const bill of partyBills ?? []) {
       const vendorKey = bill.customer_id ? `id:${bill.customer_id}` : `name:${(bill.party_name ?? '').trim().toLowerCase()}`;
       const cars = itemListOf(bill.items);
       if (cars.length === 1) add(`${vendorKey}|${cars[0].toLowerCase()}`, Number(bill.amount));
@@ -129,11 +138,11 @@ function QuickPaymentForm() {
       }
     }
     return map;
-  }, [purchaseBills]);
+  }, [partyBills]);
   const carOptionsFor = (vendor: Customer | null, typed: string): SuggestOption[] => {
     const mine = vendor ? [...(carsByVendor.get(`id:${vendor.id}`) ?? []), ...(carsByVendor.get(`name:${vendor.name.trim().toLowerCase()}`) ?? [])] : [];
     const q = typed.trim().toLowerCase();
-    // Only this vendor's cars - never the rest of the stock. A vendor with none leaves the box a plain one.
+    // Only this party's cars - never the rest of the stock. One with none leaves the box a plain one.
     return [...new Set(mine)]
       .filter((name) => !q || name.toLowerCase().includes(q))
       .map((name) => ({ key: name, label: name }));
@@ -161,16 +170,26 @@ function QuickPaymentForm() {
     return map;
   }, [vendorLedger]);
   const dueOf = (vendorId: string) => round2(dueByVendor.get(vendorId) ?? 0);
+  // What a customer has paid on each car: their Received entries whose remark starts with it.
+  const { data: customerLedger } = useSupabaseQuery('customer_ledger_entries', {
+    filters: userId ? { owner_id: userId } : {},
+    all: true,
+    enabled: !!userId && withCar && !isOut,
+  });
+  // Money paid on each car - to a vendor (Paid) or by a customer (Received): a credit on that ledger.
   const carPaid = useMemo(() => {
     const map = new Map<string, number>();
-    for (const e of vendorLedger ?? []) {
+    const entries: { party: string; entry_type: string; note: string | null; amount: number }[] = isOut
+      ? (vendorLedger ?? []).map((e) => ({ party: e.vendor_id, entry_type: e.entry_type, note: e.note, amount: Number(e.amount) }))
+      : (customerLedger ?? []).map((e) => ({ party: e.customer_id, entry_type: e.entry_type, note: e.note, amount: Number(e.amount) }));
+    for (const e of entries) {
       if (e.entry_type !== 'credit' || !e.note) continue;
-      const key = `id:${e.vendor_id}|${e.note.split(' · ')[0].trim().toLowerCase()}`;
-      map.set(key, (map.get(key) ?? 0) + Number(e.amount));
+      const key = `id:${e.party}|${e.note.split(' · ')[0].trim().toLowerCase()}`;
+      map.set(key, (map.get(key) ?? 0) + e.amount);
     }
     return map;
-  }, [vendorLedger]);
-  /** What is left to pay on a car of this vendor; null when none of the vendor's bills has the car. */
+  }, [isOut, vendorLedger, customerLedger]);
+  /** What is left to pay on a car of this party; null when none of their bills has the car. */
   const itemDueOf = (vendor: Customer | null, car: string): number | null => {
     const c = car.trim().toLowerCase();
     if (!vendor || !c) return null;

@@ -4,6 +4,7 @@ import { View, Text } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
+import { useRentalWageSync } from '../../hooks/useRentalWageSync';
 import { useSupabaseQuery } from '../../hooks/useSupabase';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { BackButton, BookPage, BookStat, BookStats, BookTable, Pill, ToolbarButton, money, useBookLayout, useBookToolbar, type BookColumn } from './BookKit';
@@ -21,6 +22,8 @@ export function RentScreen({ basePath }: { basePath: string }) {
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const layout = useBookLayout();
   const userId = useAuthStore((state) => state.session?.user.id);
+  // Employees' daily rental wages up to today (see useRentalWageSync).
+  useRentalWageSync(userId);
   const profile = useAuthStore((state) => state.profile);
   const today = localTodayIso();
   const owner: Record<string, string> = userId ? { owner_id: userId } : {};
@@ -37,7 +40,12 @@ export function RentScreen({ basePath }: { basePath: string }) {
   const rows = useMemo(
     () =>
       [...(rentals ?? [])]
-        .map((r) => ({ r, ...rentalFigures(r, today), status: rentalStatus(r, today) }))
+        .map((r) => {
+          const f = rentalFigures(r, today);
+          // The employee's wages so far: the same days, at their daily wage (each day is on their ledger).
+          const wages = r.employee_id ? round2(f.days * Number(r.wage_per_day || 0)) : 0;
+          return { r, ...f, wages, status: rentalStatus(r, today) };
+        })
         .sort((a, b) => Number(!!a.r.returned_on) - Number(!!b.r.returned_on) || b.r.start_date.localeCompare(a.r.start_date)),
     [rentals, today]
   );
@@ -46,6 +54,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
     () => ({
       out: rows.filter((x) => !x.r.returned_on).length,
       total: round2(rows.reduce((s, x) => s + x.total, 0)),
+      wages: round2(rows.reduce((s, x) => s + x.wages, 0)),
     }),
     [rows]
   );
@@ -57,6 +66,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
     summary: [
       { label: 'Out now', value: String(stats.out) },
       { label: 'Rent', value: `NPR ${money(stats.total)}` },
+      ...(stats.wages > 0 ? [{ label: 'Employee wages', value: `NPR ${money(stats.wages)}` }] : []),
       { label: 'Rentals', value: String(rows.length) },
     ],
     sections: [
@@ -66,11 +76,13 @@ export function RentScreen({ basePath }: { basePath: string }) {
           { label: 'Item' },
           { label: 'Model' },
           { label: 'Rented to' },
+          { label: 'Employee' },
           { label: 'From' },
           { label: 'To' },
           { label: 'Days', align: 'right' },
           { label: 'Rate/day', align: 'right' },
           { label: 'Rent', align: 'right' },
+          { label: 'Wages', align: 'right' },
           { label: 'Status' },
         ],
         rows: rows.map((x, i) => {
@@ -80,15 +92,17 @@ export function RentScreen({ basePath }: { basePath: string }) {
             x.r.car,
             x.r.model ?? '',
             x.r.customer_name ?? '',
+            x.r.employee_id ? x.r.employee_name ?? '' : '',
             toBsHistoryLabel(x.r.start_date),
             to ? toBsHistoryLabel(to) : '',
             String(x.days),
             money(x.r.rate_per_day),
             money(x.total),
+            x.wages ? money(x.wages) : '',
             x.status.label,
           ];
         }),
-        footer: ['', '', '', '', '', '', '', 'Total', money(stats.total), ''],
+        footer: ['', '', '', '', '', '', '', '', 'Total', money(stats.total), stats.wages ? money(stats.wages) : '', ''],
         emptyText: 'No rentals yet.',
       },
     ],
@@ -144,6 +158,22 @@ export function RentScreen({ basePath }: { basePath: string }) {
     ? [
         { key: 'item', label: 'Item', render: (x) => itemCell(x, false) },
         { key: 'renter', label: 'Rented to', width: 190, render: (x) => (x.r.customer_name ? num(x.r.customer_name, '#111827') : num('—', '#D1D5DB')) },
+        {
+          key: 'employee',
+          label: 'Employee',
+          width: 170,
+          render: (x) =>
+            x.r.employee_id ? (
+              <View style={{ minWidth: 0, gap: 2 }}>
+                {num(x.r.employee_name ?? '—', '#111827')}
+                <Text className="text-[11px] text-gray-400" numberOfLines={1}>
+                  {`NPR ${money(x.r.wage_per_day)}/day · ${money(x.wages)} so far`}
+                </Text>
+              </View>
+            ) : (
+              num('—', '#D1D5DB')
+            ),
+        },
         { key: 'from', label: 'From', width: 120, render: (x) => dateCell(x.r.start_date) },
         { key: 'to', label: 'To', width: 120, render: (x) => dateCell(x.r.returned_on ?? x.r.end_date) },
         { key: 'days', label: 'Days', width: 64, align: 'right', render: (x) => num(String(x.days)) },
@@ -163,6 +193,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
       <BookStats>
         <BookStat label="Out now" value={String(stats.out)} color="#1D4ED8" />
         <BookStat label="Rent" value={`NPR ${money(stats.total)}`} color="#374151" />
+        {stats.wages > 0 && <BookStat label="Employee wages" value={`NPR ${money(stats.wages)}`} color="#B91C1C" />}
         <BookStat label="Rentals" value={String(rows.length)} color="#374151" />
       </BookStats>
 

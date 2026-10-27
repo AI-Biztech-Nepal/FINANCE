@@ -72,7 +72,7 @@ const META: Record<
     icon: keyof typeof Ionicons.glyphMap;
     who: string;
     empty: string;
-    /** The second tile: money that actually moved this year, opening its full report. */
+    /** The second tile: money that actually moved, from the first entry up to today, opening its full report. */
     cashLabel: string;
     cashPath: string;
     note: string;
@@ -249,7 +249,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
   );
   const shownTotal = shown.reduce((sum, h) => sum + h.balance, 0);
   const largest = shown.reduce((max, h) => Math.max(max, h.balance), 0);
-  const cash = useYearCashTotals(userId);
+  const cash = useYearCashTotals(userId, { tillDate: true });
   const cashTotal = direction === 'receive' ? cash.received : cash.paid;
 
   // The heading whose entries are open in a popup. A heading has nothing inside it to choose from, so
@@ -350,7 +350,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
         opened.length === 0
           ? [
               { label: meta.title, value: `NPR ${money(shownTotal)}` },
-              { label: `${meta.cashLabel} (this year)`, value: `NPR ${money(cashTotal)}` },
+              { label: `${meta.cashLabel} (till date)`, value: `NPR ${money(cashTotal)}` },
               { label: `${meta.who}s`, value: String(shown.length) },
             ]
           : undefined,
@@ -477,7 +477,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
       <BookStats>
         <BookStat label={meta.title} value={`NPR ${money(shownTotal)}`} color={meta.color} />
         <BookStat
-          label={`${meta.cashLabel} · This year`}
+          label={`${meta.cashLabel} · Till date`}
           value={`NPR ${money(cashTotal)}`}
           color={meta.color}
           onPress={() => router.push(`${basePath}${meta.cashPath}` as never)}

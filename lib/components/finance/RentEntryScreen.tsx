@@ -7,6 +7,8 @@ import { useIsWideWeb } from '../../hooks/useWideGrid';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useSupabaseDelete, useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate } from '../../hooks/useSupabase';
 import { usePhoneContacts } from '../../hooks/usePhoneContacts';
+import { usePartyTypes } from '../../hooks/usePartyTypes';
+import { isStaffLedgerType } from '../../hooks/usePartyDestination';
 import { useScreenHeader } from '../../hooks/useScreenHeader';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { KeyInput } from './KeyInput';
@@ -30,9 +32,10 @@ const CARD_SHADOW = '0 1px 2px rgba(16,24,40,0.04), 0 4px 12px rgba(16,24,40,0.0
 // The same list length the Purchase item box and the Paid page's name box show.
 const MAX_SUGGESTIONS = 6;
 const ADD_PARTY_KEY = '__add-party__';
+const ADD_EMPLOYEE_KEY = '__add-employee__';
 
 // The order Enter walks through the boxes; the last one moves on to Save.
-const FIELDS = ['start', 'item', 'model', 'rate', 'renter', 'note'] as const;
+const FIELDS = ['start', 'item', 'model', 'rate', 'renter', 'employee', 'wage', 'note'] as const;
 type FieldName = (typeof FIELDS)[number];
 
 /** A titled white card, as on the Paid page: a small icon and heading, then what the card holds. */
@@ -112,6 +115,11 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   // they still decide its days and status).
   const end = rental?.end_date ?? '';
   const returnedOn = rental?.returned_on ?? '';
+  // The employee who goes out with it (a driver) and their wage for each day it is out: the database puts each
+  // day's wage on their ledger (0015_rental_employee_wages.sql).
+  const [employeeId, setEmployeeId] = useState<string | null>(rental?.employee_id ?? null);
+  const [employeeName, setEmployeeName] = useState(rental?.employee_name ?? '');
+  const [wage, setWage] = useState(rental && Number(rental.wage_per_day) > 0 ? String(rental.wage_per_day) : '');
   const [note, setNote] = useState(rental?.note ?? '');
   const [saving, setSaving] = useState(false);
   const [focusedField, setFocusedField] = useState<FieldName | null>(null);
@@ -194,6 +202,27 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
     return options;
   }, [renterSuggestions, customerName, customerId, customers]);
 
+  // Employees: the ledgers typed Employee (or Staff). A new one is saved under that type.
+  const { types: partyTypes, nameById: partyTypeName } = usePartyTypes(userId);
+  const staffTypeId = partyTypes.find((t) => isStaffLedgerType(t.name))?.id ?? null;
+  const employees = useMemo(
+    () => (customers ?? []).filter((c) => c.party_type_id && isStaffLedgerType(partyTypeName.get(c.party_type_id))),
+    [customers, partyTypeName]
+  );
+  const employeeOptions = useMemo<SuggestOption[]>(() => {
+    const typed = employeeName.trim().toLowerCase();
+    const options: SuggestOption[] = employees
+      .filter((c) => !typed || c.name.toLowerCase().includes(typed))
+      .sort((a, b) => Number(b.name.toLowerCase().startsWith(typed)) - Number(a.name.toLowerCase().startsWith(typed)))
+      .slice(0, MAX_SUGGESTIONS)
+      .map((c) => ({ key: c.id, label: c.name, hint: c.phone ?? null }));
+    if (typed && staffTypeId && !(customers ?? []).some((c) => c.name.trim().toLowerCase() === typed)) {
+      options.push({ key: ADD_EMPLOYEE_KEY, label: `Add "${employeeName.trim()}" as new employee`, kind: 'add' });
+    }
+    return options;
+  }, [employees, employeeName, staffTypeId, customers]);
+  const wages = employeeName.trim() ? round2(figures.days * (Number(wage) || 0)) : 0;
+
   const modelByItem = useMemo(() => {
     const map = new Map<string, string>();
     for (const bill of purchaseBills ?? []) {
@@ -258,7 +287,27 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         }
       }
     }
-    if (via !== 'tab') focus('note');
+    if (via !== 'tab') focus('employee');
+  }
+
+  async function pickEmployee(opt: SuggestOption, via: 'enter' | 'tab' | 'click') {
+    if (opt.key === ADD_EMPLOYEE_KEY) {
+      if (!userId || !staffTypeId) return;
+      const finalName = await askNewParty({ name: employeeName.trim(), kind: 'customer' });
+      if (!finalName) return;
+      try {
+        const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null, party_type_id: staffTypeId });
+        setEmployeeName(created.name);
+        setEmployeeId(created.id);
+      } catch (err) {
+        showAlert('Could not add employee', getErrorMessage(err));
+        return;
+      }
+    } else {
+      setEmployeeName(opt.label);
+      setEmployeeId(opt.key);
+    }
+    if (via !== 'tab') focus('wage');
   }
 
   async function handleSave() {
@@ -271,6 +320,10 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       showAlert('Add the date', 'Pick the day it was rented.');
       return;
     }
+    if (employeeName.trim() && !employeeId) {
+      showAlert('Pick the employee', 'Choose the employee from the list (or add them as a new employee), so their wages reach their ledger.');
+      return;
+    }
     const ok = await confirmSave({
       title: `Save ${rental ? 'changes to this' : 'this'} rental?`,
       rows: [
@@ -279,6 +332,13 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         { label: 'Rented on', value: toBsHistoryLabel(start) },
         { label: 'Rate per day', value: `NPR ${formatMoney(Number(rate) || 0)}` },
         { label: 'Days', value: String(figures.days) },
+        ...(employeeId
+          ? [
+              { label: 'Employee', value: employeeName.trim() },
+              { label: 'Daily wage', value: `NPR ${formatMoney(Number(wage) || 0)}` },
+              { label: 'Wages to their ledger', value: `NPR ${formatMoney(wages)}` },
+            ]
+          : []),
       ],
       total: { label: 'Rent', value: `NPR ${formatMoney(figures.total)}`, color: MONEY.in.base },
     });
@@ -291,6 +351,9 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       customer_name: customerName.trim() || null,
       start_date: start,
       rate_per_day: round2(Number(rate) || 0),
+      employee_id: employeeId,
+      employee_name: employeeId ? employeeName.trim() : null,
+      wage_per_day: employeeId ? round2(Number(wage) || 0) : 0,
       note: note.trim() || null,
     };
     setSaving(true);
@@ -430,6 +493,46 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         </Box>
       </View>
 
+      <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14, zIndex: focusedField === 'employee' ? 30 : 0 }}>
+        <Box label="Employee (driver)" basis={260} grow={2} raised={focusedField === 'employee'}>
+          <SuggestInput
+            value={employeeName}
+            onChangeText={(v) => {
+              setEmployeeName(v);
+              setEmployeeId(null);
+            }}
+            options={focusedField === 'employee' ? employeeOptions : []}
+            onSelectOption={(opt, via) => void pickEmployee(opt, via)}
+            inputRef={setRef('employee')}
+            onFocus={() => setFocusedField('employee')}
+            onBlur={() => setFocusedField((f) => (f === 'employee' ? null : f))}
+            onKeyPress={enterKey('employee')}
+            placeholder={employees.length || staffTypeId ? 'Optional - who goes with it?' : 'Add a ledger type "Employee" first'}
+            accessibilityLabel="Employee"
+            accent={accent}
+            inputClassName={suggestClass}
+            inputStyle={suggestStyle('employee')}
+            adornmentWidth={54}
+            adornment={employeeId ? <Ionicons name="checkmark-circle" size={15} color={accent} /> : null}
+            compact
+          />
+        </Box>
+        <Box label="Daily wage (NPR)" basis={170}>
+          <KeyInput
+            value={wage}
+            onChangeText={setWage}
+            inputRef={setRef('wage')}
+            onEnter={() => afterField('wage')}
+            onRequestSave={handleSave}
+            accent={accent}
+            placeholder="0"
+            numeric
+            align="right"
+            accessibilityLabel="Daily wage"
+          />
+        </Box>
+      </View>
+
       <View className="mt-4">
         <Box label="Remarks" basis={300}>
           <KeyInput
@@ -491,6 +594,9 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         { label: 'Days', value: String(figures.days), color: '#111827' },
         { label: 'Rate per day', value: `NPR ${money(Number(rate) || 0)}`, color: '#111827' },
         { label: 'Rent', value: `NPR ${money(figures.total)}`, color: MONEY.in.base },
+        ...(employeeId && Number(wage) > 0
+          ? [{ label: `Wages · ${employeeName.trim()}`, value: `NPR ${money(wages)}`, color: MONEY.out.base }]
+          : []),
       ].map((f, i, all) => (
         <View key={f.label} className={`flex-row items-center justify-between py-2 ${i < all.length - 1 ? 'border-b border-gray-50' : ''}`}>
           <Text className="text-xs text-gray-500">{f.label}</Text>
