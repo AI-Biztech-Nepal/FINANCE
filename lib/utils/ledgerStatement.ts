@@ -36,6 +36,8 @@ export interface LedgerItem {
   createdAt: string;
   /** The remark written on it, when there is one. */
   note?: string | null;
+  /** On the customer ledger: entered by hand (money received, or given out) rather than posted by a bill. */
+  manual?: boolean;
 }
 
 /** Both ends optional: '' means no limit on that side. 'YYYY-MM-DD'. */

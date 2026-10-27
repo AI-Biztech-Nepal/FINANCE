@@ -157,6 +157,7 @@ function useLedgerItems(userId: string | undefined): {
         day: entryDay(e.entry_date, e.created_at),
         createdAt: e.created_at,
         note: noteOf(e),
+        manual: e.source === 'manual',
       });
     }
     for (const e of vendorEntries ?? []) {
@@ -611,6 +612,7 @@ function PartyLedgerPopup({
   items,
   referenceById,
   businessName,
+  vehicles,
   onOpenLedger,
   onClose,
 }: {
@@ -618,6 +620,8 @@ function PartyLedgerPopup({
   items: LedgerItem[];
   referenceById: Map<string, LedgerReference>;
   businessName: string;
+  /** A vehicle account reads the popup like the Ledger table: price, paid, received and what is left. */
+  vehicles?: boolean;
   onOpenLedger: () => void;
   onClose: () => void;
 }) {
@@ -635,6 +639,27 @@ function PartyLedgerPopup({
   const credit = lines.reduce((sum, l) => sum + l.credit, 0);
   const closing = debit - credit;
 
+  // What each line is, in the Ledger table's own words: the price billed, the money paid, the money received.
+  // (A journal voucher moves no money, so it is none of them; it still moves what is left to receive or pay.)
+  const moneyOf = (item: LedgerItem): 'billed' | 'paid' | 'received' | 'none' =>
+    journalOf(item.note)
+      ? 'none'
+      : item.side === 'customer'
+        ? item.entryType === 'credit'
+          ? 'received'
+          : item.manual
+            ? 'paid'
+            : 'billed'
+        : item.entryType === 'debit'
+          ? 'billed'
+          : 'paid';
+  const amountOfKind = (kind: 'billed' | 'paid' | 'received') =>
+    round2(lines.reduce((sum, l) => sum + (moneyOf(l.item) === kind ? l.item.amount : 0), 0));
+  const priceTotal = amountOfKind('billed');
+  const paidTotal = amountOfKind('paid');
+  const receivedTotal = amountOfKind('received');
+  const PRICE_COLOR = '#111827';
+
   const sideWord = (b: number) => (round2(b) > 0 ? ' Dr' : round2(b) < 0 ? ' Cr' : '');
   const balanceText = (b: number) => `${dash(Math.abs(b))}${sideWord(b)}`;
   const balanceColor = (b: number) => (round2(b) > 0 ? LEDGER_TONE.receivable.text : round2(b) < 0 ? LEDGER_TONE.payable.text : '#6B7280');
@@ -643,7 +668,9 @@ function PartyLedgerPopup({
       ? 'Journal voucher'
       : item.side === 'customer'
         ? item.entryType === 'debit'
-          ? 'Billed'
+          ? vehicles && item.manual
+            ? 'Paid out'
+            : 'Billed'
           : 'Received'
         : item.entryType === 'debit'
           ? 'Bought on credit'
@@ -653,6 +680,51 @@ function PartyLedgerPopup({
     const journal = journalOf(item.note);
     const note = journal ? [journal.code, journal.narration].filter(Boolean).join(' · ') : item.note;
     return [ref ? `${ref.kind} ${ref.no}` : null, note].filter(Boolean).join(' · ');
+  };
+
+  const buildVehicleReport = (): PrintReport => {
+    const left = (b: number) => (round2(b) > 0 ? bookMoney(b) : '');
+    const owe = (b: number) => (round2(b) < 0 ? bookMoney(-b) : '');
+    return {
+      title: `Ledger - ${name}`,
+      businessName,
+      subtitle: [data.typeName, data.row.phone].filter(Boolean).join(' · ') || undefined,
+      printedOn: toBsHistoryLabel(localTodayIso()),
+      summary: [
+        { label: 'Balance (original price)', value: `NPR ${bookMoney(priceTotal)}` },
+        { label: 'Total paid', value: `NPR ${bookMoney(paidTotal)}` },
+        { label: 'Total received', value: `NPR ${bookMoney(receivedTotal)}` },
+        { label: round2(closing) < 0 ? 'Payable' : 'Receivable', value: `NPR ${bookMoney(Math.abs(closing))}` },
+        { label: 'Entries', value: String(lines.length) },
+      ],
+      sections: [
+        {
+          columns: [
+            { label: 'SN' },
+            { label: 'Date' },
+            { label: 'Details' },
+            { label: 'Balance', align: 'right' },
+            { label: 'Total paid', align: 'right' },
+            { label: 'Total received', align: 'right' },
+            { label: 'Receivable', align: 'right' },
+            { label: 'Payable', align: 'right' },
+          ],
+          rows: lines.map((l, i) => [
+            String(i + 1),
+            toBsHistoryLabel(l.item.day),
+            [kindOf(l.item), subOf(l.item)].filter(Boolean).join(' · '),
+            moneyOf(l.item) === 'billed' ? bookMoney(l.item.amount) : '',
+            moneyOf(l.item) === 'paid' ? bookMoney(l.item.amount) : '',
+            moneyOf(l.item) === 'received' ? bookMoney(l.item.amount) : '',
+            left(l.balance),
+            owe(l.balance),
+          ]),
+          footer: ['', '', 'Total', bookMoney(priceTotal), bookMoney(paidTotal), bookMoney(receivedTotal), left(closing), owe(closing)],
+          emptyText: 'No entries yet.',
+        },
+      ],
+      note: 'Balance is the original price: what was billed. Receivable and Payable are what is left to receive or pay after each line.',
+    };
   };
 
   const buildReport = (): PrintReport => ({
@@ -718,6 +790,68 @@ function PartyLedgerPopup({
     </Text>
   );
 
+  // A vehicle account's popup, in the Ledger table's own columns and colours: Balance (the price billed, black),
+  // Total paid (red), Total received (green), and what is left to receive (green) or pay (red) after the line.
+  const kindFigure = (l: Line, kind: 'billed' | 'paid' | 'received', color: string) => figure(moneyOf(l.item) === kind ? l.item.amount : 0, color);
+  const leftToReceive = (l: Line) => figure(round2(l.balance) > 0 ? l.balance : 0, LEDGER_TONE.receivable.text);
+  const leftToPay = (l: Line) => figure(round2(l.balance) < 0 ? -l.balance : 0, LEDGER_TONE.payable.text);
+  const vehicleColumns: BookColumn<Line>[] = roomy
+    ? [
+        { key: 'sn', label: 'SN', width: 52, render: (_l, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
+        { key: 'date', label: 'Date', width: 120, render: (l) => <Text className="text-[12.5px] text-gray-600">{toBsHistoryLabel(l.item.day)}</Text> },
+        { key: 'details', label: 'Details', render: (l) => detailsCell(l, false) },
+        { key: 'price', label: 'Balance', width: 118, align: 'right', render: (l) => kindFigure(l, 'billed', PRICE_COLOR) },
+        { key: 'paid', label: 'Total paid', width: 112, align: 'right', render: (l) => kindFigure(l, 'paid', LEDGER_TONE.payable.text) },
+        { key: 'received', label: 'Total received', width: 124, align: 'right', render: (l) => kindFigure(l, 'received', LEDGER_TONE.receivable.text) },
+        { key: 'receivable', label: 'Receivable', width: 108, align: 'right', render: leftToReceive },
+        { key: 'payable', label: 'Payable', width: 104, align: 'right', render: leftToPay },
+      ]
+    : [
+        { key: 'details', label: 'Details', render: (l) => detailsCell(l, true) },
+        {
+          key: 'amount',
+          label: 'Amount',
+          width: 100,
+          align: 'right',
+          render: (l) =>
+            moneyOf(l.item) === 'paid'
+              ? figure(l.item.amount, LEDGER_TONE.payable.text)
+              : moneyOf(l.item) === 'received'
+                ? figure(l.item.amount, LEDGER_TONE.receivable.text)
+                : figure(moneyOf(l.item) === 'billed' ? l.item.amount : 0, PRICE_COLOR),
+        },
+        {
+          key: 'left',
+          label: 'Left',
+          width: 100,
+          align: 'right',
+          render: (l) => (round2(l.balance) < 0 ? leftToPay(l) : leftToReceive(l)),
+        },
+      ];
+  const vehicleFooter = roomy
+    ? {
+        price: <Text className="text-[13px] font-extrabold" style={{ color: PRICE_COLOR }}>{bookMoney(priceTotal)}</Text>,
+        paid: <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.payable.text }}>{bookMoney(paidTotal)}</Text>,
+        received: <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.receivable.text }}>{bookMoney(receivedTotal)}</Text>,
+        receivable: (
+          <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.receivable.text }}>
+            {round2(closing) > 0 ? bookMoney(closing) : '—'}
+          </Text>
+        ),
+        payable: (
+          <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.payable.text }}>
+            {round2(closing) < 0 ? bookMoney(-closing) : '—'}
+          </Text>
+        ),
+      }
+    : {
+        left: (
+          <Text className="text-[13px] font-extrabold" style={{ color: round2(closing) < 0 ? LEDGER_TONE.payable.text : LEDGER_TONE.receivable.text }}>
+            {bookMoney(Math.abs(closing))}
+          </Text>
+        ),
+      };
+
   const columns: BookColumn<Line>[] = roomy
     ? [
         { key: 'sn', label: 'SN', width: 52, render: (_l, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
@@ -750,12 +884,12 @@ function PartyLedgerPopup({
     <PopupCard
       title={name}
       onClose={onClose}
-      maxWidth={920}
+      maxWidth={vehicles ? 1120 : 920}
       closeOnOutside
       headerRight={
         <>
-          <PrintButton onPress={() => void printReportDocument(reportHtml(buildReport()))} />
-          <ExcelButton onPress={() => void exportReportDocument(buildReport())} />
+          <PrintButton onPress={() => void printReportDocument(reportHtml(vehicles ? buildVehicleReport() : buildReport()))} />
+          <ExcelButton onPress={() => void exportReportDocument(vehicles ? buildVehicleReport() : buildReport())} />
           <Pressable
             onPress={onOpenLedger}
             accessibilityRole="button"
@@ -776,10 +910,10 @@ function PartyLedgerPopup({
       ) : (
         <BookTable
           stickyHeader
-          columns={columns}
+          columns={vehicles ? vehicleColumns : columns}
           rows={lines}
           rowKey={(l) => l.item.id}
-          footer={{ label: `${lines.length} ${lines.length === 1 ? 'entry' : 'entries'} · Total`, cells: footerCells }}
+          footer={{ label: `${lines.length} ${lines.length === 1 ? 'entry' : 'entries'} · Total`, cells: vehicles ? vehicleFooter : footerCells }}
         />
       )}
     </PopupCard>
@@ -1269,6 +1403,7 @@ function LedgerList({ basePath }: { basePath: string }) {
         items={itemsByParty.get(viewing.row.id) ?? []}
         referenceById={referenceById}
         businessName={profile?.business_name ?? profile?.full_name ?? ''}
+        vehicles={vehicles}
         onOpenLedger={() => {
           const id = viewing.row.id;
           setViewing(null);
