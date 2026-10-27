@@ -1521,6 +1521,28 @@ function LedgerList({ basePath }: { basePath: string }) {
       { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (d) => <PartyBalance position={positionOf(d)} compact /> },
     ];
 
+    // The listed parties added up, column by column, in the line under the table - which stays in view while
+    // the table scrolls (see `maxRows` below).
+    const sum = (pick: (d: PartyRowData) => number) => round2(sortedRows.reduce((total, d) => total + pick(d), 0));
+    const total = (value: number, color: string) =>
+      value ? (
+        <Text className="text-[12.5px] font-extrabold" style={{ color }}>
+          {bookMoney(value)}
+        </Text>
+      ) : (
+        <Text className="text-[12.5px] text-gray-300">—</Text>
+      );
+    const tableFooter = {
+      label: `${sortedRows.length} ${sortedRows.length === 1 ? 'party' : 'parties'} · Total`,
+      cells: {
+        totalPaid: total(sum((d) => d.totalPaid), LEDGER_TONE.payable.text),
+        totalReceived: total(sum((d) => d.totalReceived), LEDGER_TONE.receivable.text),
+        receivable: total(sum((d) => (d.status === 'receivable' ? d.balance : 0)), LEDGER_TONE.receivable.text),
+        payable: total(sum((d) => (d.status === 'payable' ? -d.balance : 0)), LEDGER_TONE.payable.text),
+        balance: <PartyBalance position={footerPosition} compact />,
+      },
+    };
+
     return (
       <BookPage wide={layout.wide}>
         {toolbar}
@@ -1532,10 +1554,16 @@ function LedgerList({ basePath }: { basePath: string }) {
         {filtered.length === 0 && (narrowed || merged.length === 0) ? (
           emptyState
         ) : (
-          <View style={{ gap: 10 }}>
-            <BookTable columns={columns} rows={sortedRows} rowKey={(d) => `${d.row.kind}-${d.row.id}`} onRowPress={open} stickyHeader />
-            {flatFooter}
-          </View>
+          // Twenty parties show, then the table scrolls inside itself, its header and totals kept in view.
+          <BookTable
+            columns={columns}
+            rows={sortedRows}
+            rowKey={(d) => `${d.row.kind}-${d.row.id}`}
+            onRowPress={open}
+            stickyHeader
+            maxRows={20}
+            footer={tableFooter}
+          />
         )}
 
         {typeMenu}
