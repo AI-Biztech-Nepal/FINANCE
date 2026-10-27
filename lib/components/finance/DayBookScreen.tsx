@@ -26,7 +26,7 @@ import { useReportActions } from './PrintButton';
 import type { PrintReport } from '../../utils/printReport';
 import { TransactionDetailModal } from './TransactionsScreen';
 import { TransferForm } from './BankBalancesScreen';
-import { PopupCard } from './FormKit';
+import { Field, FieldRow, FormActions, PopupCard } from './FormKit';
 import { journalOf } from '../../utils/journalVoucher';
 import { supabase } from '../../supabase';
 import { tidyName } from '../../utils/nameCaps';
@@ -410,7 +410,7 @@ function EditInput(props: ComponentProps<typeof TextInput>) {
   return (
     <TextInput
       {...props}
-      className={`rounded-lg border px-4 py-3 text-base ${props.editable === false ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
+      className={`rounded-lg border px-3 py-2.5 text-sm ${props.editable === false ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
     />
   );
 }
@@ -538,196 +538,128 @@ function EditEntryModal({ target, onClose }: { target: EditTarget | null; onClos
     }
   }
 
+  // A popup like the others (the ledger's entry editor): the fields side by side, Remove / Cancel / Save under them.
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <Pressable className="flex-1 items-center justify-center bg-black/50 px-4" onPress={onClose}>
-          <Pressable onPress={() => {}} className="w-full overflow-hidden rounded-2xl bg-white" style={{ maxWidth: 460, maxHeight: '90%' }}>
-            <View className="flex-row items-center gap-2.5 px-5 py-4" style={{ backgroundColor: '#1D4ED8' }}>
-              <View className="flex-1">
-                <Text className="text-[16px] font-bold text-white">{locked ? 'Entry details' : 'Edit entry'}</Text>
-                <Text className="mt-0.5 text-xs text-white/85">{target.title}</Text>
-              </View>
-              <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
-                <Ionicons name="close" size={22} color="#FFFFFF" />
+    <>
+      <PopupCard title={`${locked ? 'Entry details' : 'Edit entry'} · ${target.title}`} onClose={onClose} maxWidth={1000}>
+        {locked && (
+          <View className="flex-row items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+            <Ionicons name="lock-closed-outline" size={16} color="#B45309" />
+            <Text className="flex-1 text-xs leading-[17px] text-amber-900">{target.lockedReason}</Text>
+          </View>
+        )}
+
+        {/* Same order and the same field blocks as the Payment In form, so an entry reads the way it was written. */}
+        <FieldRow>
+          <Field label="Date" basis={190}>
+            {locked ? <EditInput value={form.date} editable={false} /> : <DateField value={form.date} onChange={(v) => v && set('date')(v)} />}
+          </Field>
+          {(target.fields.receiptNo || target.fields.billNo) && (
+            <Field label={target.numberLabel ?? 'Receipt No.'} basis={150}>
+              <EditInput
+                value={target.fields.billNo ? form.billNo : form.receiptNo}
+                onChangeText={target.fields.billNo ? set('billNo') : set('receiptNo')}
+                placeholder="Optional"
+                editable={!locked}
+              />
+            </Field>
+          )}
+          {target.fields.method && (
+            <Field label="Payment method" basis={220}>
+              <Pressable
+                onPress={() => !locked && setShowAccountPicker(true)}
+                disabled={locked}
+                className={`flex-row items-center justify-between rounded-lg border px-3 py-2.5 ${locked ? 'border-gray-200 bg-gray-50' : 'border-gray-300 bg-white'}`}
+              >
+                <View className="flex-row items-center gap-2">
+                  <Ionicons name={form.bankAccountId ? 'business-outline' : 'cash-outline'} size={16} color="#6B7280" />
+                  <Text className={`text-sm ${locked ? 'text-gray-500' : 'text-gray-900'}`}>{accountName}</Text>
+                </View>
+                {!locked && <Ionicons name="chevron-down" size={16} color="#9CA3AF" />}
               </Pressable>
-            </View>
+            </Field>
+          )}
+        </FieldRow>
 
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20 }}>
-              {locked && (
-                <View className="mb-4 flex-row items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-                  <Ionicons name="lock-closed-outline" size={16} color="#B45309" />
-                  <Text className="flex-1 text-xs leading-[17px] text-amber-900">{target.lockedReason}</Text>
-                </View>
-              )}
-
-              {/* Same order and the same field blocks as the Payment In
-                  form, so an entry reads the way it was written. */}
-              <FormSection icon="document-text-outline" title="Details" first>
-                <View className="flex-row" style={{ gap: 10 }}>
-                  <View className="flex-1">
-                    <Text className="mb-1 text-xs font-medium text-gray-500">Date</Text>
-                    {locked ? (
-                      <EditInput value={form.date} editable={false} />
-                    ) : (
-                      <DateField value={form.date} onChange={(v) => v && set('date')(v)} />
-                    )}
-                  </View>
-                  {(target.fields.receiptNo || target.fields.billNo) && (
-                    <View className="flex-1">
-                      <Text className="mb-1 text-xs font-medium text-gray-500">{target.numberLabel ?? 'Receipt No.'}</Text>
-                      <EditInput
-                        value={target.fields.billNo ? form.billNo : form.receiptNo}
-                        onChangeText={target.fields.billNo ? set('billNo') : set('receiptNo')}
-                        placeholder="Optional"
-                        editable={!locked}
-                      />
-                    </View>
-                  )}
-                </View>
-              </FormSection>
-
-              {target.fields.method && (
-                <FormSection icon="wallet-outline" title="Payment method">
+        {(target.fields.party || !!target.subtitleParty || (target.fields.direction && !locked)) && (
+          <FieldRow>
+            {target.fields.party && (
+              <Field label={target.partyLabel ?? 'Customer'} basis={260}>
+                <EditInput value={form.party} onChangeText={set('party')} placeholder="Name" editable={!locked} />
+              </Field>
+            )}
+            {!target.fields.party && !!target.subtitleParty && (
+              <Field label={target.partyLabel ?? 'Customer'} basis={260}>
+                {target.fields.reassign && !locked ? (
                   <Pressable
-                    onPress={() => !locked && setShowAccountPicker(true)}
-                    disabled={locked}
-                    className={`flex-row items-center justify-between rounded-lg border px-3 py-2.5 ${locked ? 'border-gray-200 bg-gray-50' : 'border-gray-300 bg-white'}`}
+                    onPress={() => setShowPartyPicker(true)}
+                    className="flex-row items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2.5"
+                    accessibilityRole="button"
+                    accessibilityLabel="Change the name on this entry"
                   >
-                    <View className="flex-row items-center gap-2">
-                      <Ionicons name={form.bankAccountId ? 'business-outline' : 'cash-outline'} size={16} color="#6B7280" />
-                      <Text className={`text-sm ${locked ? 'text-gray-500' : 'text-gray-900'}`}>{accountName}</Text>
-                    </View>
-                    {!locked && <Ionicons name="chevron-down" size={16} color="#9CA3AF" />}
-                  </Pressable>
-                </FormSection>
-              )}
-
-              {target.fields.party && (
-                <FormSection icon="person-outline" title={target.partyLabel ?? 'Customer'}>
-                  <EditInput value={form.party} onChangeText={set('party')} placeholder="Name" editable={!locked} />
-                </FormSection>
-              )}
-
-              {!target.fields.party && !!target.subtitleParty && (
-                <FormSection icon="person-outline" title={target.partyLabel ?? 'Customer'}>
-                  {target.fields.reassign && !locked ? (
-                    <Pressable
-                      onPress={() => setShowPartyPicker(true)}
-                      className="flex-row items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2.5"
-                      accessibilityRole="button"
-                      accessibilityLabel="Change the name on this entry"
-                    >
-                      <Text className="flex-1 text-sm text-gray-900" numberOfLines={1}>
-                        {(allParties ?? []).find((c) => c.id === form.partyId)?.name ?? target.subtitleParty}
-                      </Text>
-                      <Text className="text-xs font-semibold text-blue-700">Change</Text>
-                    </Pressable>
-                  ) : (
-                    <EditInput value={target.subtitleParty} editable={false} />
-                  )}
-                </FormSection>
-              )}
-
-              {target.fields.direction && !locked && (
-                <FormSection icon="swap-horizontal-outline" title="Entry type">
-                  <View className="flex-row" style={{ gap: 8 }}>
-                    {([
-                      { key: 'credit', label: 'Received', color: '#047857' },
-                      { key: 'debit', label: 'Paid', color: '#B91C1C' },
-                    ] as const).map((o) => {
-                      const on = form.entryType === o.key;
-                      return (
-                        <Pressable
-                          key={o.key}
-                          onPress={() => setForm((f) => (f ? { ...f, entryType: o.key } : f))}
-                          className="flex-1 items-center rounded-lg border py-2.5"
-                          style={{ borderColor: on ? o.color : '#D1D5DB', backgroundColor: on ? `${o.color}14` : '#FFFFFF' }}
-                          accessibilityState={{ selected: on }}
-                        >
-                          <Text className="text-sm font-semibold" style={{ color: on ? o.color : '#6B7280' }}>
-                            {o.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </FormSection>
-              )}
-
-              <FormSection icon="cash-outline" title="Amount">
-                <View className="flex-row" style={{ gap: 10 }}>
-                  <View className="flex-1">
-                    <Text className="mb-1 text-xs font-medium text-gray-500">Amount (NPR)</Text>
-                    <EditInput
-                      value={form.amount}
-                      onChangeText={(v) => set('amount')(decimalInput(v))}
-                      keyboardType="decimal-pad"
-                      editable={!locked}
-                    />
-                  </View>
-                  {target.fields.discount && (
-                    <View className="flex-1">
-                      <Text className="mb-1 text-xs font-medium text-gray-500">Discount (NPR)</Text>
-                      <EditInput
-                        value={form.discount}
-                        onChangeText={(v) => set('discount')(decimalInput(v))}
-                        keyboardType="decimal-pad"
-                        editable={!locked}
-                      />
-                    </View>
-                  )}
-                </View>
-                <View className="mt-3">
-                  <Text className="mb-1 text-xs font-medium text-gray-500">Remarks</Text>
-                  <EditInput
-                    value={form.note}
-                    onChangeText={set('note')}
-                    placeholder="Optional"
-                    multiline
-                    style={{ minHeight: 70, textAlignVertical: 'top' }}
-                    editable={!locked}
-                  />
-                </View>
-              </FormSection>
-
-              {!locked && (
-                <>
-                  <Pressable
-                    onPress={handleSave}
-                    disabled={busy}
-                    className="h-12 flex-row items-center justify-center gap-2 rounded-xl disabled:opacity-50"
-                    style={{ backgroundColor: '#1D4ED8' }}
-                  >
-                    <Ionicons name="checkmark" size={18} color="#fff" />
-                    <Text className="text-base font-semibold text-white">{busy ? 'Saving...' : 'Save changes'}</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleDelete}
-                    disabled={busy}
-                    className="mt-3 flex-row items-center justify-center gap-2 rounded-xl py-3 disabled:opacity-50"
-                    style={
-                      confirmingDelete
-                        ? { backgroundColor: '#DC2626' }
-                        : { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' }
-                    }
-                  >
-                    <Ionicons name="trash-outline" size={17} color={confirmingDelete ? '#FFFFFF' : '#DC2626'} />
-                    <Text className={`text-sm font-semibold ${confirmingDelete ? 'text-white' : 'text-red-600'}`}>
-                      {confirmingDelete ? 'Tap again to delete for good' : 'Delete entry'}
+                    <Text className="flex-1 text-sm text-gray-900" numberOfLines={1}>
+                      {(allParties ?? []).find((c) => c.id === form.partyId)?.name ?? target.subtitleParty}
                     </Text>
+                    <Text className="text-xs font-semibold text-blue-700">Change</Text>
                   </Pressable>
-                  {confirmingDelete && (
-                    <Text className="mt-2 text-center text-xs text-gray-500">
-                      It disappears from the Day Book and from every total that counted it.
-                    </Text>
-                  )}
-                </>
-              )}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
+                ) : (
+                  <EditInput value={target.subtitleParty} editable={false} />
+                )}
+              </Field>
+            )}
+            {target.fields.direction && !locked && (
+              <Field label="Entry type" basis={240}>
+                <View className="flex-row" style={{ gap: 8 }}>
+                  {([
+                    { key: 'credit', label: 'Received', color: '#047857' },
+                    { key: 'debit', label: 'Paid', color: '#B91C1C' },
+                  ] as const).map((o) => {
+                    const on = form.entryType === o.key;
+                    return (
+                      <Pressable
+                        key={o.key}
+                        onPress={() => setForm((f) => (f ? { ...f, entryType: o.key } : f))}
+                        className="flex-1 items-center rounded-lg border py-2.5"
+                        style={{ borderColor: on ? o.color : '#D1D5DB', backgroundColor: on ? `${o.color}14` : '#FFFFFF' }}
+                        accessibilityState={{ selected: on }}
+                      >
+                        <Text className="text-sm font-semibold" style={{ color: on ? o.color : '#6B7280' }}>
+                          {o.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </Field>
+            )}
+          </FieldRow>
+        )}
+
+        <FieldRow>
+          <Field label="Amount (NPR)" basis={170}>
+            <EditInput value={form.amount} onChangeText={(v) => set('amount')(decimalInput(v))} keyboardType="decimal-pad" editable={!locked} />
+          </Field>
+          {target.fields.discount && (
+            <Field label="Discount (NPR)" basis={170}>
+              <EditInput value={form.discount} onChangeText={(v) => set('discount')(decimalInput(v))} keyboardType="decimal-pad" editable={!locked} />
+            </Field>
+          )}
+          <Field label="Remarks" basis={280}>
+            <EditInput value={form.note} onChangeText={set('note')} placeholder="Optional" multiline style={{ minHeight: 44, textAlignVertical: 'top' }} editable={!locked} />
+          </Field>
+        </FieldRow>
+
+        {!locked && (
+          <>
+            <FormActions onCancel={onClose} onSave={handleSave} saving={busy} saveLabel="Save changes" onRemove={handleDelete} />
+            {confirmingDelete && (
+              <Text className="text-center text-xs text-gray-500">
+                Press Remove again to delete this entry for good. It disappears from the Day Book and from every total that counted it.
+              </Text>
+            )}
+          </>
+        )}
+      </PopupCard>
 
       <ContactPickerModal
         visible={showPartyPicker}
@@ -754,7 +686,7 @@ function EditEntryModal({ target, onClose }: { target: EditTarget | null; onClos
         onRename={bankAccounts.rename}
         onDelete={bankAccounts.remove}
       />
-    </Modal>
+    </>
   );
 }
 
