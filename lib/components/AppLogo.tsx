@@ -1,14 +1,15 @@
 // lib/components/AppLogo.tsx
-import { View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'react-native';
 
-// Placeholder mark until the store has its own logo art.
+/** The Finance logo (the green F with the bar chart), kept in a square `size` box. Also the app icon on the phone
+ * (assets/icon.png and the android-icon-*.png layers are made from the same artwork). */
 export function AppLogo({ size = 44 }: { size?: number }) {
   return (
-    <View
-      style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center' }}
-    >
-      <Ionicons name="storefront" size={size * 0.5} color="#fff" />
-    </View>
+    <Image
+      source={require('../../assets/logos/finance-logo.png')}
+      style={{ width: size, height: size }}
+      resizeMode="contain"
+      accessibilityLabel="Finance"
+    />
   );
 }
