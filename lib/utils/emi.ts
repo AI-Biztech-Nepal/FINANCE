@@ -26,6 +26,30 @@ export function addMonths(iso: string, n: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+type Billed = { total: number; bill: BusinessTransaction; line: BillItem; date: string };
+type PlanRow = Omit<EmiPlan, 'id' | 'owner_id' | 'created_at' | 'updated_at'>;
+
+/** Each item's lines on the `type` bills (Purchase or Sale), by name: what they come to, and the latest bill's party, line and date. */
+function billedBy(bills: BusinessTransaction[], type: 'purchase' | 'sale'): Map<string, Billed> {
+  const found = new Map<string, Billed>();
+  for (const bill of bills) {
+    if (bill.type !== type) continue;
+    const date = (bill.bill_date ?? bill.created_at).slice(0, 10);
+    for (const line of bill.items ?? []) {
+      const k = norm(line.description);
+      if (!k) continue;
+      const amount = Number(line.amount) > 0 ? Number(line.amount) : (Number(line.qty) || 0) * (Number(line.rate) || 0);
+      const seen = found.get(k);
+      if (!seen) found.set(k, { total: amount, bill, line, date });
+      else {
+        seen.total += amount;
+        if (date > seen.date) Object.assign(seen, { bill, line, date });
+      }
+    }
+  }
+  return found;
+}
+
 /**
  * The EMI plans for every vehicle bought - in stock or since sold, none of them is paid up - one per item, on
  * instalments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to; with no bill,
@@ -41,26 +65,10 @@ export function emiStockPlans(input: {
   today: string;
   months: number;
   rate: number;
-}): { rows: Omit<EmiPlan, 'id' | 'owner_id' | 'created_at' | 'updated_at'>[]; noPrice: string[] } {
+}): { rows: PlanRow[]; noPrice: string[] } {
   const have = new Set(input.plans.filter((p) => emiDirection(p) === 'purchase').map((p) => norm(p.car)));
-  // Each item's Purchase bill lines: what they come to, and the latest bill's vendor, model and date.
-  const found = new Map<string, { total: number; bill: BusinessTransaction; line: BillItem; date: string }>();
-  for (const bill of input.bills) {
-    if (bill.type !== 'purchase') continue;
-    const date = (bill.bill_date ?? bill.created_at).slice(0, 10);
-    for (const line of bill.items ?? []) {
-      const k = norm(line.description);
-      if (!k) continue;
-      const amount = Number(line.amount) > 0 ? Number(line.amount) : (Number(line.qty) || 0) * (Number(line.rate) || 0);
-      const seen = found.get(k);
-      if (!seen) found.set(k, { total: amount, bill, line, date });
-      else {
-        seen.total += amount;
-        if (date > seen.date) Object.assign(seen, { bill, line, date });
-      }
-    }
-  }
-  const rows: Omit<EmiPlan, 'id' | 'owner_id' | 'created_at' | 'updated_at'>[] = [];
+  const found = billedBy(input.bills, 'purchase');
+  const rows: PlanRow[] = [];
   const noPrice: string[] = [];
   for (const p of input.products) {
     if (p.is_active === false) continue;
@@ -92,6 +100,50 @@ export function emiStockPlans(input: {
     });
   }
   return { rows, noPrice };
+}
+
+/**
+ * The other side of the same vehicles: each one already sold (it is on a Sale bill) is a plan for the customer to pay
+ * us - the price its Sale bills come to, `months` instalments with `rate`% a month flat, the first one a month after
+ * the sale, the model from the vehicle's Purchase bill. What the customer already paid is not taken off here: the plan
+ * reads it from their Received entries naming the vehicle. A vehicle that already has a sale plan is left out.
+ */
+export function emiSoldPlans(input: {
+  products: Product[];
+  bills: BusinessTransaction[];
+  plans: Pick<EmiPlan, 'car' | 'direction'>[];
+  months: number;
+  rate: number;
+}): { rows: PlanRow[] } {
+  const have = new Set(input.plans.filter((p) => emiDirection(p) === 'sale').map((p) => norm(p.car)));
+  const sold = billedBy(input.bills, 'sale');
+  const bought = billedBy(input.bills, 'purchase');
+  const rows: PlanRow[] = [];
+  for (const p of input.products) {
+    if (p.is_active === false) continue;
+    const k = norm(p.name);
+    const sale = sold.get(k);
+    if (!k || have.has(k) || !sale || !(sale.total > 0)) continue;
+    have.add(k);
+    const price = round2(sale.total);
+    rows.push({
+      direction: 'sale',
+      car: p.name,
+      model: bought.get(k)?.line.model?.trim() || null,
+      customer_id: sale.bill.customer_id ?? null,
+      customer_name: sale.bill.party_name ?? null,
+      sale_price: price,
+      down_payment: 0,
+      installment: flatInstallment(price, input.months, input.rate),
+      months: input.months,
+      interest_rate: input.rate,
+      first_due: addMonths(sale.date, 1),
+      product_id: p.id,
+      note: null,
+      closed_on: null,
+    });
+  }
+  return { rows };
 }
 
 /**

@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { useSupabaseInsert, useSupabaseQuery } from '../../hooks/useSupabase';
 import { BookStat, BookStats, BookTable, Pill, money, type BookColumn } from './BookKit';
 import { useConfirmSave } from './ConfirmSave';
-import { EMI_STOCK_MONTHS, EMI_STOCK_RATE, emiDirection, emiFigures, emiStockPlans } from '../../utils/emi';
+import { EMI_STOCK_MONTHS, EMI_STOCK_RATE, emiDirection, emiFigures, emiSoldPlans, emiStockPlans } from '../../utils/emi';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import { journalOf } from '../../utils/journalVoucher';
@@ -23,7 +23,7 @@ const WORDS: Record<Direction, { tab: string; party: string; price: string; paid
     party: 'Customer',
     price: 'Sale price',
     paid: 'Received',
-    none: 'No EMI sales yet. Add one with New EMI.',
+    none: 'No EMI sales yet. Add one with New EMI, or add all your sold vehicles above.',
     note: 'Received is what the customer paid for the vehicle on the Received page (pick the vehicle in Item). The down payment is due on the sale; each instalment on its day. The sale itself is its Sale bill.',
   },
   purchase: {
@@ -48,8 +48,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   const { data: plans, error } = useSupabaseQuery('emi_plans', { filters: owner, orderBy: { column: 'first_due', ascending: false }, all: true, enabled: !!userId });
   const { data: received } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId });
   const { data: paidOut } = useSupabaseQuery('vendor_ledger_entries', { filters: owner, all: true, enabled: !!userId });
-  const { data: products } = useSupabaseQuery('products', { filters: owner, all: true, enabled: !!userId && dir === 'purchase' });
-  const { data: bills } = useSupabaseQuery('business_transactions', { filters: { ...owner, type: 'purchase' }, all: true, enabled: !!userId && dir === 'purchase' });
+  const { data: products } = useSupabaseQuery('products', { filters: owner, all: true, enabled: !!userId });
+  const { data: bills } = useSupabaseQuery('business_transactions', { filters: owner, all: true, enabled: !!userId });
   const createPlan = useSupabaseInsert('emi_plans');
   const { confirm, dialog: confirmDialog } = useConfirmSave();
   const [adding, setAdding] = useState(false);
@@ -76,32 +76,33 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   const sum = (f: (r: Row) => number) => round2(rows.reduce((s, r) => s + f(r), 0));
   const countOf = (d: Direction) => (plans ?? []).filter((p) => emiDirection(p) === d).length;
 
-  // The stock on the shelf that is not in EMI yet.
-  const stock = useMemo(
-    () => (dir === 'purchase' ? emiStockPlans({ products: products ?? [], bills: bills ?? [], plans: plans ?? [], today, months: EMI_STOCK_MONTHS, rate: EMI_STOCK_RATE }) : null),
-    [dir, products, bills, plans, today]
-  );
+  // The vehicles not in EMI yet on this side: every vehicle bought (we pay its vendor), or every one already sold
+  // (the customer pays us).
+  const batch = useMemo(() => {
+    const input = { products: products ?? [], bills: bills ?? [], plans: plans ?? [], months: EMI_STOCK_MONTHS, rate: EMI_STOCK_RATE };
+    return dir === 'purchase' ? emiStockPlans({ ...input, today }) : { ...emiSoldPlans(input), noPrice: [] as string[] };
+  }, [dir, products, bills, plans, today]);
 
-  async function addStock() {
-    if (!userId || !stock || adding || stock.rows.length === 0) return;
-    const n = stock.rows.length;
-    const price = round2(stock.rows.reduce((s, r) => s + Number(r.sale_price), 0));
-    const toPay = round2(stock.rows.reduce((s, r) => s + Number(r.down_payment) + Number(r.installment) * Number(r.months), 0));
+  async function addAll() {
+    if (!userId || adding || batch.rows.length === 0) return;
+    const n = batch.rows.length;
+    const price = round2(batch.rows.reduce((s, r) => s + Number(r.sale_price), 0));
+    const total = round2(batch.rows.reduce((s, r) => s + Number(r.down_payment) + Number(r.installment) * Number(r.months), 0));
     const ok = await confirm({
-      title: `Add ${n} ${n === 1 ? 'vehicle' : 'vehicles'} to EMI?`,
+      title: `Add ${n} ${dir === 'purchase' ? (n === 1 ? 'vehicle' : 'vehicles') : n === 1 ? 'sold vehicle' : 'sold vehicles'} to EMI?`,
       rows: [
-        { label: 'Items', value: String(n) },
-        { label: 'Purchase price', value: `NPR ${money(price)}` },
+        { label: 'Vehicles', value: String(n) },
+        { label: words.price, value: `NPR ${money(price)}` },
         { label: 'Plan', value: `${EMI_STOCK_MONTHS} months · ${EMI_STOCK_RATE}% a month, flat` },
-        ...(stock.noPrice.length ? [{ label: 'Left out (no purchase price)', value: String(stock.noPrice.length) }] : []),
+        ...(batch.noPrice.length ? [{ label: 'Left out (no purchase price)', value: String(batch.noPrice.length) }] : []),
       ],
-      total: { label: 'To pay with interest', value: `NPR ${money(toPay)}`, color: '#B91C1C' },
+      total: { label: dir === 'purchase' ? 'To pay with interest' : 'To collect with interest', value: `NPR ${money(total)}`, color: dir === 'purchase' ? '#B91C1C' : '#047857' },
     });
     if (!ok) return;
     setAdding(true);
     let added = 0;
     try {
-      for (const row of stock.rows) {
+      for (const row of batch.rows) {
         await createPlan.mutateAsync({ owner_id: userId, ...row });
         added += 1;
       }
@@ -198,21 +199,25 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
         })}
       </View>
 
-      {/* The stock on the shelf, bought on EMI: one tap puts it all in. */}
-      {dir === 'purchase' && stock && (stock.rows.length > 0 || stock.noPrice.length > 0) && (
+      {/* Every vehicle not in EMI yet on this side: one tap puts them all in. */}
+      {(batch.rows.length > 0 || batch.noPrice.length > 0) && (
         <View className="flex-row flex-wrap items-center rounded-xl border border-gray-200 bg-white px-4 py-3" style={{ gap: 12 }}>
           <View style={{ flex: 1, minWidth: 220, gap: 2 }}>
             <Text className="text-[13px] font-semibold text-gray-900">
-              {stock.rows.length > 0 ? `${stock.rows.length} ${stock.rows.length === 1 ? 'vehicle is' : 'vehicles are'} not in EMI yet` : 'Nothing left to add'}
+              {batch.rows.length > 0
+                ? `${batch.rows.length} ${dir === 'purchase' ? (batch.rows.length === 1 ? 'vehicle is' : 'vehicles are') : batch.rows.length === 1 ? 'sold vehicle is' : 'sold vehicles are'} not in EMI yet`
+                : 'Nothing left to add'}
             </Text>
             <Text className="text-[12px] text-gray-500">
-              {`Every vehicle you bought, in stock or sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a month on the price (flat), from the vendor on its purchase bill. What you already paid is taken off in Remaining.`}
-              {stock.noPrice.length > 0 ? ` ${stock.noPrice.length} with no purchase price yet ${stock.noPrice.length === 1 ? 'is' : 'are'} left out.` : ''}
+              {dir === 'purchase'
+                ? `Every vehicle you bought, in stock or sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a month on the price (flat), from the vendor on its purchase bill. What you already paid is taken off in Remaining.`
+                : `Every vehicle you have sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a month on the sale price (flat), from the customer on its sale bill. What they already paid is taken off in Remaining.`}
+              {batch.noPrice.length > 0 ? ` ${batch.noPrice.length} with no purchase price yet ${batch.noPrice.length === 1 ? 'is' : 'are'} left out.` : ''}
             </Text>
           </View>
-          {stock.rows.length > 0 && (
-            <Pressable onPress={() => void addStock()} disabled={adding} className="rounded-lg bg-blue-600 px-4 py-2.5 disabled:opacity-50">
-              <Text className="text-[13px] font-bold text-white">{adding ? 'Adding…' : `Add ${stock.rows.length} to EMI`}</Text>
+          {batch.rows.length > 0 && (
+            <Pressable onPress={() => void addAll()} disabled={adding} className="rounded-lg bg-blue-600 px-4 py-2.5 disabled:opacity-50">
+              <Text className="text-[13px] font-bold text-white">{adding ? 'Adding…' : `Add ${batch.rows.length} to EMI`}</Text>
             </Pressable>
           )}
         </View>
