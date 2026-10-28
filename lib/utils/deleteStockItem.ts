@@ -40,7 +40,7 @@ export async function deleteStockItem(ownerId: string, name: string, productId: 
     const amount = round2(Number(bill.amount) - mine.reduce((s, i) => s + lineAmount(i), 0));
     const { error } =
       rest.length && amount > 0
-        ? await supabase.from('business_transactions').update({ items: rest, amount }).eq('id', bill.id)
+        ? await (supabase.from('business_transactions') as any).update({ items: rest, amount }).eq('id', bill.id)
         : await supabase.from('business_transactions').delete().eq('id', bill.id);
     if (error) throw error;
   }
