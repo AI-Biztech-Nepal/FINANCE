@@ -13,6 +13,7 @@ export default function Register() {
   const [fullName, setFullName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,12 +39,13 @@ export default function Register() {
       showAlert('Add your name', 'Enter your full name so others know who they are dealing with.');
       return;
     }
-    if (!companyName.trim()) {
-      showAlert('Add your company name', 'Enter the company name - it is printed on your bills.');
+    if (!address.trim()) {
+      showAlert('Add your address', 'Enter your address - it is printed on your bills.');
       return;
     }
-    if (!address.trim()) {
-      showAlert('Add your address', 'Enter the company address - it is printed on your bills.');
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 7 || phoneDigits.length > 15) {
+      showAlert('Check your phone number', 'Enter a valid phone number, e.g. 98XXXXXXXX.');
       return;
     }
     if (!isValidEmail(trimmedEmail)) {
@@ -60,9 +62,16 @@ export default function Register() {
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
-      // The company name and address go onto the new profile with the name (see 0010_signup_company_details.sql).
+      // The company name (optional), address and phone go onto the new profile with the name (see
+      // 0010_signup_company_details.sql and 0022_signup_phone.sql).
       options: {
-        data: { full_name: fullName.trim(), business_name: companyName.trim(), business_address: address.trim() },
+        data: {
+          full_name: fullName.trim(),
+          business_name: companyName.trim(),
+          business_address: address.trim(),
+          business_phone: phone.trim(),
+          phone: phone.trim(),
+        },
         emailRedirectTo: authRedirectUrl(),
       },
     });
@@ -98,7 +107,7 @@ export default function Register() {
         <View className="mb-5 items-center">
           <AppLogo size={100} />
         </View>
-        <Text className="mb-6 text-center text-2xl font-extrabold text-gray-900">Create your company account</Text>
+        <Text className="mb-6 text-center text-2xl font-extrabold text-gray-900">Create your account</Text>
 
         <Text className="mb-1.5 text-xs font-semibold text-gray-500">
           Your name<Text className="text-red-500"> *</Text>
@@ -112,12 +121,12 @@ export default function Register() {
         />
 
         <Text className="mb-1.5 text-xs font-semibold text-gray-500">
-          Company name<Text className="text-red-500"> *</Text>
+          Company name<Text className="font-normal text-gray-400"> (optional)</Text>
         </Text>
         <TextInput
           value={companyName}
           onChangeText={setCompanyName}
-          placeholder="Printed on your bills"
+          placeholder="Printed on your bills (optional)"
           placeholderTextColor="#9CA3AF"
           className="mb-3.5 rounded-xl border-[1.5px] border-gray-200 px-4 py-3.5 text-sm text-gray-900"
         />
@@ -128,7 +137,20 @@ export default function Register() {
         <TextInput
           value={address}
           onChangeText={setAddress}
-          placeholder="Company address"
+          placeholder="Your address"
+          placeholderTextColor="#9CA3AF"
+          className="mb-3.5 rounded-xl border-[1.5px] border-gray-200 px-4 py-3.5 text-sm text-gray-900"
+        />
+
+        <Text className="mb-1.5 text-xs font-semibold text-gray-500">
+          Phone number<Text className="text-red-500"> *</Text>
+        </Text>
+        <TextInput
+          value={phone}
+          onChangeText={setPhone}
+          autoComplete="tel"
+          keyboardType="phone-pad"
+          placeholder="98XXXXXXXX"
           placeholderTextColor="#9CA3AF"
           className="mb-3.5 rounded-xl border-[1.5px] border-gray-200 px-4 py-3.5 text-sm text-gray-900"
         />

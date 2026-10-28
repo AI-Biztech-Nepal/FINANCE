@@ -15,14 +15,14 @@ const FIELDS = [
   ['full_name', 'Your name', 'name'],
   ['phone', 'Your phone', 'tel'],
   ['city', 'City', 'off'],
-  ['business_name', 'Company name (printed on bills)', 'organization'],
-  ['business_address', 'Company address', 'street-address'],
+  ['business_name', 'Company name (optional, printed on bills)', 'organization'],
+  ['business_address', 'Address', 'street-address'],
   ['business_phone', 'Company phone', 'off'],
   ['business_vat_no', 'VAT / PAN no.', 'off'],
   ['business_reg_no', 'Registration no.', 'off'],
 ] as const;
 // Asked for when the account is made (see register.tsx), and kept filled in.
-const REQUIRED: readonly string[] = ['full_name', 'business_name', 'business_address'];
+const REQUIRED: readonly string[] = ['full_name', 'business_address'];
 
 export default function StoreProfile() {
   const profile = useAuthStore((state) => state.profile);
