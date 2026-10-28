@@ -42,6 +42,12 @@ export function builtInLogoLarge(businessName: string | null | undefined): numbe
   return sellsVehicles(businessName) ? require('../../assets/logos/deeva-large.png') : builtInLogo(businessName);
 }
 
+/** The logo straight on the Dashboard's top band, no box: Deeva's - the same design in silver-white lines with the red
+ * swoosh under the car kept, no background. */
+export function builtInLogoBanner(businessName: string | null | undefined): number | null {
+  return sellsVehicles(businessName) ? require('../../assets/logos/deeva-banner.png') : null;
+}
+
 /** The names of a bill's items, each once, in the order they are on the bill. */
 export function itemListOf(items: BillItem[] | null | undefined): string[] {
   const seen = new Set<string>();

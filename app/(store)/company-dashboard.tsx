@@ -21,7 +21,7 @@ import { supabase } from '../../lib/supabase';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../../lib/components/web/WebSidebarShell';
 import { CARD_SHADOW, RecentActivityCard } from '../../lib/components/finance/dashboard/FinanceDashboard';
 import { formatMoney } from '../../lib/utils/money';
-import { bannerColors, builtInLogo, builtInLogoLarge } from '../../lib/utils/accountFeatures';
+import { bannerColors, builtInLogo, builtInLogoBanner, builtInLogoLarge } from '../../lib/utils/accountFeatures';
 
 const npr = (n: number) => `NPR ${formatMoney(n)}`;
 /** 1,23,456 -> "1.23L", 12,34,567 -> "12.3L", 1,23,45,678 -> "1.23Cr": short money for charts. */
@@ -584,6 +584,8 @@ export default function StoreDashboard() {
   // No logo uploaded: the one the app keeps for this company, if any.
   const fallbackLogo = logoUrl ? null : builtInLogo(company);
   const largeLogo = logoUrl ? null : builtInLogoLarge(company);
+  // A company with a banner logo shows it straight on the banner, beside its name.
+  const bannerLogo = logoUrl ? null : builtInLogoBanner(company);
   // The banner at the top: blue, green for Deeva.
   const banner = bannerColors(company);
   const details = [
@@ -618,21 +620,32 @@ export default function StoreDashboard() {
   const hero = (
     <LinearGradient colors={banner.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 20, padding: wide ? 28 : 20 }}>
       <View className="flex-row flex-wrap items-center" style={{ gap: 18 }}>
-        <Pressable
-          onPress={() => setLogoOpen(true)}
-          disabled={!logoUrl && !fallbackLogo}
-          accessibilityLabel="View the logo larger"
-          className="items-center justify-center overflow-hidden rounded-2xl bg-white"
-          style={{ width: 76, height: 76 }}
-        >
-          {logoUrl ? (
-            <Image source={{ uri: logoUrl }} style={{ width: 76, height: 76 }} resizeMode="cover" />
-          ) : fallbackLogo ? (
-            <Image source={fallbackLogo} style={{ width: 72, height: 72 }} resizeMode="contain" />
-          ) : (
-            <Ionicons name="business" size={34} color={banner.solid} />
-          )}
-        </Pressable>
+        {bannerLogo ? (
+          <Pressable onPress={() => setLogoOpen(true)} accessibilityLabel={`${company} logo - view larger`} style={{ maxWidth: '100%' }}>
+            <Image
+              source={bannerLogo}
+              // a soft shadow under the lines lifts them off the gradient (web)
+              style={[{ width: 220, height: 59, maxWidth: '100%' }, Platform.OS === 'web' ? ({ filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.35))' } as object) : null]}
+              resizeMode="contain"
+            />
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => setLogoOpen(true)}
+            disabled={!logoUrl && !fallbackLogo}
+            accessibilityLabel="View the logo larger"
+            className="items-center justify-center overflow-hidden rounded-2xl bg-white"
+            style={{ width: 76, height: 76 }}
+          >
+            {logoUrl ? (
+              <Image source={{ uri: logoUrl }} style={{ width: 76, height: 76 }} resizeMode="cover" />
+            ) : fallbackLogo ? (
+              <Image source={fallbackLogo} style={{ width: 72, height: 72 }} resizeMode="contain" />
+            ) : (
+              <Ionicons name="business" size={34} color={banner.solid} />
+            )}
+          </Pressable>
+        )}
         {/* The square is small, so tapping it shows the logo large and clear. */}
         <Modal visible={logoOpen} transparent animationType="fade" onRequestClose={() => setLogoOpen(false)}>
           <Pressable onPress={() => setLogoOpen(false)} className="flex-1 items-center justify-center bg-black/50 px-4">
@@ -643,7 +656,6 @@ export default function StoreDashboard() {
           </Pressable>
         </Modal>
         <View style={{ flex: 1, minWidth: 220, gap: 6 }}>
-          <Text className="text-[12px] font-semibold tracking-wider" style={{ color: banner.label }}>COMPANY OVERVIEW</Text>
           <Text className="text-[26px] font-extrabold text-white" numberOfLines={2}>{company}</Text>
           {profile?.full_name && profile.business_name ? <Text className="text-[13px]" style={{ color: banner.sub }}>Owner · {profile.full_name}</Text> : null}
           <View className="mt-1 flex-row flex-wrap" style={{ columnGap: 16, rowGap: 6 }}>
