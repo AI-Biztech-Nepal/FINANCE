@@ -9,6 +9,8 @@ export interface SuggestOption {
   key: string;
   label: string;
   hint?: string | null;
+  /** A small line under the name - for a person, the Ledger type they are filed under. */
+  sub?: string | null;
   /** 'add' draws the row as a "+ Add ..." action instead of a match. */
   kind?: 'add';
 }
@@ -215,9 +217,16 @@ export function SuggestInput({
                     </Text>
                   </>
                 ) : (
-                  <Text className={`flex-1 text-gray-900 ${compact ? 'text-xs' : 'text-sm'}`} numberOfLines={1}>
-                    {highlightText(o.label, value)}
-                  </Text>
+                  <View className="flex-1" style={{ minWidth: 0 }}>
+                    <Text className={`text-gray-900 ${compact ? 'text-xs' : 'text-sm'}`} numberOfLines={1}>
+                      {highlightText(o.label, value)}
+                    </Text>
+                    {!!o.sub && (
+                      <Text className="text-[10.5px] text-gray-400" numberOfLines={1}>
+                        {o.sub}
+                      </Text>
+                    )}
+                  </View>
                 )}
                 {!!o.hint && <Text className={`ml-2 text-gray-400 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{o.hint}</Text>}
               </Pressable>

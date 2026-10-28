@@ -9,6 +9,8 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Customer, ExpenseCategory } from '../../../types/database.types';
+import { useAuthStore } from '../../hooks/useAuth';
+import { usePartyTypes } from '../../hooks/usePartyTypes';
 import type { PhoneContactEntry } from '../../hooks/usePhoneContacts';
 import { buildCustomerSuggestions, type CustomerSuggestion } from '../../utils/customerSuggestions';
 import { readKey } from '../../utils/webKeys';
@@ -121,6 +123,9 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
   }));
 
   const focusedRowKey = focusedCell?.col === 0 ? focusedCell.key : null;
+  // The Ledger type each person is filed under (Customer, Vendor, Employee ...), shown under their name in the list.
+  const { nameById: partyTypeName } = usePartyTypes(useAuthStore((state) => state.session?.user.id));
+  const typeOf = (c: { party_type_id?: string | null }) => (c.party_type_id ? partyTypeName.get(c.party_type_id) ?? null : null);
   const suggestions = useMemo<CustomerSuggestion[]>(() => {
     if (!focusedRowKey) return [];
     const row = rows.find((r) => r.key === focusedRowKey);
@@ -135,6 +140,7 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
       key: s.key,
       label: s.name,
       hint: s.customer ? s.phone : 'From contacts',
+      sub: s.customer ? typeOf(s.customer) : null,
     }));
     // Nobody saved goes by what was typed: offer to add them right here, like the stock item box does.
     const row = focusedRowKey ? rows.find((r) => r.key === focusedRowKey) : null;
@@ -144,7 +150,7 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
       options.push({ key: ADD_PARTY_KEY, label: `Add "${typed}" as new vendor`, kind: 'add' });
     }
     return options;
-  }, [suggestions, focusedRowKey, rows, customers, onCreateParty]);
+  }, [suggestions, focusedRowKey, rows, customers, onCreateParty, partyTypeName]);
 
   function focusCell(rowIndex: number, col: ExpenseCol) {
     const row = rows[rowIndex];

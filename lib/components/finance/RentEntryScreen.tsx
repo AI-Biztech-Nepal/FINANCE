@@ -189,6 +189,9 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
     () => (customerName.trim() ? buildCustomerSuggestions(customers ?? [], phoneContacts.contacts, customerName.trim(), MAX_SUGGESTIONS) : []),
     [customers, phoneContacts.contacts, customerName]
   );
+  // The Ledger type each person is filed under (Customer, Vendor, Employee ...), shown under their name in the list.
+  const { types: partyTypes, nameById: partyTypeName } = usePartyTypes(userId);
+  const typeOf = (c: { party_type_id?: string | null }) => (c.party_type_id ? partyTypeName.get(c.party_type_id) ?? null : null);
   const renterOptions = useMemo<SuggestOption[]>(() => {
     const typed = customerName.trim();
     if (!typed) return [];
@@ -196,16 +199,16 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       key: s.key,
       label: s.name,
       hint: s.customer ? s.phone : 'From contacts',
+      sub: s.customer ? typeOf(s.customer) : null,
     }));
     const linkedExact = !!customerId && customers?.find((c) => c.id === customerId)?.name === customerName;
     if (!linkedExact && !(customers ?? []).some((c) => c.name.trim().toLowerCase() === typed.toLowerCase())) {
       options.push({ key: ADD_PARTY_KEY, label: `Add "${typed}" as new customer`, kind: 'add' });
     }
     return options;
-  }, [renterSuggestions, customerName, customerId, customers]);
+  }, [renterSuggestions, customerName, customerId, customers, partyTypeName]);
 
   // Employees: the ledgers typed Employee (or Staff). A new one is saved under that type.
-  const { types: partyTypes, nameById: partyTypeName } = usePartyTypes(userId);
   const staffTypeId = partyTypes.find((t) => isStaffLedgerType(t.name))?.id ?? null;
   const employees = useMemo(
     () => (customers ?? []).filter((c) => c.party_type_id && isStaffLedgerType(partyTypeName.get(c.party_type_id))),

@@ -5,6 +5,8 @@ import { Text, useCaps } from './finance/CapsText';
 import { highlightText } from './finance/Highlight';
 import { Ionicons } from '@expo/vector-icons';
 import { buildCustomerSuggestions, type CustomerSuggestion } from '../utils/customerSuggestions';
+import { useAuthStore } from '../hooks/useAuth';
+import { usePartyTypes } from '../hooks/usePartyTypes';
 import type { Customer } from '../../types/database.types';
 import type { PhoneContactEntry } from '../hooks/usePhoneContacts';
 
@@ -41,6 +43,9 @@ export function ContactPickerModal({
    * instead of opening this popup's own name / phone step. */
   onAddNewTyped?: (name: string) => void;
 }) {
+  // The Ledger type each person is filed under, shown under their name.
+  const userId = useAuthStore((state) => state.session?.user.id);
+  const { nameById: partyTypeName } = usePartyTypes(userId);
   const [search, setSearch] = useState(initialQuery);
   // On a page whose words are all capitals (the Ledger) what is typed here is too.
   const caps = useCaps();
@@ -152,6 +157,9 @@ export function ContactPickerModal({
                   <Pressable onPress={() => handleSelect(s)} className="flex-row items-center justify-between border-b border-gray-100 px-2 py-2.5">
                     <View>
                       <Text className="text-sm font-semibold text-gray-900">{highlightText(s.name, search)}</Text>
+                      {!!s.customer?.party_type_id && !!partyTypeName.get(s.customer.party_type_id) && (
+                        <Text className="text-[11px] font-medium text-gray-500">{partyTypeName.get(s.customer.party_type_id)}</Text>
+                      )}
                       {!!s.phone && <Text className="text-xs text-gray-500">{highlightText(s.phone, search)}</Text>}
                     </View>
                     {!s.customer && <Ionicons name="person-outline" size={14} color="#9CA3AF" />}

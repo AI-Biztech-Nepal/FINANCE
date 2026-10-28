@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useRole } from '../../hooks/useAuth';
 import { sellsVehicles } from '../../utils/accountFeatures';
+import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { useConfirmNewParty } from './NewPartyConfirm';
 import { highlightText } from './Highlight';
 import { useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate, useSupabaseUpsert, useSupabaseDelete } from '../../hooks/useSupabase';
@@ -1467,6 +1468,9 @@ function TransactionForm({
   const itemsTableRef = useRef<BillItemsTableHandle>(null);
   const [vendorFocused, setVendorFocused] = useState(false);
 
+  // The Ledger type each person is filed under (Customer, Vendor, Employee ...), shown under their name in the list.
+  const { nameById: partyTypeName } = usePartyTypes(userId);
+  const typeOf = (c: { party_type_id?: string | null }) => (c.party_type_id ? partyTypeName.get(c.party_type_id) ?? null : null);
   const vendorSuggestions = useMemo<CustomerSuggestion[]>(() => {
     if (!vendorFocused || !isBill) return [];
     const q = partyName.trim();
@@ -1480,6 +1484,7 @@ function TransactionForm({
       key: s.key,
       label: s.name,
       hint: s.customer ? s.phone : 'From contacts',
+      sub: s.customer ? typeOf(s.customer) : null,
     }));
     // Nobody saved goes by what was typed: offer to add them right here, like the stock item box does.
     const typed = partyName.trim();
@@ -1488,7 +1493,7 @@ function TransactionForm({
       options.push({ key: ADD_PARTY_KEY, label: `Add "${typed}" as new ${type === 'purchase' ? 'vendor' : 'customer'}`, kind: 'add' });
     }
     return options;
-  }, [vendorSuggestions, vendorFocused, isBill, partyName, customerId, customers, type]);
+  }, [vendorSuggestions, vendorFocused, isBill, partyName, customerId, customers, type, partyTypeName]);
 
   useEffect(() => {
     if (!desktopWeb || !isBill) return;
