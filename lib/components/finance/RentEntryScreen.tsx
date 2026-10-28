@@ -117,8 +117,8 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   // rent and the employee's daily wage both stop on it.
   const end = rental?.end_date ?? '';
   const [returnedOn, setReturnedOn] = useState(rental?.returned_on ?? '');
-  // The employee who goes out with it (a driver) and their wage for each day it is out: the database puts each
-  // day's wage on their ledger (0015_rental_employee_wages.sql).
+  // The employee who goes out with it (a driver) and what they owe the business for each day it is out: the
+  // database puts each day's amount on their ledger as a Receivable (0015, 0018_rental_wage_receivable.sql).
   const [employeeId, setEmployeeId] = useState<string | null>(rental?.employee_id ?? null);
   const [employeeName, setEmployeeName] = useState(rental?.employee_name ?? '');
   const [wage, setWage] = useState(rental && Number(rental.wage_per_day) > 0 ? String(rental.wage_per_day) : '');
@@ -358,7 +358,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
           ? [
               { label: 'Employee', value: employeeName.trim() },
               { label: 'Daily wage', value: `NPR ${formatMoney(Number(wage) || 0)}` },
-              { label: 'Wages to their ledger', value: `NPR ${formatMoney(wages)}` },
+              { label: 'To receive from employee', value: `NPR ${formatMoney(wages)}` },
             ]
           : []),
       ],
@@ -384,6 +384,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       if (rental) await updateRental.mutateAsync({ id: rental.id, values });
       else await createRental.mutateAsync({ owner_id: userId, ...values });
       // Saving a rental rewrites its employee's daily wage lines in the database (0015): show them.
+      queryClient.invalidateQueries({ queryKey: ['customer_ledger_entries'] });
       queryClient.invalidateQueries({ queryKey: ['vendor_ledger_entries'] });
       goBack();
     } catch (err) {
@@ -408,7 +409,8 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         onPress: async () => {
           try {
             await deleteRental.mutateAsync(rental.id);
-            queryClient.invalidateQueries({ queryKey: ['vendor_ledger_entries'] });
+            queryClient.invalidateQueries({ queryKey: ['customer_ledger_entries'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor_ledger_entries'] });
             goBack();
           } catch (err) {
             showAlert('Could not remove', getErrorMessage(err));
@@ -562,7 +564,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
             compact
           />
         </Box>
-        <Box label="Daily wage (NPR)" basis={170}>
+        <Box label="Daily amount from employee (NPR)" basis={200}>
           <KeyInput
             value={wage}
             onChangeText={setWage}
@@ -640,7 +642,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
         { label: 'Rate per day', value: `NPR ${money(Number(rate) || 0)}`, color: '#111827' },
         { label: 'Rent', value: `NPR ${money(figures.total)}`, color: MONEY.in.base },
         ...(employeeId && Number(wage) > 0
-          ? [{ label: `Wages · ${employeeName.trim()}`, value: `NPR ${money(wages)}`, color: MONEY.out.base }]
+          ? [{ label: `To receive · ${employeeName.trim()}`, value: `NPR ${money(wages)}`, color: MONEY.in.base }]
           : []),
       ].map((f, i, all) => (
         <View key={f.label} className={`flex-row items-center justify-between py-2 ${i < all.length - 1 ? 'border-b border-gray-50' : ''}`}>

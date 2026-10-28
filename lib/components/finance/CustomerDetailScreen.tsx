@@ -869,7 +869,8 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       const outgoing = owes && e.source === 'manual';
       lines.push({
         key: `ledger-${e.id}`,
-        label: journalOf(e.note) ? 'Journal' : syncedFromBill ? TX_TYPE_LABEL.sale : !owes ? 'Received' : outgoing ? 'Paid' : 'Receivable',
+        // A rented vehicle's employee owes its daily amount (0018_rental_wage_receivable.sql).
+        label: journalOf(e.note) ? 'Journal' : e.source_type === 'rental_wage' ? 'Daily wage' : syncedFromBill ? TX_TYPE_LABEL.sale : !owes ? 'Received' : outgoing ? 'Paid' : 'Receivable',
         tone: outgoing ? OUT_TONE : IN_TONE,
         detail: journalText(e.note) ?? e.note ?? (syncedFromBill ? '' : e.source === 'booking' ? 'From a booked job' : 'Manual entry'),
         reference: e.receipt_no ?? '',
@@ -1049,7 +1050,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   // rental's daily wage, a job's payment - follows that record, so it says where to change it instead.
   const deleteBill = useSupabaseDelete('business_transactions');
   const lockedReason = (row: HistoryRow) =>
-    row.vendor?.source_type === 'rental_wage'
+    (row.vendor ?? row.ledger)?.source_type === 'rental_wage'
       ? 'This daily wage comes from a rental. Change the rental (its employee, wage or Returned on) or remove it on the Rent page, and its wage lines follow.'
       : 'This entry was written by another record (a job or a booking). Change that record and this follows.';
   function editAnyRow(row: HistoryRow) {

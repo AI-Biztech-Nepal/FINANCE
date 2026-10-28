@@ -17,7 +17,10 @@ export function useRentalWageSync(userId: string | undefined) {
     const client = supabase as unknown as { rpc: (fn: string) => PromiseLike<{ error: unknown }> };
     client.rpc('sync_rental_wages').then(
       ({ error }) => {
-        if (live && !error) queryClient.invalidateQueries({ queryKey: ['vendor_ledger_entries'] });
+        if (live && !error) {
+          queryClient.invalidateQueries({ queryKey: ['customer_ledger_entries'] });
+          queryClient.invalidateQueries({ queryKey: ['vendor_ledger_entries'] });
+        }
       },
       () => {}
     );

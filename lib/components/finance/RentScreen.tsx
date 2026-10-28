@@ -34,6 +34,21 @@ export function RentScreen({ basePath }: { basePath: string }) {
     enabled: !!userId,
   });
 
+  // The employees' own ledgers: what they owe for the days out (the daily amount lines) and what they have handed
+  // over (Received) - so the page shows what is still due from them.
+  const { data: employeeLedger } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId });
+  const employeeMoney = useMemo(() => {
+    const ids = new Set((rentals ?? []).map((r) => r.employee_id).filter((v): v is string => !!v));
+    let owed = 0;
+    let received = 0;
+    for (const e of employeeLedger ?? []) {
+      if (!ids.has(e.customer_id)) continue;
+      if (e.entry_type === 'credit') received += Number(e.amount);
+      else if (e.source_type === 'rental_wage') owed += Number(e.amount);
+    }
+    return { owed: round2(owed), received: round2(received), due: round2(Math.max(0, owed - received)) };
+  }, [rentals, employeeLedger]);
+
   const openEntry = (id?: string) => router.push((id ? `${basePath}/rent-entry?id=${id}` : `${basePath}/rent-entry`) as never);
 
   // Items still out first, then the rest - newest first in each.
@@ -42,7 +57,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
       [...(rentals ?? [])]
         .map((r) => {
           const f = rentalFigures(r, today);
-          // The employee's wages so far: the same days, at their daily wage (each day is on their ledger).
+          // What the employee owes for it so far: the same days, at their daily amount (each day is on their ledger).
           const wages = r.employee_id ? round2(f.days * Number(r.wage_per_day || 0)) : 0;
           return { r, ...f, wages, status: rentalStatus(r, today) };
         })
@@ -66,7 +81,13 @@ export function RentScreen({ basePath }: { basePath: string }) {
     summary: [
       { label: 'Out now', value: String(stats.out) },
       { label: 'Rent', value: `NPR ${money(stats.total)}` },
-      ...(stats.wages > 0 ? [{ label: 'Employee wages', value: `NPR ${money(stats.wages)}` }] : []),
+      ...(stats.wages > 0
+        ? [
+            { label: 'To receive from employees', value: `NPR ${money(employeeMoney.owed || stats.wages)}` },
+            { label: 'Received from employees', value: `NPR ${money(employeeMoney.received)}` },
+            { label: 'Due from employees', value: `NPR ${money(employeeMoney.due)}` },
+          ]
+        : []),
       { label: 'Rentals', value: String(rows.length) },
     ],
     sections: [
@@ -82,7 +103,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
           { label: 'Days', align: 'right' },
           { label: 'Rate/day', align: 'right' },
           { label: 'Rent', align: 'right' },
-          { label: 'Wages', align: 'right' },
+          { label: 'To receive (employee)', align: 'right' },
           { label: 'Status' },
         ],
         rows: rows.map((x, i) => {
@@ -166,8 +187,8 @@ export function RentScreen({ basePath }: { basePath: string }) {
             x.r.employee_id ? (
               <View style={{ minWidth: 0, gap: 2 }}>
                 {num(x.r.employee_name ?? '—', '#111827')}
-                <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-                  {`NPR ${money(x.r.wage_per_day)}/day · ${money(x.wages)} so far`}
+                <Text className="text-[11px] font-semibold" style={{ color: '#047857' }} numberOfLines={1}>
+                  {`To receive ${money(x.wages)} · NPR ${money(x.r.wage_per_day)}/day`}
                 </Text>
               </View>
             ) : (
@@ -193,7 +214,13 @@ export function RentScreen({ basePath }: { basePath: string }) {
       <BookStats>
         <BookStat label="Out now" value={String(stats.out)} color="#1D4ED8" />
         <BookStat label="Rent" value={`NPR ${money(stats.total)}`} color="#374151" />
-        {stats.wages > 0 && <BookStat label="Employee wages" value={`NPR ${money(stats.wages)}`} color="#B91C1C" />}
+        {stats.wages > 0 && (
+          <>
+            <BookStat label="To receive from employees" value={`NPR ${money(employeeMoney.owed || stats.wages)}`} color="#047857" />
+            <BookStat label="Received from employees" value={`NPR ${money(employeeMoney.received)}`} color="#047857" />
+            <BookStat label="Due from employees" value={`NPR ${money(employeeMoney.due)}`} color="#B91C1C" />
+          </>
+        )}
         <BookStat label="Rentals" value={String(rows.length)} color="#374151" />
       </BookStats>
 
