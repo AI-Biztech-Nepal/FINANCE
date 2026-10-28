@@ -63,7 +63,8 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "package": "com.storebooks.app"
+      "package": "com.storebooks.app",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"
