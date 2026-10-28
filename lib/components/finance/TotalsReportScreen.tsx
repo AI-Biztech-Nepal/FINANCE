@@ -27,6 +27,8 @@ import { TransactionDetailModal } from './TransactionsScreen';
 import { tidyName } from '../../utils/nameCaps';
 import { highlightText } from './Highlight';
 import { itemNamesOf, modelNamesOf, sellsVehicles } from '../../utils/accountFeatures';
+import { partyFigures } from '../../utils/partyFigures';
+import { LedgerFormatTable, type LedgerFormatRow } from './LedgerFormatTable';
 import type { BusinessTransaction } from '../../../types/database.types';
 
 /** Total Received / Total Paid are money that actually moved; Sales / Purchase / Expense are the bills themselves, paid or not. */
@@ -658,6 +660,44 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     [entries, year, partyId, range.from, range.to, needle]
   );
 
+  // A vehicle account reads every report in the Ledger's own table: one line per person in the report, with their
+  // Ledger figures (billed, paid and received in the report's period; payable / receivable at its end). What has no
+  // person behind it (a walk-in bill, an expense category) is a line of its own, from the report's own entries.
+  const ledgerRows = useMemo((): LedgerFormatRow[] | null => {
+    if (!vehicleAccount || partyId) return null;
+    const from = rangeActive ? range.from : `${year}-01-01`;
+    const to = rangeActive ? range.to : `${year}-12-31`;
+    const figures = partyFigures(allLedgerEntries ?? [], allVendorEntries ?? [], from, to);
+    const rows = new Map<string, LedgerFormatRow>();
+    for (const e of yearEntries) {
+      const pid = e.nav.kind === 'party' ? e.nav.partyId : e.tx?.customer_id ?? null;
+      if (pid) {
+        if (!rows.has(pid)) {
+          const f = figures.get(pid) ?? { billed: 0, paid: 0, received: 0, payable: 0, receivable: 0, lastDay: '', lastRef: '' };
+          rows.set(pid, { key: pid, name: nameById.get(pid) ?? (e.category || e.party || '—'), ledgerType: ledgerTypeById.get(pid) ?? '', ...f });
+        }
+        continue;
+      }
+      const name = (kind === 'expense' ? e.category : e.party) || e.party || 'No party';
+      const k = `name:${name.toLowerCase()}`;
+      let r = rows.get(k);
+      if (!r) {
+        r = { key: k, name, ledgerType: '', billed: 0, paid: 0, received: 0, payable: 0, receivable: 0, lastDay: '', lastRef: '' };
+        rows.set(k, r);
+      }
+      const day = e.date.slice(0, 10);
+      if (day >= r.lastDay) {
+        r.lastDay = day;
+        r.lastRef = e.billNo || r.lastRef;
+      }
+      if (kind === 'received') r.received += e.amount;
+      else if (kind === 'paid' || kind === 'expense') r.paid += e.amount;
+      else r.billed += e.amount;
+    }
+    return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicleAccount, partyId, rangeActive, range.from, range.to, year, allLedgerEntries, allVendorEntries, yearEntries, kind, nameById, ledgerTypeById]);
+
   // The Expense Report is laid out by category - Fuel, Bike Repair, Salary Expenses ... - each with
   // what it adds up to, biggest first, and the individual ledgers / categories under it (Fuel
   // Aviator, Fuel Manish ...; the category pill on every row says which). Categories come from the
@@ -1069,17 +1109,29 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
         // Every report is one table, laid out as the Purchase Report's: SN, date, bill / receipt no., who it was with
         // (or the category), the vehicle, the Ledger type and the amount - newest first. A person's own page keeps
         // its month rows.
-        <BookTable
-          columns={grouped !== null ? billColumns : columns}
-          rows={shownEntries}
-          rowKey={(e) => e.id}
-          onRowPress={open}
-          groupOf={grouped !== null ? undefined : (e) => bsMonthGroup(e.date)}
-          footer={{
-            label: `${shownEntries.length} ${shownEntries.length === 1 ? 'entry' : 'entries'} · Total`,
-            cells: { amount: <Text className="text-[13px] font-extrabold" style={{ color: figureColor }}>{money(stats.total)}</Text> },
-          }}
-        />
+        ledgerRows ? (
+          <LedgerFormatTable
+            rows={ledgerRows}
+            full={layout.full}
+            search={search}
+            partyLabel={pickWord.one}
+            onOpen={(r) => {
+              if (!r.key.startsWith('name:')) router.push(hrefFor(r.key) as never);
+            }}
+          />
+        ) : (
+          <BookTable
+            columns={grouped !== null ? billColumns : columns}
+            rows={shownEntries}
+            rowKey={(e) => e.id}
+            onRowPress={open}
+            groupOf={grouped !== null ? undefined : (e) => bsMonthGroup(e.date)}
+            footer={{
+              label: `${shownEntries.length} ${shownEntries.length === 1 ? 'entry' : 'entries'} · Total`,
+              cells: { amount: <Text className="text-[13px] font-extrabold" style={{ color: figureColor }}>{money(stats.total)}</Text> },
+            }}
+          />
+        )
       )}
 
       {partyId && partyLedgerRows.length > 0 && (

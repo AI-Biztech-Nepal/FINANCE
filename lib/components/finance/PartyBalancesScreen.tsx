@@ -22,6 +22,8 @@ import { itemListOf, itemNamesOf, sellsVehicles } from '../../utils/accountFeatu
 import { round2 } from '../../utils/money';
 import { highlightText } from './Highlight';
 import { PopupCard } from './FormKit';
+import { LedgerFormatTable, type LedgerFormatRow } from './LedgerFormatTable';
+import { partyFigures } from '../../utils/partyFigures';
 import { ExcelButton, PrintButton, exportReportDocument, printReportDocument } from './PrintButton';
 
 type Direction = 'receive' | 'give';
@@ -126,16 +128,18 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
     filters: userId ? { owner_id: userId } : {},
     enabled: !!userId,
   });
-  // `all`: balances are sums over every entry; a plain read stops at 1000 rows.
+  // `all`: balances are sums over every entry; a plain read stops at 1000 rows. A vehicle account reads both ledgers
+  // either way: its table is the Ledger's own, which nets a person's two ledgers.
+  const vehicleBooks = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
   const { data: customerEntries } = useSupabaseQuery('customer_ledger_entries', {
     filters: userId ? { owner_id: userId } : {},
     all: true,
-    enabled: !!userId && direction === 'receive',
+    enabled: !!userId && (direction === 'receive' || vehicleBooks),
   });
   const { data: vendorEntries } = useSupabaseQuery('vendor_ledger_entries', {
     filters: userId ? { owner_id: userId } : {},
     all: true,
-    enabled: !!userId && direction === 'give',
+    enabled: !!userId && (direction === 'give' || vehicleBooks),
   });
   // A vehicle account's entries that a bill posted read with the item (car) on the bill in place of its remark.
   const showItems = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
@@ -473,6 +477,18 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
         { key: 'left', label: 'Remaining', width: 110, align: 'right', render: remaining },
       ];
 
+  // A vehicle account: each person listed, with their Ledger figures (both ledgers, every entry).
+  const ledgerRows = useMemo((): LedgerFormatRow[] | null => {
+    if (!vehicleBooks) return null;
+    const figures = partyFigures(customerEntries ?? [], vendorEntries ?? [], '', '');
+    return shown.map((h) => ({
+      key: h.partyId,
+      name: nameCaps(h.name),
+      ledgerType: h.ledgerType,
+      ...(figures.get(h.partyId) ?? { billed: 0, paid: 0, received: 0, payable: 0, receivable: 0, lastDay: '', lastRef: '' }),
+    }));
+  }, [vehicleBooks, customerEntries, vendorEntries, shown]);
+
   // Laid out as the Purchase Report's table: SN, the last entry's date and its no., who, the vehicles, their Ledger
   // type, and what is owed. A line opens that person's entries in a popup.
   const lastOf = (h: Heading) => h.entries.reduce<LogEntry | null>((a, e) => (!a || e.day > a.day ? e : a), null);
@@ -577,7 +593,11 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
           <Text className="mt-2 text-gray-500">{needle ? `No name matches "${search.trim()}".` : meta.empty}</Text>
         </View>
       ) : (
-        // One table, as the Purchase Report's (see headingColumns). A line opens that person's entries.
+        // A vehicle account: the Ledger's own table (see LedgerFormatTable). Otherwise the Purchase Report's (see
+        // headingColumns). A line opens that person's entries.
+        ledgerRows ? (
+          <LedgerFormatTable rows={ledgerRows} full={layout.full} search={search} partyLabel={meta.who} onOpen={(r) => setView(shown.find((h) => h.partyId === r.key) ?? null)} />
+        ) : (
         <BookTable
           columns={headingColumns}
           rows={shown}
@@ -588,6 +608,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
             cells: { amount: <Text className="text-[13px] font-extrabold" style={{ color: meta.color }}>{money(shownTotal)}</Text> },
           }}
         />
+        )
       )}
 
       <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">{meta.note}</Text>
