@@ -5,8 +5,9 @@
 --      additive, safe to run when it already ran), then
 --   2) WE PAY THE VENDOR: a purchase plan for every vehicle in Stock and Inventory - in stock or since sold. The same
 --      rules as the "Add N to EMI" button on Rent & EMI > EMI > We pay vendors:
---        price        what the vehicle's Purchase bills come to (else its cost price); a vehicle with no price
---                     anywhere is left out
+--        price        what the vehicle's Purchase bills come to (else its cost price) - read the way Stock and
+--                     Inventory read a car's bill: the whole bill, VAT and discount included, when the car is the
+--                     only one on it, else the car's own line. A vehicle with no price anywhere is left out
 --        vendor/model from the vehicle's latest Purchase bill
 --        first due    a month after that bill (a month from today when there is no bill)
 --   3) THE CUSTOMER PAYS US: a sale plan for every vehicle that is already out (it is on a Sale bill). The same rules
@@ -61,6 +62,11 @@ begin
            when coalesce(nullif(li.item ->> 'amount', '')::numeric, 0) > 0 then (li.item ->> 'amount')::numeric
            else coalesce(nullif(li.item ->> 'qty', '')::numeric, 0) * coalesce(nullif(li.item ->> 'rate', '')::numeric, 0)
          end as amount,
+         t.id as bill_id, t.amount as bill_amount,
+         -- how many different items the bill has (a car is "the only one" on its bill when this is 1)
+         (select count(distinct lower(btrim(x.item ->> 'description')))
+            from jsonb_array_elements(t.items) as x(item)
+            where btrim(coalesce(x.item ->> 'description', '')) <> '') as n_items,
          t.customer_id, t.party_name,
          coalesce(t.bill_date, (t.created_at at time zone 'utc')::date) as bill_day,
          t.created_at
@@ -68,16 +74,24 @@ begin
   cross join lateral jsonb_array_elements(t.items) as li(item)
   where t.owner_id = v_owner and t.type in ('purchase', 'sale');
 
-  -- ... what each item came to on each kind of bill, and the latest bill's party, model and day
+  -- ... what each item came to on each kind of bill, and the latest bill's party, model and day. A car's price is read
+  -- the way Stock and Inventory and the Payable Report read it: the WHOLE bill (VAT and discount included) when the car
+  -- is the only one on it, else the car's own line.
   create temporary table _emi_bills on commit drop as
   select kind, k,
-         sum(amount) as billed,
+         sum(per_bill) as billed,
          (array_agg(model order by bill_day desc, created_at desc))[1] as model,
          (array_agg(customer_id order by bill_day desc, created_at desc))[1] as customer_id,
          (array_agg(party_name order by bill_day desc, created_at desc))[1] as party_name,
          max(bill_day) as bill_day
-  from _emi_lines
-  where k <> ''
+  from (
+    select kind, k, bill_id, customer_id, party_name, bill_day, created_at,
+           max(model) as model,
+           case when max(n_items) = 1 then max(bill_amount) else sum(amount) end as per_bill
+    from _emi_lines
+    where k <> ''
+    group by kind, k, bill_id, customer_id, party_name, bill_day, created_at
+  ) b
   group by kind, k;
 
   -- WE PAY THE VENDOR: every vehicle in Stock and Inventory (one row per name)

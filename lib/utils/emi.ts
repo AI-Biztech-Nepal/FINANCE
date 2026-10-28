@@ -1,5 +1,6 @@
 // lib/utils/emi.ts
 import { round2 } from './money';
+import { itemListOf } from './accountFeatures';
 import type { BillItem, BusinessTransaction, EmiPlan, Product } from '../../types/database.types';
 
 /** What a stock item bought on EMI is set up with: 12 monthly instalments, 10% a month (flat). */
@@ -29,16 +30,25 @@ export function addMonths(iso: string, n: number): string {
 type Billed = { total: number; bill: BusinessTransaction; line: BillItem; date: string };
 type PlanRow = Omit<EmiPlan, 'id' | 'owner_id' | 'created_at' | 'updated_at'>;
 
-/** Each item's lines on the `type` bills (Purchase or Sale), by name: what they come to, and the latest bill's party, line and date. */
+/** Each item's lines on the `type` bills (Purchase or Sale), by name: what they come to, and the latest bill's party, line and
+ * date. Read the way Stock and Inventory and the Payable Report read a car's bill: the whole bill (VAT and discount
+ * included) when the car is the only one on it, else the car's own line. */
 function billedBy(bills: BusinessTransaction[], type: 'purchase' | 'sale'): Map<string, Billed> {
   const found = new Map<string, Billed>();
   for (const bill of bills) {
     if (bill.type !== type) continue;
     const date = (bill.bill_date ?? bill.created_at).slice(0, 10);
+    const sole = itemListOf(bill.items).length === 1;
+    const counted = new Set<string>();
     for (const line of bill.items ?? []) {
       const k = norm(line.description);
       if (!k) continue;
-      const amount = Number(line.amount) > 0 ? Number(line.amount) : (Number(line.qty) || 0) * (Number(line.rate) || 0);
+      let amount = Number(line.amount) > 0 ? Number(line.amount) : (Number(line.qty) || 0) * (Number(line.rate) || 0);
+      if (sole) {
+        // the one car's bill is counted once, however many lines it has
+        amount = counted.has(k) ? 0 : Number(bill.amount) || amount;
+        counted.add(k);
+      }
       const seen = found.get(k);
       if (!seen) found.set(k, { total: amount, bill, line, date });
       else {
@@ -52,8 +62,8 @@ function billedBy(bills: BusinessTransaction[], type: 'purchase' | 'sale'): Map<
 
 /**
  * The EMI plans for every vehicle bought - in stock or since sold, none of them is paid up - one per item, on
- * instalments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to; with no bill,
- * the cost price), `months` instalments with `rate`% a month flat, the first one a month after the bill. What was
+ * instalments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to - the same figure
+ * as the car's bill on Stock and Inventory; with no bill, the cost price), `months` instalments with `rate`% a month flat, the first one a month after the bill. What was
  * already paid is not taken off here - the plan reads it from the Paid entries, so Remaining shows what is left. An
  * item that already has a purchase plan is left out, so adding twice makes no duplicates; one with no price anywhere
  * is reported in `noPrice` instead.

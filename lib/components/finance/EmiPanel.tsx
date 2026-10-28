@@ -62,14 +62,16 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
       const k = `sale|${e.customer_id}|${key(e.note.split(' · ')[0])}`;
       paidBy.set(k, (paidBy.get(k) ?? 0) + Number(e.amount));
     }
+    // A vehicle bought on EMI: every payment naming it, whichever vendor it was recorded under - the way Stock and
+    // Inventory and the Payable Report count what was paid on a car.
     for (const e of paidOut ?? []) {
       if (e.entry_type !== 'credit' || !e.note || journalOf(e.note)) continue;
-      const k = `purchase|${e.vendor_id}|${key(e.note.split(' · ')[0])}`;
+      const k = `purchase|${key(e.note.split(' · ')[0])}`;
       paidBy.set(k, (paidBy.get(k) ?? 0) + Number(e.amount));
     }
     return (plans ?? [])
       .filter((p) => emiDirection(p) === dir)
-      .map((p) => ({ p, ...emiFigures(p, paidBy.get(`${dir}|${p.customer_id}|${key(p.car)}`) ?? 0, today) }))
+      .map((p) => ({ p, ...emiFigures(p, paidBy.get(dir === 'purchase' ? `purchase|${key(p.car)}` : `sale|${p.customer_id}|${key(p.car)}`) ?? 0, today) }))
       .sort((a, b) => Number(a.status.label === 'Completed') - Number(b.status.label === 'Completed') || b.overdue - a.overdue);
   }, [plans, received, paidOut, dir, today]);
   type Row = (typeof rows)[number];

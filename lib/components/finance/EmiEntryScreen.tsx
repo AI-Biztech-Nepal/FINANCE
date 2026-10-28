@@ -107,12 +107,13 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   }, [customers, customerName]);
 
   const paid = useMemo(() => {
-    if (!plan || !customerId) return 0;
+    if (!plan || (!buying && !customerId)) return 0;
     const k = car.trim().replace(/\s+/g, ' ').toLowerCase();
     const names = (note: string | null) => (note ?? '').split(' · ')[0].trim().replace(/\s+/g, ' ').toLowerCase() === k;
-    // What the customer paid (their Received entries) or what we paid the vendor (the Paid entries on their ledger).
+    // What the customer paid (their Received entries), or what we paid on the car (every Paid entry naming it - the way
+    // Stock and Inventory count it, whichever vendor it was recorded under).
     return buying
-      ? (paidOut ?? []).filter((e) => e.vendor_id === customerId && e.entry_type === 'credit' && names(e.note)).reduce((s, e) => s + Number(e.amount), 0)
+      ? (paidOut ?? []).filter((e) => e.entry_type === 'credit' && names(e.note)).reduce((s, e) => s + Number(e.amount), 0)
       : (received ?? []).filter((e) => e.customer_id === customerId && e.entry_type === 'credit' && names(e.note)).reduce((s, e) => s + Number(e.amount), 0);
   }, [received, paidOut, buying, plan, customerId, car]);
   const figures = emiFigures(
