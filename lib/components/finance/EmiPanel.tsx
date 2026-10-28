@@ -1,6 +1,6 @@
 // lib/components/finance/EmiPanel.tsx
 import { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { useSupabaseInsert, useSupabaseQuery } from '../../hooks/useSupabase';
 import { BookStat, BookStats, BookTable, Pill, money, type BookColumn } from './BookKit';
@@ -42,6 +42,7 @@ const WORDS: Record<Direction, { tab: string; party: string; price: string; paid
  * vendor's ledger - with a button that puts every vehicle bought in, 12 months at 10% a month (flat). */
 export function EmiPanel({ userId, basePath, full }: { userId: string | undefined; basePath: string; full: boolean }) {
   const today = localTodayIso();
+  const { width: windowWidth } = useWindowDimensions();
   const [dir, setDir] = useState<Direction>('sale');
   const words = WORDS[dir];
   const owner: Record<string, string> = userId ? { owner_id: userId } : {};
@@ -128,23 +129,26 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
     ) : (
       <Text className="text-[12.5px] text-gray-300">—</Text>
     );
+  // The vehicle column takes whatever the fixed columns leave, so on a window that is not very wide the extra columns
+  // (SN, the customer / vendor - also on the vehicle's second line - and the down payment) are left out to give it room.
+  const roomy = full && windowWidth >= 1650;
+  const showDown = roomy && rows.some((r) => Number(r.p.down_payment) > 0);
+  // The whole name is shown: it wraps onto another line rather than being cut short.
   const vehicle = (r: Row) => (
     <View style={{ minWidth: 0, gap: 2 }}>
-      <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
-        {r.p.car}
-      </Text>
-      <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-        {[r.p.model, r.p.customer_name].filter(Boolean).join(' · ') || '—'}
+      <Text className="text-[13px] font-semibold text-gray-900">{r.p.car}</Text>
+      <Text className="text-[11px] text-gray-400" numberOfLines={2}>
+        {[r.p.model, roomy ? null : r.p.customer_name].filter(Boolean).join(' · ') || '—'}
       </Text>
     </View>
   );
   const columns: BookColumn<Row>[] = full
     ? [
-        { key: 'sn', label: 'SN', width: 52, render: (_r, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
+        ...(roomy ? [{ key: 'sn', label: 'SN', width: 48, render: (_r: Row, i: number) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> }] : []),
         { key: 'vehicle', label: 'Vehicle', render: vehicle },
-        { key: 'customer', label: words.party, width: 170, render: (r) => <Text className="text-[12.5px] font-medium text-gray-900" numberOfLines={1}>{r.p.customer_name || '—'}</Text> },
-        { key: 'price', label: words.price, width: 115, align: 'right', render: (r) => fig(Number(r.p.sale_price)) },
-        { key: 'down', label: 'Down payment', width: 115, align: 'right', render: (r) => fig(Number(r.p.down_payment)) },
+        ...(roomy ? [{ key: 'customer', label: words.party, width: 160, render: (r: Row) => <Text className="text-[12.5px] font-medium text-gray-900">{r.p.customer_name || '—'}</Text> }] : []),
+        { key: 'price', label: words.price, width: 108, align: 'right' as const, render: (r: Row) => fig(Number(r.p.sale_price)) },
+        ...(showDown ? [{ key: 'down', label: 'Down payment', width: 108, align: 'right' as const, render: (r: Row) => fig(Number(r.p.down_payment)) }] : []),
         {
           key: 'inst',
           label: 'Instalment',
@@ -153,15 +157,15 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
           render: (r) => (
             <View className="items-end">
               <Text className="text-[12.5px] font-medium text-gray-900">{money(Number(r.p.installment))}</Text>
-              <Text className="text-[11px] text-gray-400">{`× ${r.p.months} months${Number(r.p.interest_rate) > 0 ? ` · ${Number(r.p.interest_rate)}%/mo` : ''} · ${r.dueCount} due`}</Text>
+              <Text className="text-[11px] text-gray-400">{`${r.p.months} mo${Number(r.p.interest_rate) > 0 ? ` · ${Number(r.p.interest_rate)}%/mo` : ''} · ${r.dueCount} due`}</Text>
             </View>
           ),
         },
-        { key: 'paid', label: words.paid, width: 115, align: 'right', render: (r) => fig(r.paid, '#047857', true) },
-        { key: 'overdue', label: 'Overdue', width: 110, align: 'right', render: (r) => fig(r.overdue, '#B91C1C', true) },
-        { key: 'left', label: 'Remaining', width: 115, align: 'right', render: (r) => fig(r.remaining, '#111827', true) },
-        { key: 'next', label: 'Next due', width: 125, render: (r) => <Text className="text-[12.5px] text-gray-700">{r.next ? toBsHistoryLabel(r.next) : '—'}</Text> },
-        { key: 'status', label: 'Status', width: 100, render: (r) => <Pill text={r.status.label} color={r.status.color} bg={r.status.bg} /> },
+        { key: 'paid', label: words.paid, width: 108, align: 'right', render: (r) => fig(r.paid, '#047857', true) },
+        { key: 'overdue', label: 'Overdue', width: 104, align: 'right', render: (r) => fig(r.overdue, '#B91C1C', true) },
+        { key: 'left', label: 'Remaining', width: 108, align: 'right', render: (r) => fig(r.remaining, '#111827', true) },
+        { key: 'next', label: 'Next due', width: 112, render: (r) => <Text className="text-[12.5px] text-gray-700">{r.next ? toBsHistoryLabel(r.next) : '—'}</Text> },
+        { key: 'status', label: 'Status', width: 96, render: (r) => <Pill text={r.status.label} color={r.status.color} bg={r.status.bg} /> },
       ]
     : [
         { key: 'vehicle', label: 'Vehicle', render: vehicle },
