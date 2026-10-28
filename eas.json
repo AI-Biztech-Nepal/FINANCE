@@ -11,10 +11,28 @@
         "buildType": "apk"
       }
     },
-    "production": {
+    "preview": {
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
       }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {}
     }
   }
 }

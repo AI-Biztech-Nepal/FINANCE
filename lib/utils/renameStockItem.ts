@@ -36,7 +36,7 @@ export async function renameStockItem(ownerId: string, productId: string, oldNam
   for (const bill of bills) {
     if (!(bill.items ?? []).some((i) => nameKey(i.description) === from)) continue;
     const items = (bill.items ?? []).map((i) => (nameKey(i.description) === from ? { ...i, description: to } : i));
-    const { error } = await supabase.from('business_transactions').update({ items }).eq('id', bill.id);
+    const { error } = await (supabase.from('business_transactions') as any).update({ items }).eq('id', bill.id);
     if (error) throw error;
   }
 
@@ -49,16 +49,16 @@ export async function renameStockItem(ownerId: string, productId: string, oldNam
     for (const e of entries) {
       const parts = (e.note ?? '').split(' · ');
       if (nameKey(parts[0]) !== from) continue;
-      const { error } = await supabase.from(table).update({ note: [to, ...parts.slice(1)].join(' · ') }).eq('id', e.id);
+      const { error } = await (supabase.from(table) as any).update({ note: [to, ...parts.slice(1)].join(' · ') }).eq('id', e.id);
       if (error) throw error;
     }
   }
 
   // Rentals of the car.
-  const { error: rentalError } = await supabase.from('rentals').update({ car: to }).eq('owner_id', ownerId).ilike('car', escapeLike(oldName.trim()));
+  const { error: rentalError } = await (supabase.from('rentals') as any).update({ car: to }).eq('owner_id', ownerId).ilike('car', escapeLike(oldName.trim()));
   if (rentalError) throw rentalError;
 
   // The quantity the owner saved, whatever the bills just did to it.
-  const { error: stockError } = await supabase.from('products').update({ stock_level: stockLevel }).eq('id', productId);
+  const { error: stockError } = await (supabase.from('products') as any).update({ stock_level: stockLevel }).eq('id', productId);
   if (stockError) throw stockError;
 }
