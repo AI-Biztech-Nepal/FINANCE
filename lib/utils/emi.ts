@@ -1,7 +1,6 @@
 // lib/utils/emi.ts
 import { round2 } from './money';
 import type { EmiPlan } from '../../types/database.types';
-import { themeColors } from '../theme/accent';
 
 /** 'YYYY-MM-DD' `n` months after `iso`, on the same day (the month's last day when it has fewer). */
 export function addMonths(iso: string, n: number): string {
@@ -38,6 +37,6 @@ export function emiFigures(plan: Pick<EmiPlan, 'down_payment' | 'installment' | 
       ? { label: 'Completed', color: '#047857', bg: '#ECFDF5' }
       : overdue > 0
         ? { label: 'Overdue', color: '#B91C1C', bg: '#FEF2F2' }
-        : { label: 'Running', color: themeColors.c700, bg: themeColors.c50 };
+        : { label: 'Running', color: '#1D4ED8', bg: '#EFF6FF' };
   return { total, paid: round2(paid), dueCount, dueByNow, overdue, remaining, next: remaining === 0 ? null : next, status };
 }

@@ -33,7 +33,6 @@ import { tidyName } from '../../utils/nameCaps';
 import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import type { BusinessTransaction } from '../../../types/database.types';
 import { decimalInput } from '../../utils/number';
-import { accentAlpha, themeColors } from '../../theme/accent';
 
 type Kind = 'opening' | 'received' | 'paid' | 'expense' | 'sale' | 'purchase' | 'transfer' | 'journal';
 
@@ -323,7 +322,7 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
         { key: 'balance', label: 'Balance', width: 92, align: 'right', render: balanceCell },
       ];
 
-  const closingColor = closing >= 0 ? themeColors.c600 : '#DC2626';
+  const closingColor = closing >= 0 ? '#2563EB' : '#DC2626';
   const footer = full
     ? {
         label: `Opening ${money(opening)} + In ${money(totalIn)} − Out ${money(totalOut)} = Closing balance`,
@@ -769,9 +768,9 @@ function AccountPicker({ options, selected, onSelect, userId }: {
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
                     className="flex-row items-center px-4 py-3"
-                    style={{ gap: 10, backgroundColor: on ? themeColors.c50 : undefined }}
+                    style={{ gap: 10, backgroundColor: on ? '#EFF6FF' : undefined }}
                   >
-                    <Ionicons name={iconFor(c.key)} size={17} color={on ? themeColors.c700 : '#6B7280'} />
+                    <Ionicons name={iconFor(c.key)} size={17} color={on ? '#1D4ED8' : '#6B7280'} />
                     <Text className={`flex-1 text-[14px] ${on ? 'font-bold text-blue-700' : 'font-medium text-gray-900'}`} numberOfLines={1}>
                       {c.name}
                     </Text>
@@ -780,7 +779,7 @@ function AccountPicker({ options, selected, onSelect, userId }: {
                         NPR {formatMoney(amountOf(c.key) ?? 0)}
                       </Text>
                     )}
-                    {on && <Ionicons name="checkmark" size={17} color={themeColors.c700} />}
+                    {on && <Ionicons name="checkmark" size={17} color="#1D4ED8" />}
                   </Pressable>
                 );
               })}
@@ -794,7 +793,7 @@ function AccountPicker({ options, selected, onSelect, userId }: {
           accessibilityLabel={`Showing ${current?.name ?? 'all accounts'}. Choose an account`}
           accessibilityState={{ expanded: open }}
           className="flex-row items-center rounded-full px-4"
-          style={{ minHeight: 44, gap: 8, backgroundColor: themeColors.c700, boxShadow: `0 8px 20px ${accentAlpha(700, 0.35)}` }}
+          style={{ minHeight: 44, gap: 8, backgroundColor: '#1D4ED8', boxShadow: '0 8px 20px rgba(29,78,216,0.35)' }}
         >
           <Ionicons name={iconFor(current?.key ?? null)} size={17} color="#FFFFFF" />
           <Text className="max-w-[180px] text-[14px] font-semibold text-white" numberOfLines={1}>

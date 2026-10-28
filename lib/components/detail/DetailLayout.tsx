@@ -3,7 +3,6 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 import { View, Text, Image, Pressable, Platform, ScrollView, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../web/WebSidebarShell';
-import { themeColors } from '../../theme/accent';
 
 /** True once the viewport is wide enough for the two-column detail layout -
  * same breakpoint the sidebar shell uses, so a phone browser still gets the
@@ -18,7 +17,7 @@ export function useWideDetail(): boolean {
 export const STAGE_PILL: Record<string, { bg: string; ink: string }> = {
   orange: { bg: '#FFF7ED', ink: '#C2410C' },
   amber: { bg: '#FFFBEB', ink: '#B45309' },
-  blue: { get bg() { return themeColors.c50; }, get ink() { return themeColors.c700; } },
+  blue: { bg: '#EFF6FF', ink: '#1D4ED8' },
   red: { bg: '#FEF2F2', ink: '#B91C1C' },
   green: { bg: '#F0FDF4', ink: '#15803D' },
   emerald: { bg: '#ECFDF5', ink: '#047857' },
@@ -160,7 +159,7 @@ export function DetailHero({
 }
 
 const HERO_ACTION_TONE = {
-  call: { get bg() { return themeColors.c50; }, get fg() { return themeColors.c700; } },
+  call: { bg: '#EFF6FF', fg: '#1D4ED8' },
   message: { bg: '#F0FDFA', fg: '#0F766E' },
 } as const;
 
@@ -262,9 +261,9 @@ export function DetailTimeline({ steps }: { steps: TimelineStep[] }) {
               <View
                 className="h-[22px] w-[22px] items-center justify-center rounded-full"
                 style={{
-                  backgroundColor: step.done ? themeColors.c600 : step.now ? '#FFFFFF' : '#F3F4F6',
+                  backgroundColor: step.done ? '#2563EB' : step.now ? '#FFFFFF' : '#F3F4F6',
                   borderWidth: step.now ? 2 : 0,
-                  borderColor: themeColors.c600,
+                  borderColor: '#2563EB',
                 }}
               >
                 {step.done ? (
@@ -276,7 +275,7 @@ export function DetailTimeline({ steps }: { steps: TimelineStep[] }) {
               {!last && (
                 <View
                   className="w-0.5 flex-1"
-                  style={{ minHeight: 26, backgroundColor: step.done ? themeColors.c600 : '#E5E7EB' }}
+                  style={{ minHeight: 26, backgroundColor: step.done ? '#2563EB' : '#E5E7EB' }}
                 />
               )}
             </View>
@@ -303,8 +302,8 @@ export function PersonRow({
   sub,
   initials,
   photoUrl,
-  bg = themeColors.c100,
-  fg = themeColors.c700,
+  bg = '#DBEAFE',
+  fg = '#1D4ED8',
   children,
 }: {
   name: string;
@@ -364,10 +363,10 @@ export function DetailButton({
   height?: number;
 }) {
   const styles: Record<ButtonKind, { bg: string; fg: string; border?: string }> = {
-    primary: { bg: themeColors.c500, fg: '#FFFFFF' },
+    primary: { bg: '#3B82F6', fg: '#FFFFFF' },
     green: { bg: '#16A34A', fg: '#FFFFFF' },
     ghost: { bg: '#FFFFFF', fg: '#374151', border: '#D1D5DB' },
-    tint: { bg: themeColors.c50, fg: themeColors.c700, border: themeColors.c200 },
+    tint: { bg: '#EFF6FF', fg: '#1D4ED8', border: '#BFDBFE' },
     red: { bg: '#DC2626', fg: '#FFFFFF' },
     // A destructive action that is not the main one: outlined, red text.
     danger: { bg: '#FFFFFF', fg: '#DC2626', border: '#FECACA' },

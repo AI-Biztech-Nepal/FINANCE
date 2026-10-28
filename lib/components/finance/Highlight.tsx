@@ -1,10 +1,9 @@
 // lib/components/finance/Highlight.tsx
 import type { ReactNode } from 'react';
 import { Text } from 'react-native';
-import { themeColors } from '../../theme/accent';
 
 /** What a search match looks like: the brand blue on a pale background. */
-const MARK = { get color() { return themeColors.c700; }, get backgroundColor() { return themeColors.c100; } } as const;
+const MARK = { color: '#1D4ED8', backgroundColor: '#DBEAFE' } as const;
 
 /** `text` with every part that matches what was typed in the search marked - so a search shows why each
  * line is there. Not case-sensitive; with nothing typed (or no match) the text is returned as it is. Put it

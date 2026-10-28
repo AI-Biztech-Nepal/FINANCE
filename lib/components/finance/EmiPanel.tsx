@@ -9,7 +9,6 @@ import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import { journalOf } from '../../utils/journalVoucher';
 import { round2 } from '../../utils/money';
-import { themeColors } from '../../theme/accent';
 
 const key = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -99,7 +98,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   return (
     <>
       <BookStats>
-        <BookStat label="Running" value={String(rows.filter((r) => r.status.label !== 'Completed').length)} color={themeColors.c700} />
+        <BookStat label="Running" value={String(rows.filter((r) => r.status.label !== 'Completed').length)} color="#1D4ED8" />
         <BookStat label="Received" value={`NPR ${money(sum((r) => r.paid))}`} color="#047857" />
         <BookStat label="Overdue" value={`NPR ${money(sum((r) => r.overdue))}`} color="#B91C1C" />
         <BookStat label="Remaining" value={`NPR ${money(sum((r) => r.remaining))}`} color="#111827" />

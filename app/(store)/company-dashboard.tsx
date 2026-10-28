@@ -21,8 +21,7 @@ import { supabase } from '../../lib/supabase';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../../lib/components/web/WebSidebarShell';
 import { CARD_SHADOW, RecentActivityCard } from '../../lib/components/finance/dashboard/FinanceDashboard';
 import { formatMoney } from '../../lib/utils/money';
-import { builtInLogo, builtInLogoLarge } from '../../lib/utils/accountFeatures';
-import { themeColors } from '../../lib/theme/accent';
+import { bannerColors, builtInLogo, builtInLogoLarge } from '../../lib/utils/accountFeatures';
 
 const npr = (n: number) => `NPR ${formatMoney(n)}`;
 /** 1,23,456 -> "1.23L", 12,34,567 -> "12.3L", 1,23,45,678 -> "1.23Cr": short money for charts. */
@@ -35,7 +34,7 @@ function lakh(n: number): string {
   return `${s}${Math.round(a)}`;
 }
 const DAY_MS = 24 * 60 * 60 * 1000;
-const palette = () => [themeColors.c600, '#0F766E', '#F59E0B', '#7C3AED', '#E11D48', '#94A3B8'];
+const PALETTE = ['#2563EB', '#0F766E', '#F59E0B', '#7C3AED', '#E11D48', '#94A3B8'];
 
 // ---------- months ----------
 type Bucket = { key: string; label: string };
@@ -311,8 +310,8 @@ function TrendChart({ labels, sales, purchases, onSales, onPurchases }: { labels
     <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
       <Defs>
         <SvgGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={themeColors.c600} stopOpacity={0.35} />
-          <Stop offset="1" stopColor={themeColors.c600} stopOpacity={0.02} />
+          <Stop offset="0" stopColor="#2563EB" stopOpacity={0.35} />
+          <Stop offset="1" stopColor="#2563EB" stopOpacity={0.02} />
         </SvgGradient>
       </Defs>
       {grid.map((g) => {
@@ -326,7 +325,7 @@ function TrendChart({ labels, sales, purchases, onSales, onPurchases }: { labels
       })}
       {area ? <Path d={area} fill="url(#salesFill)" /> : null}
       <Path d={purchaseLine} fill="none" stroke="#F59E0B" strokeWidth={2.5} strokeLinecap="round" {...svgPress(onPurchases)} />
-      <Path d={salesLine} fill="none" stroke={themeColors.c600} strokeWidth={3.5} strokeLinecap="round" {...svgPress(onSales)} />
+      <Path d={salesLine} fill="none" stroke="#2563EB" strokeWidth={3.5} strokeLinecap="round" {...svgPress(onSales)} />
       {purchases.map((v, i) => (
         <Circle key={`p${i}`} cx={x(i)} cy={y(v)} r={5} fill="#FFFFFF" stroke="#F59E0B" strokeWidth={2} {...svgPress(onPurchases)} />
       ))}
@@ -340,14 +339,14 @@ function TrendChart({ labels, sales, purchases, onSales, onPurchases }: { labels
         const purchaseY = purchaseHigher ? y(pv) - 11 : y(pv) + 19;
         return (
           <G key={`s${i}`}>
-            <Circle cx={x(i)} cy={y(v)} r={best || lastPoint ? 7 : 5.5} fill="#FFFFFF" stroke={themeColors.c600} strokeWidth={3} {...svgPress(onSales)} />
+            <Circle cx={x(i)} cy={y(v)} r={best || lastPoint ? 7 : 5.5} fill="#FFFFFF" stroke="#2563EB" strokeWidth={3} {...svgPress(onSales)} />
             {v > 0 && (
               <SvgText
                 x={x(i)}
                 y={salesY}
                 fontSize={best || lastPoint ? 12 : 10.5}
                 fontWeight={best || lastPoint ? '700' : '600'}
-                fill={best || lastPoint ? themeColors.c700 : '#374151'}
+                fill={best || lastPoint ? '#1D4ED8' : '#374151'}
                 textAnchor="middle"
               >
                 {lakh(v)}
@@ -557,7 +556,7 @@ export default function StoreDashboard() {
     const rest = sorted.slice(5).reduce((s, [, v]) => s + v, 0);
     if (rest > 0) top.push(['Other', rest]);
     const total = top.reduce((s, [, v]) => s + v, 0);
-    return { parts: top.map(([label, value], i) => ({ label, value, color: palette()[i % palette().length] })), total };
+    return { parts: top.map(([label, value], i) => ({ label, value, color: PALETTE[i % PALETTE.length] })), total };
   }, [transactions, categories, range]);
 
   // ---- top customers by sales in the period ----
@@ -585,6 +584,8 @@ export default function StoreDashboard() {
   // No logo uploaded: the one the app keeps for this company, if any.
   const fallbackLogo = logoUrl ? null : builtInLogo(company);
   const largeLogo = logoUrl ? null : builtInLogoLarge(company);
+  // The banner at the top: blue, green for Deeva.
+  const banner = bannerColors(company);
   const details = [
     profile?.business_address && { icon: 'location-outline' as const, text: profile.business_address },
     profile?.business_phone && { icon: 'call-outline' as const, text: profile.business_phone },
@@ -594,8 +595,8 @@ export default function StoreDashboard() {
   const go = (path: string) => router.push(path as never);
 
   const cashParts = [
-    { label: 'Cash', value: Math.max(0, balances.cash), color: palette()[2] },
-    ...balances.perAccount.map((a, i) => ({ label: a.name, value: Math.max(0, a.balance), color: palette()[(i + 3) % palette().length] })),
+    { label: 'Cash', value: Math.max(0, balances.cash), color: PALETTE[2] },
+    ...balances.perAccount.map((a, i) => ({ label: a.name, value: Math.max(0, a.balance), color: PALETTE[(i + 3) % PALETTE.length] })),
   ].filter((p) => p.value > 0);
   const cashTotal = cashParts.reduce((s, p) => s + p.value, 0);
 
@@ -615,7 +616,7 @@ export default function StoreDashboard() {
 
 
   const hero = (
-    <LinearGradient colors={[themeColors.heroFrom, themeColors.heroMid, themeColors.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 20, padding: wide ? 28 : 20 }}>
+    <LinearGradient colors={banner.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 20, padding: wide ? 28 : 20 }}>
       <View className="flex-row flex-wrap items-center" style={{ gap: 18 }}>
         <Pressable
           onPress={() => setLogoOpen(true)}
@@ -629,7 +630,7 @@ export default function StoreDashboard() {
           ) : fallbackLogo ? (
             <Image source={fallbackLogo} style={{ width: 72, height: 72 }} resizeMode="contain" />
           ) : (
-            <Ionicons name="business" size={34} color={themeColors.c900} />
+            <Ionicons name="business" size={34} color={banner.solid} />
           )}
         </Pressable>
         {/* The square is small, so tapping it shows the logo large and clear. */}
@@ -642,14 +643,14 @@ export default function StoreDashboard() {
           </Pressable>
         </Modal>
         <View style={{ flex: 1, minWidth: 220, gap: 6 }}>
-          <Text className="text-[12px] font-semibold tracking-wider text-blue-200">COMPANY OVERVIEW</Text>
+          <Text className="text-[12px] font-semibold tracking-wider" style={{ color: banner.label }}>COMPANY OVERVIEW</Text>
           <Text className="text-[26px] font-extrabold text-white" numberOfLines={2}>{company}</Text>
-          {profile?.full_name && profile.business_name ? <Text className="text-[13px] text-blue-100">Owner · {profile.full_name}</Text> : null}
+          {profile?.full_name && profile.business_name ? <Text className="text-[13px]" style={{ color: banner.sub }}>Owner · {profile.full_name}</Text> : null}
           <View className="mt-1 flex-row flex-wrap" style={{ columnGap: 16, rowGap: 6 }}>
             {details.map((d) => (
               <View key={d.text} className="flex-row items-center" style={{ gap: 6 }}>
-                <Ionicons name={d.icon} size={14} color={themeColors.c200} />
-                <Text className="text-[12.5px] text-blue-50" numberOfLines={1}>{d.text}</Text>
+                <Ionicons name={d.icon} size={14} color={banner.label} />
+                <Text className="text-[12.5px]" style={{ color: banner.soft }} numberOfLines={1}>{d.text}</Text>
               </View>
             ))}
           </View>
@@ -667,10 +668,10 @@ export default function StoreDashboard() {
           { label: 'Entries this period', value: String(entriesInPeriod), icon: 'book-outline' as const, path: '/(store)/daybook' },
         ].map((s) => (
           <Pressable key={s.label} onPress={() => go(s.path)} className="flex-row items-center rounded-xl px-3.5 py-2.5" style={{ gap: 10, backgroundColor: 'rgba(255,255,255,0.12)', flexGrow: 1, flexBasis: 150 }}>
-            <Ionicons name={s.icon} size={18} color={themeColors.c200} />
+            <Ionicons name={s.icon} size={18} color={banner.label} />
             <View>
               <Text className="text-[18px] font-extrabold text-white">{s.value}</Text>
-              <Text className="text-[11.5px] text-blue-100">{s.label}</Text>
+              <Text className="text-[11.5px]" style={{ color: banner.sub }}>{s.label}</Text>
             </View>
           </Pressable>
         ))}
@@ -684,7 +685,7 @@ export default function StoreDashboard() {
     {
       headerRight: () => (
         <Pressable onPress={() => setPeriodOpen(true)} className="flex-row items-center rounded-lg border border-gray-200 bg-white px-3 py-1.5" style={{ gap: 6 }}>
-          <Ionicons name="calendar-outline" size={15} color={themeColors.c900} />
+          <Ionicons name="calendar-outline" size={15} color="#1E3A8A" />
           <Text className="text-[12.5px] font-semibold text-gray-800">{periodLabel}</Text>
           <Ionicons name="chevron-down" size={13} color="#6B7280" />
         </Pressable>
@@ -702,10 +703,10 @@ export default function StoreDashboard() {
               key={p.key}
               onPress={() => { setPeriod(p.key); setPeriodOpen(false); }}
               className="flex-row items-center px-3.5 py-2.5"
-              style={{ gap: 8, backgroundColor: p.key === period ? themeColors.c50 : undefined }}
+              style={{ gap: 8, backgroundColor: p.key === period ? '#EFF6FF' : undefined }}
             >
-              <Text className="flex-1 text-[13px]" style={{ color: p.key === period ? themeColors.c700 : '#1F2937', fontWeight: p.key === period ? '700' : '500' }}>{p.label}</Text>
-              {p.key === period && <Ionicons name="checkmark" size={15} color={themeColors.c700} />}
+              <Text className="flex-1 text-[13px]" style={{ color: p.key === period ? '#1D4ED8' : '#1F2937', fontWeight: p.key === period ? '700' : '500' }}>{p.label}</Text>
+              {p.key === period && <Ionicons name="checkmark" size={15} color="#1D4ED8" />}
             </Pressable>
           ))}
         </View>
@@ -726,7 +727,7 @@ export default function StoreDashboard() {
       <Kpi label={`Expenses · ${periodLabel}`} value={npr(totals.now.expense)} icon="receipt-outline" color="#B91C1C" tint="#FEF2F2" caption={ec.text} captionColor="#6B7280" series={series.expense} onPress={() => go('/(store)/expense-report')} />
       <Kpi label={`Result · ${periodLabel}`} value={npr(monthResult)} icon="calculator-outline" color={monthResult >= 0 ? '#0F766E' : '#B91C1C'} tint="#F0FDFA" caption="Sales − purchases − expenses" onPress={() => go('/(store)/report')} />
       <Kpi label="Cash & bank" value={npr(balances.total)} icon="wallet-outline" color="#047857" tint="#ECFDF5" caption={`Cash ${npr(balances.cash)}`} onPress={() => go('/(store)/bank-balances')} />
-      <Kpi label="To receive" value={npr(owed.receivable)} icon="arrow-down-circle-outline" color={themeColors.c700} tint={themeColors.c50} caption={`From ${owed.debtors} ${owed.debtors === 1 ? 'party' : 'parties'}`} onPress={() => go('/(store)/to-receive')} />
+      <Kpi label="To receive" value={npr(owed.receivable)} icon="arrow-down-circle-outline" color="#1D4ED8" tint="#EFF6FF" caption={`From ${owed.debtors} ${owed.debtors === 1 ? 'party' : 'parties'}`} onPress={() => go('/(store)/to-receive')} />
       <Kpi label="To pay" value={npr(owed.payable)} icon="arrow-up-circle-outline" color="#B91C1C" tint="#FEF2F2" caption="Owed to vendors" onPress={() => go('/(store)/to-give')} />
       <Kpi label="Net position" value={npr(net)} icon="stats-chart-outline" color={net >= 0 ? '#7C3AED' : '#B91C1C'} tint="#F5F3FF" caption="Cash + receivable − payable" captionColor={net < 0 ? '#B91C1C' : '#6B7280'} onPress={() => go('/(store)/bank-balances')} />
     </View>
@@ -743,7 +744,7 @@ export default function StoreDashboard() {
   );
 
   const trend = (
-    <Panel title="Sales and purchases" subtitle="Last 12 months" right={<Legend items={[{ label: 'Sales', color: themeColors.c600 }, { label: 'Purchases', color: '#F59E0B' }]} />}>
+    <Panel title="Sales and purchases" subtitle="Last 12 months" right={<Legend items={[{ label: 'Sales', color: '#2563EB' }, { label: 'Purchases', color: '#F59E0B' }]} />}>
       <TrendChart labels={months.map((m) => m.label)} sales={series.sale} purchases={series.purchase} onSales={() => go('/(store)/sales-report')} onPurchases={() => go('/(store)/purchase-report')} />
     </Panel>
   );
@@ -788,7 +789,7 @@ export default function StoreDashboard() {
         firstHead="Item"
         shareHead="% of cash"
         rows={[
-          { onPress: () => go('/(store)/to-receive'), label: `To receive · ${owed.debtors} ${owed.debtors === 1 ? 'party' : 'parties'}`, amount: owed.receivable, color: themeColors.c600, share: cashAll > 0 ? (owed.receivable / cashAll) * 100 : null },
+          { onPress: () => go('/(store)/to-receive'), label: `To receive · ${owed.debtors} ${owed.debtors === 1 ? 'party' : 'parties'}`, amount: owed.receivable, color: '#2563EB', share: cashAll > 0 ? (owed.receivable / cashAll) * 100 : null },
           { onPress: () => go('/(store)/to-give'), label: 'To pay · vendors', amount: owed.payable, color: '#DC2626', share: cashAll > 0 ? (owed.payable / cashAll) * 100 : null },
           {
             onPress: () => go('/(store)/received'),
@@ -850,7 +851,7 @@ export default function StoreDashboard() {
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text className="text-[13px] font-semibold text-gray-800" numberOfLines={1}>{name}</Text>
                     <View className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                      <View style={{ width: `${Math.max(2, pct)}%`, height: 6, backgroundColor: themeColors.c600 }} />
+                      <View style={{ width: `${Math.max(2, pct)}%`, height: 6, backgroundColor: '#2563EB' }} />
                     </View>
                   </View>
                   <Text className="w-24 text-right text-[13px] font-semibold text-gray-900">{npr(value)}</Text>
@@ -883,7 +884,7 @@ export default function StoreDashboard() {
           { label: 'Stock', icon: 'cube' as const, path: '/(store)/inventory' },
         ].map((a) => (
           <Pressable key={a.label} onPress={() => go(a.path)} className="flex-row items-center rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5" style={{ gap: 8 }}>
-            <Ionicons name={a.icon} size={16} color={themeColors.c900} />
+            <Ionicons name={a.icon} size={16} color="#1E3A8A" />
             <Text className="text-[13px] font-semibold text-gray-800">{a.label}</Text>
           </Pressable>
         ))}

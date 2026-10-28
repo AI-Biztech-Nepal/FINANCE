@@ -5,7 +5,6 @@ import { Text, useCaps } from './CapsText';
 import { Ionicons } from '@expo/vector-icons';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { showAlert, getErrorMessage } from '../../utils/alert';
-import { themeColors } from '../../theme/accent';
 
 const MAX_NAME_LENGTH = 30;
 
@@ -184,7 +183,7 @@ export function PartyTypeField({
           maxLength={MAX_NAME_LENGTH}
           accessibilityLabel="Ledger type"
           className="rounded-lg border bg-white px-3 py-2.5 text-sm text-gray-900"
-          style={[{ borderColor: focused ? themeColors.c600 : '#D1D5DB' }, typing]}
+          style={[{ borderColor: focused ? '#2563EB' : '#D1D5DB' }, typing]}
         />
 
         {open ? (
@@ -208,7 +207,7 @@ export function PartyTypeField({
                     <Text className={`text-sm font-semibold ${selected ? 'text-blue-700' : 'text-gray-900'}`} numberOfLines={1}>
                       {t.name}
                     </Text>
-                    {selected && <Ionicons name="checkmark-circle" size={16} color={themeColors.c600} />}
+                    {selected && <Ionicons name="checkmark-circle" size={16} color="#2563EB" />}
                   </Pressable>
                 );
               })}

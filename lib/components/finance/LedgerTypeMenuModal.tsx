@@ -6,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from './CapsText';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { showAlert, getErrorMessage } from '../../utils/alert';
-import { themeColors } from '../../theme/accent';
 
 const MAX_NAME_LENGTH = 30;
 
@@ -135,7 +134,7 @@ export function LedgerTypeMenuModal({
               return (
                 <View key={t.id} className="mb-1.5 flex-row items-center rounded-lg border border-gray-100">
                   <Pressable onPress={() => onPick(t.id)} className="flex-1 flex-row items-center gap-2 px-2 py-2.5" accessibilityState={{ selected: on }}>
-                    <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={on ? themeColors.c600 : '#D1D5DB'} />
+                    <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={on ? '#2563EB' : '#D1D5DB'} />
                     <Text className="flex-1 text-sm font-medium text-gray-900" numberOfLines={1}>
                       {t.name}
                     </Text>
@@ -162,7 +161,7 @@ export function LedgerTypeMenuModal({
               className="mb-1.5 flex-row items-center gap-2 rounded-lg border border-gray-100 px-2 py-2.5"
               accessibilityState={{ selected: selectedId == null }}
             >
-              <Ionicons name={selectedId == null ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={selectedId == null ? themeColors.c600 : '#D1D5DB'} />
+              <Ionicons name={selectedId == null ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={selectedId == null ? '#2563EB' : '#D1D5DB'} />
               <Text className="flex-1 text-sm font-medium text-gray-500">No ledger type</Text>
             </Pressable>
           </ScrollView>

@@ -11,7 +11,6 @@ import { router } from 'expo-router';
 import { useScreenHeader } from '../../hooks/useScreenHeader';
 import { formatMoney } from '../../utils/money';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../web/WebSidebarShell';
-import { themeColors } from '../../theme/accent';
 
 /** Rupees with thousands separators, and paise when there are some; a dash for "nothing". */
 export function money(n: number | null | undefined): string {
@@ -74,7 +73,7 @@ export function ToolbarButton({ label, icon, onPress }: { label: string; icon: k
     <Pressable
       onPress={onPress}
       className="h-9 flex-row items-center justify-center rounded-lg px-3.5"
-      style={{ backgroundColor: themeColors.c700, gap: 6 }}
+      style={{ backgroundColor: '#1D4ED8', gap: 6 }}
     >
       <Ionicons name={icon} size={16} color="#FFFFFF" />
       <Text className="text-[13px] font-semibold text-white">{label}</Text>
@@ -342,7 +341,7 @@ export function BookTable<T>({
               onPress={onRowPress ? () => onRowPress(row) : undefined}
               disabled={!onRowPress || rowPressable?.(row) === false}
               className="flex-row border-b border-gray-200"
-              style={highlight?.(row) ? { backgroundColor: themeColors.c50 } : undefined}
+              style={highlight?.(row) ? { backgroundColor: '#EFF6FF' } : undefined}
             >
               {columns.map((c, i) => (
                 <View

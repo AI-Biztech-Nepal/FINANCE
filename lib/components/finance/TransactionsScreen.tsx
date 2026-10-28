@@ -36,7 +36,7 @@ import { AddStockItemDialog } from './AddStockItemDialog';
 import { TransactionsBook } from './TransactionsBook';
 import { tidyName } from '../../utils/nameCaps';
 import { BookTable, type BookColumn } from './BookKit';
-import { entryAccent, entryShadow } from './entryTheme';
+import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
 import { buildCustomerSuggestions, type CustomerSuggestion } from '../../utils/customerSuggestions';
 import { readKey } from '../../utils/webKeys';
@@ -57,7 +57,6 @@ import type {
 } from '../../../types/database.types';
 import { localTodayIso } from '../../utils/localDate';
 import { round2, formatMoney } from '../../utils/money';
-import { themeColors } from '../../theme/accent';
 
 // Local date, not UTC - see localTodayIso.
 const todayIso = localTodayIso;
@@ -545,9 +544,9 @@ function CategoryPickerModal({
                         key={k}
                         onPress={() => setNewGroup(k)}
                         className="flex-1 items-center rounded-lg border py-2"
-                        style={{ borderColor: newGroup === k ? themeColors.c600 : '#D1D5DB', backgroundColor: newGroup === k ? themeColors.c50 : '#FFFFFF' }}
+                        style={{ borderColor: newGroup === k ? '#2563EB' : '#D1D5DB', backgroundColor: newGroup === k ? '#EFF6FF' : '#FFFFFF' }}
                       >
-                        <Text className="text-[13px] font-semibold" style={{ color: newGroup === k ? themeColors.c700 : '#374151' }}>{label}</Text>
+                        <Text className="text-[13px] font-semibold" style={{ color: newGroup === k ? '#1D4ED8' : '#374151' }}>{label}</Text>
                       </Pressable>
                     ))}
                   </View>
@@ -1605,7 +1604,7 @@ function TransactionForm({
               className="h-9 flex-row items-center justify-center rounded-lg border border-blue-600 bg-blue-50 px-3.5 disabled:opacity-50"
               style={{ gap: 6 }}
             >
-              <Ionicons name={scanning ? 'hourglass-outline' : 'camera-outline'} size={15} color={themeColors.c600} />
+              <Ionicons name={scanning ? 'hourglass-outline' : 'camera-outline'} size={15} color="#2563EB" />
               <Text className="text-[13px] font-semibold text-blue-700">{scanning ? 'Reading…' : 'Scan Bill'}</Text>
             </Pressable>
           ),
@@ -1615,7 +1614,7 @@ function TransactionForm({
   );
 
   if (expenseTable) {
-    const accent = entryAccent();
+    const accent = FINANCE_ENTRY_ACCENT;
     return (
       <View className="mb-4">
         <View className="mb-4 flex-row" style={{ gap: 24 }}>
@@ -1707,7 +1706,7 @@ function TransactionForm({
                   onPress={handleSaveAllExpenses}
                   disabled={saving}
                   className="items-center rounded-xl px-8 py-2.5 disabled:opacity-50"
-                  style={{ backgroundColor: accent, boxShadow: `0 2px 6px ${entryShadow()}` }}
+                  style={{ backgroundColor: accent, boxShadow: `0 2px 6px ${FINANCE_ENTRY_SHADOW}` }}
                 >
                   <Text className="text-sm font-bold text-white">{saving ? 'Saving…' : 'Save'}</Text>
                 </Pressable>
@@ -1716,7 +1715,7 @@ function TransactionForm({
           </View>
 
           <View style={{ width: 320 }}>
-            <RecentEntriesCard userId={userId} type="expense" color={entryAccent()} activeId={initial?.id} onOpen={onOpenRecent} />
+            <RecentEntriesCard userId={userId} type="expense" color={FINANCE_ENTRY_ACCENT} activeId={initial?.id} onOpen={onOpenRecent} />
           </View>
         </View>
 
@@ -1758,8 +1757,8 @@ function TransactionForm({
   // same ones the original single-column return further down uses -
   // nothing here is a separate calculation.
   if (desktopWeb && isBill) {
-    const accent = entryAccent();
-    const accentShadow = entryShadow();
+    const accent = FINANCE_ENTRY_ACCENT;
+    const accentShadow = FINANCE_ENTRY_SHADOW;
     const partyLabel = type === 'purchase' ? 'Vendor' : 'Customer';
 
     return (
@@ -2134,7 +2133,7 @@ function TransactionForm({
         disabled={scanning}
         className="mb-3 flex-row items-center justify-center gap-2 rounded-lg border border-blue-600 bg-blue-50 py-2.5 disabled:opacity-50"
       >
-        <Ionicons name={scanning ? 'hourglass-outline' : 'camera-outline'} size={16} color={themeColors.c600} />
+        <Ionicons name={scanning ? 'hourglass-outline' : 'camera-outline'} size={16} color="#2563EB" />
         <Text className="text-sm font-semibold text-blue-700">{scanning ? 'Reading the bill…' : 'Scan Bill'}</Text>
       </Pressable>
       {isBill ? (
@@ -2732,7 +2731,7 @@ function BillEditPopup({
           {/* The bill's items, ruled like the printed bill: what the amount above is made of. */}
           <BillItemsReadOnly tx={tx} />
           <Pressable onPress={onEditItems} accessibilityRole="button" className="flex-row items-center self-start" style={{ gap: 6 }}>
-            <Ionicons name="create-outline" size={14} color={themeColors.c700} />
+            <Ionicons name="create-outline" size={14} color="#1D4ED8" />
             <Text className="text-[12px] font-semibold text-blue-700">Edit the items</Text>
           </Pressable>
         </View>
@@ -3189,7 +3188,7 @@ function TransferFeedRow({
       className="mb-2.5 flex-row items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4"
     >
       <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
-        <Ionicons name="swap-horizontal" size={16} color={themeColors.c600} />
+        <Ionicons name="swap-horizontal" size={16} color="#2563EB" />
       </View>
       <View className="flex-1">
         <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
@@ -3654,7 +3653,7 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
                       className="h-10 flex-row items-center justify-center rounded-2xl border border-gray-300 bg-white px-3"
                       style={{ gap: 6 }}
                     >
-                      <Ionicons name="cloud-upload-outline" size={17} color={themeColors.c700} />
+                      <Ionicons name="cloud-upload-outline" size={17} color="#1D4ED8" />
                       <Text className="text-[13px] font-semibold text-gray-700">Import</Text>
                     </Pressable>
                   )}

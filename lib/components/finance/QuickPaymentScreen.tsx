@@ -23,7 +23,7 @@ import { KeyboardSelect } from './KeyboardSelect';
 import { useConfirmSave } from './ConfirmSave';
 import { optionLabel } from '../../hooks/useAvailableAmounts';
 import { useAccountBalances } from '../../hooks/useAccountBalances';
-import { entryAccent, entryShadow } from './entryTheme';
+import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { MONEY } from './moneyColors';
 import { readKey } from '../../utils/webKeys';
 import { showAlert, getErrorMessage } from '../../utils/alert';
@@ -34,7 +34,6 @@ import { localTodayIso } from '../../utils/localDate';
 import { round2, formatMoney } from '../../utils/money';
 import { itemListOf, sellsVehicles } from '../../utils/accountFeatures';
 import type { SuggestOption } from './SuggestInput';
-import { themeColors } from '../../theme/accent';
 
 // Local date, not UTC - see localTodayIso.
 const todayIso = localTodayIso;
@@ -601,7 +600,7 @@ function QuickPaymentForm() {
       disabled={scanning}
       className="flex-row items-center justify-center gap-2 rounded-lg border border-blue-600 bg-blue-50 px-4 py-2.5 disabled:opacity-50"
     >
-      <Ionicons name={scanning ? 'hourglass-outline' : 'camera-outline'} size={16} color={themeColors.c600} />
+      <Ionicons name={scanning ? 'hourglass-outline' : 'camera-outline'} size={16} color="#2563EB" />
       <Text className="text-sm font-semibold text-blue-700">{scanning ? 'Reading the slip…' : 'Scan Bill'}</Text>
     </Pressable>
   );
@@ -654,7 +653,7 @@ function QuickPaymentForm() {
       )}
       {selectedCustomer ? (
         <View className="flex-row items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2">
-          <Ionicons name="checkmark-circle" size={14} color={themeColors.c700} />
+          <Ionicons name="checkmark-circle" size={14} color="#1d4ed8" />
           <Text className="flex-1 text-xs font-medium text-blue-700">
             Using saved {payTarget === 'vendor' ? 'vendor' : 'customer'}
           </Text>
@@ -723,7 +722,7 @@ function QuickPaymentForm() {
               className="h-9 flex-row items-center justify-center rounded-lg border border-blue-600 bg-blue-50 px-3.5 disabled:opacity-50"
               style={{ gap: 6 }}
             >
-              <Ionicons name={scanning ? 'hourglass-outline' : 'camera-outline'} size={15} color={themeColors.c600} />
+              <Ionicons name={scanning ? 'hourglass-outline' : 'camera-outline'} size={15} color="#2563EB" />
               <Text className="text-[13px] font-semibold text-blue-700">{scanning ? 'Reading…' : 'Scan Bill'}</Text>
             </Pressable>
           ),
@@ -733,7 +732,7 @@ function QuickPaymentForm() {
   );
 
   if (desktopWeb) {
-    const accent = entryAccent();
+    const accent = FINANCE_ENTRY_ACCENT;
     return (
       <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <View className="px-8 pt-6">
@@ -855,7 +854,7 @@ function QuickPaymentForm() {
                     onPress={handleSaveAll}
                     disabled={saving}
                     className="items-center rounded-xl px-8 py-2.5 disabled:opacity-50"
-                    style={{ backgroundColor: accent, boxShadow: `0 2px 6px ${entryShadow()}` }}
+                    style={{ backgroundColor: accent, boxShadow: `0 2px 6px ${FINANCE_ENTRY_SHADOW}` }}
                   >
                     <Text className="text-sm font-bold text-white">{saving ? 'Saving…' : 'Save'}</Text>
                   </Pressable>

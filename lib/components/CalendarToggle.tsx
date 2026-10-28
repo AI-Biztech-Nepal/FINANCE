@@ -1,7 +1,6 @@
 // lib/components/CalendarToggle.tsx
 import { Pressable, Text, View } from 'react-native';
 import { useCalendarMode, type CalendarMode } from '../hooks/useCalendarMode';
-import { themeColors } from '../theme/accent';
 
 const OPTIONS: { mode: CalendarMode; label: string; help: string }[] = [
   { mode: 'ad', label: 'AD', help: 'Show dates in English (AD)' },
@@ -32,7 +31,7 @@ export function CalendarToggle() {
             className="items-center justify-center rounded-md px-2.5 py-1"
             style={{ backgroundColor: on ? '#FFFFFF' : 'transparent', boxShadow: on ? '0 1px 2px rgba(16,24,40,0.12)' : undefined }}
           >
-            <Text className="text-[12px] font-bold" style={{ color: on ? themeColors.c700 : '#6B7280' }}>
+            <Text className="text-[12px] font-bold" style={{ color: on ? '#1D4ED8' : '#6B7280' }}>
               {o.label}
             </Text>
           </Pressable>

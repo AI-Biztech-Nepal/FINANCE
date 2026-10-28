@@ -8,6 +8,27 @@ export function sellsVehicles(businessName: string | null | undefined): boolean 
   return /\bdee?va\s+auto\b/i.test(businessName ?? '');
 }
 
+export interface BannerColors {
+  /** The flat band (Finance, Report). */
+  solid: string;
+  /** The Dashboard's gradient, corner to corner. */
+  gradient: [string, string, string];
+  /** The light tints for the small text on the band, strongest first. */
+  label: string;
+  sub: string;
+  soft: string;
+  delta: string;
+}
+
+const BLUE_BANNER: BannerColors = { solid: '#1E3A8A', gradient: ['#0F172A', '#1E3A8A', '#2563EB'], label: '#BFDBFE', sub: '#DBEAFE', soft: '#EFF6FF', delta: '#93C5FD' };
+const GREEN_BANNER: BannerColors = { solid: '#169441', gradient: ['#169441', '#1EAE4E', '#34CB69'], label: '#B9F1CB', sub: '#DDF8E6', soft: '#F2FDF5', delta: '#84E8A5' };
+
+/** The colours of the big band at the top of the Dashboard, Finance and Report pages: the app's blue, except for Deeva
+ * Auto Enterprises, whose main colour is green. Only that band - the rest of the app stays blue for every account. */
+export function bannerColors(businessName: string | null | undefined): BannerColors {
+  return sellsVehicles(businessName) ? GREEN_BANNER : BLUE_BANNER;
+}
+
 /** A logo kept with the app for an account that has not uploaded one of its own (Company Details): Hamro G&G
  * Auto Enterprises, picked out by its business name - "G&G", "G & G" or "GnG", in any case - and Deeva Auto
  * Enterprises. Both are made for a light background (no background of their own). */

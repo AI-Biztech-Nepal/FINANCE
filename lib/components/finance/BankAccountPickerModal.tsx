@@ -7,7 +7,6 @@ import type { BankAccount } from '../../../types/database.types';
 import type { AvailableAmounts } from '../../hooks/useAvailableAmounts';
 import { useAccountBalances } from '../../hooks/useAccountBalances';
 import { formatMoney, round2 } from '../../utils/money';
-import { themeColors } from '../../theme/accent';
 
 /** The money available in an account, shown at the right of its row. */
 function Available({ amount }: { amount: number | undefined }) {
@@ -88,7 +87,7 @@ export function BankAccountPickerModal({
 
           {total !== undefined && accounts.length > 0 && (
             <View className="mb-2 flex-row items-center gap-2 rounded-lg bg-blue-50 px-2.5 py-2">
-              <Ionicons name="wallet-outline" size={16} color={themeColors.c700} />
+              <Ionicons name="wallet-outline" size={16} color="#1D4ED8" />
               <Text className="flex-1 text-sm font-semibold text-blue-800">All accounts · without cash</Text>
               <Text className="text-xs font-bold" style={{ color: total < 0 ? '#DC2626' : '#047857' }}>
                 NPR {formatMoney(total)}
@@ -105,7 +104,7 @@ export function BankAccountPickerModal({
               className="mb-1.5 flex-row items-center gap-2 rounded-lg border border-gray-100 px-2 py-2"
             >
               <Ionicons name="cash-outline" size={16} color="#6B7280" />
-              {selectedId === null && <Ionicons name="checkmark-circle" size={16} color={themeColors.c600} />}
+              {selectedId === null && <Ionicons name="checkmark-circle" size={16} color="#2563EB" />}
               <Text className="flex-1 text-sm font-medium text-gray-900">Cash</Text>
             </Pressable>
 
@@ -141,7 +140,7 @@ export function BankAccountPickerModal({
                         className="flex-1 flex-row items-center gap-2 py-1"
                       >
                         <Ionicons name="business-outline" size={16} color="#6B7280" />
-                        {selectedId === acc.id && <Ionicons name="checkmark-circle" size={16} color={themeColors.c600} />}
+                        {selectedId === acc.id && <Ionicons name="checkmark-circle" size={16} color="#2563EB" />}
                         <Text className="flex-1 text-sm font-medium text-gray-900" numberOfLines={1}>
                           {acc.name}
                         </Text>

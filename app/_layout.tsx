@@ -12,8 +12,6 @@ import { useContactsSyncBootstrap } from '../lib/hooks/useContactsSyncBootstrap'
 import { BiometricLockScreen } from '../lib/components/BiometricLockScreen';
 import { AppAlertHost } from '../lib/components/AppAlertHost';
 import '../global.css';
-import { vars } from 'nativewind';
-import { accentFor, accentVars, applyAccent, themeColors } from '../lib/theme/accent';
 
 // Pre-login screens (login/register) are still a bare mobile-first form
 // with no width cap, so on a laptop browser it'd stretch edge-to-edge - a
@@ -84,13 +82,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const isLoading = useAuthStore((state) => state.isLoading);
   const userId = useAuthStore((state) => state.session?.user.id);
   const isRecovering = useAuthStore((state) => state.isRecovering);
-  const profile = useAuthStore((state) => state.profile);
-
-  // The account's own colour (green for Deeva Auto Enterprises, blue for everyone else) is put in place here, in the
-  // render that comes before any signed-in screen is drawn: a page refresh holds the spinner until the profile is in,
-  // and a sign-in goes through the index screen, which waits for it. Signed out, it is blue again.
-  const accent = accentFor(profile?.business_name?.trim() || profile?.full_name);
-  applyAccent(accent);
 
   useBiometricLockBootstrap(userId);
   useContactsSyncBootstrap(userId);
@@ -101,7 +92,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   if (isLoading || (userId && !biometricChecked)) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color={themeColors.c700} />
+        <ActivityIndicator size="large" color="#1d4ed8" />
       </View>
     );
   }
@@ -121,11 +112,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   // to choose a new password, so they get the pre-login frame, not the app's.
   const content =
     userId && !isRecovering ? <KeyboardSafeArea>{children}</KeyboardSafeArea> : <WebFrame>{children}</WebFrame>;
-
-  // On the web the colour is a CSS variable on the page. A phone has no page, so the app is wrapped in its variables.
-  if (Platform.OS !== 'web' && accent !== 'blue') {
-    return <View style={[{ flex: 1 }, vars(accentVars(accent))]}>{content}</View>;
-  }
 
   return (
     <>{content}</>

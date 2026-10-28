@@ -4,7 +4,6 @@ import { router, usePathname, useGlobalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
 import { AppLogo } from '../AppLogo';
-import { themeColors } from '../../theme/accent';
 
 export interface WebNavItem {
   href: string;
@@ -28,7 +27,7 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
   const active = isActive(item.href);
   const top = depth === 0;
 
-  const color = active ? themeColors.c600 : top ? '#6B7280' : '#9CA3AF';
+  const color = active ? '#2563EB' : top ? '#6B7280' : '#9CA3AF';
   return (
     <View>
       <View
@@ -36,7 +35,7 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
           flexDirection: 'row',
           alignItems: 'center',
           borderRadius: top ? 10 : 8,
-          backgroundColor: active ? themeColors.c50 : 'transparent',
+          backgroundColor: active ? '#EFF6FF' : 'transparent',
         }}
       >
         <Pressable
@@ -62,7 +61,7 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
           />
           <Text
             numberOfLines={top ? undefined : 1}
-            style={{ flex: 1, fontSize: top ? 14 : 13, fontWeight: '600', color: active ? themeColors.c600 : '#6B7280' }}
+            style={{ flex: 1, fontSize: top ? 14 : 13, fontWeight: '600', color: active ? '#2563EB' : '#6B7280' }}
           >
             {item.label}
           </Text>
@@ -220,7 +219,7 @@ export function WebSidebarShell({
               width: 34,
               height: 34,
               borderRadius: 999,
-              backgroundColor: themeColors.c600,
+              backgroundColor: '#2563EB',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,

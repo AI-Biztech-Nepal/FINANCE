@@ -41,7 +41,6 @@ import { round2 } from '../../utils/money';
 import { highlightText } from './Highlight';
 import { tidyName } from '../../utils/nameCaps';
 import type { BusinessTransaction, Product } from '../../../types/database.types';
-import { themeColors } from '../../theme/accent';
 
 type StockStatus = 'ok' | 'out' | 'untracked';
 type StatusFilter = 'all' | 'in' | 'out';
@@ -199,7 +198,7 @@ function Field({
         onBlur={() => setFocused(false)}
         placeholderTextColor="#9CA3AF"
         className="rounded-lg border bg-white px-3 py-2.5 text-sm text-gray-900"
-        style={[{ borderColor: focused ? themeColors.c600 : '#D1D5DB' }, { outlineStyle: 'none' } as object]}
+        style={[{ borderColor: focused ? '#2563EB' : '#D1D5DB' }, { outlineStyle: 'none' } as object]}
       />
     </View>
   );
@@ -487,25 +486,25 @@ function StockItemPopup({
             open, so the product form is its only way to edit. */}
         {lastIn ? (
           <>
-            <Pressable onPress={() => onEditPurchase(lastIn.tx)} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: themeColors.c700 }}>
+            <Pressable onPress={() => onEditPurchase(lastIn.tx)} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
               <Text className="text-[13px] font-bold text-white">Edit purchase</Text>
             </Pressable>
-            <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg border px-4 py-2.5" style={{ borderColor: themeColors.c700 }}>
-              <Text className="text-[13px] font-bold" style={{ color: themeColors.c700 }}>{row.product ? 'Edit product' : 'Track as a product'}</Text>
+            <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg border px-4 py-2.5" style={{ borderColor: '#1D4ED8' }}>
+              <Text className="text-[13px] font-bold" style={{ color: '#1D4ED8' }}>{row.product ? 'Edit product' : 'Track as a product'}</Text>
             </Pressable>
           </>
         ) : row.product ? (
           // No purchase bill has this item, so there is none to edit: record the one it was bought with.
           <>
-            <Pressable onPress={onAddPurchase} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: themeColors.c700 }}>
+            <Pressable onPress={onAddPurchase} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
               <Text className="text-[13px] font-bold text-white">Add purchase</Text>
             </Pressable>
-            <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg border px-4 py-2.5" style={{ borderColor: themeColors.c700 }}>
-              <Text className="text-[13px] font-bold" style={{ color: themeColors.c700 }}>Edit product</Text>
+            <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg border px-4 py-2.5" style={{ borderColor: '#1D4ED8' }}>
+              <Text className="text-[13px] font-bold" style={{ color: '#1D4ED8' }}>Edit product</Text>
             </Pressable>
           </>
         ) : (
-          <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: themeColors.c700 }}>
+          <Pressable onPress={onEdit} accessibilityRole="button" className="rounded-lg px-4 py-2.5" style={{ backgroundColor: '#1D4ED8' }}>
             <Text className="text-[13px] font-bold text-white">Track as a product</Text>
           </Pressable>
         )}
@@ -1233,7 +1232,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
             <Pressable onPress={closeDialog} className="rounded-xl border border-gray-300 bg-white px-5 py-3">
               <Text className="text-sm font-bold text-gray-600">Cancel</Text>
             </Pressable>
-            <Pressable onPress={save} disabled={saving} className="rounded-xl px-6 py-3 disabled:opacity-50" style={{ backgroundColor: themeColors.c700 }}>
+            <Pressable onPress={save} disabled={saving} className="rounded-xl px-6 py-3 disabled:opacity-50" style={{ backgroundColor: '#1D4ED8' }}>
               <Text className="text-sm font-bold text-white">Save</Text>
             </Pressable>
           </View>
@@ -1263,7 +1262,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
         {vehicles ? (
           <BookStat label="Profit / Loss" value={`NPR ${profitText(stats.profit)}`} color={profitColor(stats.profit)} />
         ) : (
-          <BookStat label="Stock value (cost)" value={`NPR ${money(stats.value)}`} color={themeColors.c700} />
+          <BookStat label="Stock value (cost)" value={`NPR ${money(stats.value)}`} color="#1D4ED8" />
         )}
         <BookStat label="Out of stock" value={String(stats.out)} color="#B91C1C" onPress={toggleOut} />
       </BookStats>
