@@ -615,7 +615,7 @@ export default function StoreDashboard() {
 
 
   const hero = (
-    <LinearGradient colors={[themeColors.ink, themeColors.c900, themeColors.c600]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 20, padding: wide ? 28 : 20 }}>
+    <LinearGradient colors={[themeColors.heroFrom, themeColors.heroMid, themeColors.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 20, padding: wide ? 28 : 20 }}>
       <View className="flex-row flex-wrap items-center" style={{ gap: 18 }}>
         <Pressable
           onPress={() => setLogoOpen(true)}

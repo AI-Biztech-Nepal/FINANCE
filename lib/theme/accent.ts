@@ -27,29 +27,33 @@ const SCALES: Record<AccentName, Record<Shade, string>> = {
     900: '#1E3A8A',
     950: '#172554',
   },
-  // 600 is the deeper green (white text on it stays easy to read), so the whole scale sits a step darker than Tailwind's.
+  // A bright, clean green all the way down: even the deepest steps stay clearly green (no near-black green), so the
+  // buttons (500), the icon tiles (600) and the links (700) read as one green.
   green: {
-    50: '#F0FDF4',
-    100: '#DCFCE7',
-    200: '#BBF7D0',
-    300: '#86EFAC',
-    400: '#22C55E',
-    500: '#16A34A',
-    600: '#15803D',
-    700: '#166534',
-    800: '#14532D',
-    900: '#0F3D22',
-    950: '#052E16',
+    50: '#F2FDF5',
+    100: '#DDF8E6',
+    200: '#B9F1CB',
+    300: '#84E8A5',
+    400: '#4CD97D',
+    500: '#23BB58',
+    600: '#1CA74C',
+    700: '#169441',
+    800: '#137E37',
+    900: '#116B30',
+    950: '#0D5726',
   },
 };
 
-/** The near-black the dashboard's blue gradient starts from. */
-const INK: Record<AccentName, string> = { blue: '#0F172A', green: '#052E16' };
+/** The three colours of the dashboard's banner gradient. Blue's run from near-black through navy; green's stay green. */
+const HERO: Record<AccentName, [string, string, string]> = {
+  blue: ['#0F172A', '#1E3A8A', '#2563EB'],
+  green: ['#169441', '#1EAE4E', '#34CB69'],
+};
 
-type Colors = Record<`c${Shade}`, string> & { ink: string };
+type Colors = Record<`c${Shade}`, string> & { heroFrom: string; heroMid: string; heroTo: string };
 
 function colorsOf(name: AccentName): Colors {
-  const out = { ink: INK[name] } as Colors;
+  const out = { heroFrom: HERO[name][0], heroMid: HERO[name][1], heroTo: HERO[name][2] } as Colors;
   for (const shade of SHADES) out[`c${shade}`] = SCALES[name][shade];
   return out;
 }
