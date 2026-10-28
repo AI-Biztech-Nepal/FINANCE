@@ -31,7 +31,7 @@ const WORDS: Record<Direction, { tab: string; party: string; price: string; paid
     party: 'Vendor',
     price: 'Purchase price',
     paid: 'Paid',
-    none: 'No stock bought on EMI yet. Add one with New EMI, or add the stock you have above.',
+    none: 'No vehicles bought on EMI yet. Add one with New EMI, or add all your vehicles above.',
     note: 'Paid is what you paid the vendor for the item on the Paid page (pick the item in Item). The down payment is due on the purchase; each instalment on its day. The purchase itself is its Purchase bill.',
   },
 };
@@ -39,7 +39,7 @@ const WORDS: Record<Direction, { tab: string; party: string; price: string; paid
 /** The EMI tab of Rent & EMI, both ways. Customers pay us: every vehicle sold on instalments - what it comes to, what the
  * customer has paid (their Received entries naming the vehicle), what is overdue, what is left and when the next
  * instalment falls. We pay vendors: the stock bought on instalments, the same figures from the Paid entries on the
- * vendor's ledger - with a button that puts all the stock on the shelf in, 12 months at 10% a month (flat). */
+ * vendor's ledger - with a button that puts every vehicle bought in, 12 months at 10% a month (flat). */
 export function EmiPanel({ userId, basePath, full }: { userId: string | undefined; basePath: string; full: boolean }) {
   const today = localTodayIso();
   const [dir, setDir] = useState<Direction>('sale');
@@ -88,7 +88,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
     const price = round2(stock.rows.reduce((s, r) => s + Number(r.sale_price), 0));
     const toPay = round2(stock.rows.reduce((s, r) => s + Number(r.down_payment) + Number(r.installment) * Number(r.months), 0));
     const ok = await confirm({
-      title: `Add ${n} stock ${n === 1 ? 'item' : 'items'} to EMI?`,
+      title: `Add ${n} ${n === 1 ? 'vehicle' : 'vehicles'} to EMI?`,
       rows: [
         { label: 'Items', value: String(n) },
         { label: 'Purchase price', value: `NPR ${money(price)}` },
@@ -203,10 +203,10 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
         <View className="flex-row flex-wrap items-center rounded-xl border border-gray-200 bg-white px-4 py-3" style={{ gap: 12 }}>
           <View style={{ flex: 1, minWidth: 220, gap: 2 }}>
             <Text className="text-[13px] font-semibold text-gray-900">
-              {stock.rows.length > 0 ? `${stock.rows.length} stock ${stock.rows.length === 1 ? 'item is' : 'items are'} not in EMI yet` : 'Nothing left to add'}
+              {stock.rows.length > 0 ? `${stock.rows.length} ${stock.rows.length === 1 ? 'vehicle is' : 'vehicles are'} not in EMI yet` : 'Nothing left to add'}
             </Text>
             <Text className="text-[12px] text-gray-500">
-              {`Bought on EMI: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a month on the price (flat), from the vendor on the purchase bill.`}
+              {`Every vehicle you bought, in stock or sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a month on the price (flat), from the vendor on its purchase bill. What you already paid is taken off in Remaining.`}
               {stock.noPrice.length > 0 ? ` ${stock.noPrice.length} with no purchase price yet ${stock.noPrice.length === 1 ? 'is' : 'are'} left out.` : ''}
             </Text>
           </View>

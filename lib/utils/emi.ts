@@ -27,11 +27,12 @@ export function addMonths(iso: string, n: number): string {
 }
 
 /**
- * The EMI plans for the stock that has been bought and is on the shelf (stock above 0), one per item, bought on
- * instalments from the vendor of its latest Purchase bill: its price (the cost price times what is in stock, else the
- * bill's rate), `months` instalments with `rate`% a month flat, the first one a month after the bill. An item that
- * already has a purchase plan is left out, so adding twice makes no duplicates; one with no price anywhere is
- * reported in `noPrice` instead.
+ * The EMI plans for every vehicle bought - in stock or since sold, none of them is paid up - one per item, on
+ * instalments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to; with no bill,
+ * the cost price), `months` instalments with `rate`% a month flat, the first one a month after the bill. What was
+ * already paid is not taken off here - the plan reads it from the Paid entries, so Remaining shows what is left. An
+ * item that already has a purchase plan is left out, so adding twice makes no duplicates; one with no price anywhere
+ * is reported in `noPrice` instead.
  */
 export function emiStockPlans(input: {
   products: Product[];
@@ -42,27 +43,33 @@ export function emiStockPlans(input: {
   rate: number;
 }): { rows: Omit<EmiPlan, 'id' | 'owner_id' | 'created_at' | 'updated_at'>[]; noPrice: string[] } {
   const have = new Set(input.plans.filter((p) => emiDirection(p) === 'purchase').map((p) => norm(p.car)));
-  const latest = new Map<string, { bill: BusinessTransaction; line: BillItem; date: string }>();
+  // Each item's Purchase bill lines: what they come to, and the latest bill's vendor, model and date.
+  const found = new Map<string, { total: number; bill: BusinessTransaction; line: BillItem; date: string }>();
   for (const bill of input.bills) {
     if (bill.type !== 'purchase') continue;
     const date = (bill.bill_date ?? bill.created_at).slice(0, 10);
     for (const line of bill.items ?? []) {
       const k = norm(line.description);
       if (!k) continue;
-      const seen = latest.get(k);
-      if (!seen || date > seen.date) latest.set(k, { bill, line, date });
+      const amount = Number(line.amount) > 0 ? Number(line.amount) : (Number(line.qty) || 0) * (Number(line.rate) || 0);
+      const seen = found.get(k);
+      if (!seen) found.set(k, { total: amount, bill, line, date });
+      else {
+        seen.total += amount;
+        if (date > seen.date) Object.assign(seen, { bill, line, date });
+      }
     }
   }
   const rows: Omit<EmiPlan, 'id' | 'owner_id' | 'created_at' | 'updated_at'>[] = [];
   const noPrice: string[] = [];
   for (const p of input.products) {
-    if (p.is_active === false || !(Number(p.stock_level) > 0)) continue;
+    if (p.is_active === false) continue;
     const k = norm(p.name);
     if (!k || have.has(k)) continue;
     have.add(k);
-    const found = latest.get(k);
-    const unit = Number(p.purchase_price) > 0 ? Number(p.purchase_price) : Number(found?.line.rate) > 0 ? Number(found?.line.rate) : 0;
-    const price = round2(unit * Number(p.stock_level));
+    const f = found.get(k);
+    // Its bills come to the price; with no (priced) bill, the cost price for what is in stock - or for one, when it has been sold.
+    const price = round2(f && f.total > 0 ? f.total : Number(p.purchase_price) > 0 ? Number(p.purchase_price) * Math.max(1, Number(p.stock_level) || 0) : 0);
     if (!(price > 0)) {
       noPrice.push(p.name);
       continue;
@@ -70,15 +77,15 @@ export function emiStockPlans(input: {
     rows.push({
       direction: 'purchase',
       car: p.name,
-      model: found?.line.model?.trim() || null,
-      customer_id: found?.bill.customer_id ?? null,
-      customer_name: found?.bill.party_name ?? null,
+      model: f?.line.model?.trim() || null,
+      customer_id: f?.bill.customer_id ?? null,
+      customer_name: f?.bill.party_name ?? null,
       sale_price: price,
       down_payment: 0,
       installment: flatInstallment(price, input.months, input.rate),
       months: input.months,
       interest_rate: input.rate,
-      first_due: addMonths(found?.date ?? input.today, 1),
+      first_due: addMonths(f?.date ?? input.today, 1),
       product_id: p.id,
       note: null,
       closed_on: null,
