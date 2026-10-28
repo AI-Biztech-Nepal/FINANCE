@@ -16,7 +16,7 @@ import { KeyInput } from './KeyInput';
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
 import { useConfirmSave } from './ConfirmSave';
-import { useConfirmNewParty } from './NewPartyConfirm';
+import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { MONEY } from './moneyColors';
 import { money } from './BookKit';
@@ -255,15 +255,15 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   async function pickRenter(opt: SuggestOption, via: 'enter' | 'tab' | 'click') {
     if (opt.key === ADD_PARTY_KEY) {
       if (!userId) return;
-      const finalName = await askNewParty({ name: customerName.trim(), kind: 'customer' });
-      if (!finalName) {
+      const asked = await askNewParty({ name: customerName.trim(), kind: 'customer' });
+      if (!asked) {
         // Cancelled in the confirmation: the name is dropped, so it cannot be saved by accident.
         setCustomerName('');
         setCustomerId(null);
         return;
       }
       try {
-        const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
+        const created = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, ...withType(asked) });
         setCustomerName(created.name);
         setCustomerId(created.id);
       } catch (err) {
@@ -277,15 +277,15 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
       if (s.customer) setCustomerId(s.customer.id);
       else {
         // A phone contact that is not saved yet is saved now, so the rental links to a real customer.
-        const finalName = await askNewParty({ name: s.name, kind: 'customer' });
-        if (!finalName) {
+        const asked = await askNewParty({ name: s.name, kind: 'customer' });
+        if (!asked) {
           // Cancelled in the confirmation: the name is dropped, so it cannot be saved by accident.
           setCustomerName('');
           setCustomerId(null);
           return;
         }
         try {
-          const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: s.phone });
+          const created = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: s.phone, ...withType(asked) });
           setCustomerId(created.id);
         } catch {
           setCustomerId(null);
@@ -298,10 +298,10 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   async function pickEmployee(opt: SuggestOption, via: 'enter' | 'tab' | 'click') {
     if (opt.key === ADD_EMPLOYEE_KEY) {
       if (!userId || !staffTypeId) return;
-      const finalName = await askNewParty({ name: employeeName.trim(), kind: 'customer' });
-      if (!finalName) return;
+      const asked = await askNewParty({ name: employeeName.trim(), kind: 'customer', typeId: staffTypeId });
+      if (!asked) return;
       try {
-        const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null, party_type_id: staffTypeId });
+        const created = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, party_type_id: asked.partyTypeId ?? staffTypeId });
         setEmployeeName(created.name);
         setEmployeeId(created.id);
       } catch (err) {

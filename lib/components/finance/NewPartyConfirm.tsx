@@ -1,22 +1,57 @@
 // lib/components/finance/NewPartyConfirm.tsx
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { TextInput } from 'react-native';
 import { Text } from './CapsText';
 import { Field, FieldRow, FormActions, INPUT, PopupCard } from './FormKit';
+import { PartyTypeField } from './PartyTypeField';
+import { useAuthStore } from '../../hooks/useAuth';
+import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { readKey } from '../../utils/webKeys';
 
 export type NewPartyKind = 'customer' | 'vendor' | 'payee';
 
-function NewPartyDialog({ kind, initial, onAdd, onCancel }: { kind: NewPartyKind; initial: string; onAdd: (name: string) => void; onCancel: () => void }) {
+/** What the popup answers with: the name to save, and the Ledger type to file the person under (null: none). */
+export interface NewPartyAnswer {
+  name: string;
+  partyTypeId: string | null;
+}
+
+/** The type to save on the new customer row: `{ ...withType(answer) }`. */
+export const withType = (answer: NewPartyAnswer): { party_type_id?: string } => (answer.partyTypeId ? { party_type_id: answer.partyTypeId } : {});
+
+function NewPartyDialog({
+  kind,
+  initial,
+  typeId,
+  onAdd,
+  onCancel,
+}: {
+  kind: NewPartyKind;
+  initial: string;
+  typeId?: string | null;
+  onAdd: (answer: NewPartyAnswer) => void;
+  onCancel: () => void;
+}) {
+  const userId = useAuthStore((state) => state.session?.user.id);
+  const { types } = usePartyTypes(userId);
   const [name, setName] = useState(initial);
+  // The Ledger type starts on the one that fits what is being added (a customer under Customer, a vendor or payee
+  // under Vendor) - or the one the caller asked for - until another is picked or typed.
+  const fitting = useMemo(() => {
+    if (typeId) return typeId;
+    const word = kind === 'customer' ? /^customers?$/i : /^vendors?$/i;
+    return types.find((t) => word.test(t.name.trim()))?.id ?? null;
+  }, [typeId, kind, types]);
+  const [picked, setPicked] = useState<string | null | undefined>(undefined);
+  const partyTypeId = picked === undefined ? fitting : picked;
   const add = () => {
-    if (name.trim()) onAdd(name.trim());
+    if (name.trim()) onAdd({ name: name.trim(), partyTypeId });
   };
   return (
     // No cross: it has to be answered with Cancel (the name is dropped) or Add (it is saved).
     <PopupCard title={`Add new ${kind}`} onClose={onCancel} maxWidth={460} hideClose>
       <Text className="text-[13px] text-gray-500">
-        This {kind} is not saved yet. Check the name - fix it if it needs it - and add.
+        This {kind} is not saved yet. Check the name - fix it if it needs it - and the Ledger type it belongs to, then add.
       </Text>
       {/* In a row: a Field's width setting is a height in a column. */}
       <FieldRow>
@@ -42,37 +77,46 @@ function NewPartyDialog({ kind, initial, onAdd, onCancel }: { kind: NewPartyKind
           />
         </Field>
       </FieldRow>
+      <PartyTypeField ownerId={userId} value={partyTypeId} onChange={setPicked} />
       <FormActions onCancel={onCancel} onSave={add} saveLabel={`Add ${kind}`} />
     </PopupCard>
   );
 }
 
 /** `const { askNewParty, dialog } = useConfirmNewParty()` - `await askNewParty({ name, kind })` right before a
- * new customer / vendor is saved from a typed name. It opens a popup with the name in an editable box:
- * resolves to the name to save ("Add"), or null on Cancel / Esc / a tap outside - then nothing is saved.
- * Render `{dialog}` anywhere in the screen. */
+ * new customer / vendor is saved from a typed name. It opens a popup with the name in an editable box and the
+ * Ledger type it will be filed under: resolves to the name and type to save ("Add"), or null on Cancel / Esc -
+ * then nothing is saved. `typeId` starts the Ledger type on a given one (an employee). Render `{dialog}`
+ * anywhere in the screen. */
 export function useConfirmNewParty(): {
-  askNewParty: (options: { name: string; kind: NewPartyKind }) => Promise<string | null>;
+  askNewParty: (options: { name: string; kind: NewPartyKind; typeId?: string | null }) => Promise<NewPartyAnswer | null>;
   dialog: ReactNode;
 } {
-  const [pending, setPending] = useState<{ name: string; kind: NewPartyKind; resolve: (name: string | null) => void } | null>(null);
+  const [pending, setPending] = useState<{
+    name: string;
+    kind: NewPartyKind;
+    typeId?: string | null;
+    resolve: (answer: NewPartyAnswer | null) => void;
+  } | null>(null);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
 
   const askNewParty = useCallback(
-    ({ name, kind }: { name: string; kind: NewPartyKind }) => {
+    ({ name, kind, typeId }: { name: string; kind: NewPartyKind; typeId?: string | null }) => {
       // A second ask while one is already up must not stack another.
-      if (pendingRef.current) return Promise.resolve<string | null>(null);
-      return new Promise<string | null>((resolve) => setPending({ name, kind, resolve }));
+      if (pendingRef.current) return Promise.resolve<NewPartyAnswer | null>(null);
+      return new Promise<NewPartyAnswer | null>((resolve) => setPending({ name, kind, typeId, resolve }));
     },
     []
   );
 
-  const finish = (value: string | null) => {
+  const finish = (value: NewPartyAnswer | null) => {
     pending?.resolve(value);
     setPending(null);
   };
 
-  const dialog = pending ? <NewPartyDialog kind={pending.kind} initial={pending.name} onAdd={(n) => finish(n)} onCancel={() => finish(null)} /> : null;
+  const dialog = pending ? (
+    <NewPartyDialog kind={pending.kind} initial={pending.name} typeId={pending.typeId} onAdd={(answer) => finish(answer)} onCancel={() => finish(null)} />
+  ) : null;
   return { askNewParty, dialog };
 }

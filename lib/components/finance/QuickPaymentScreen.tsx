@@ -16,7 +16,7 @@ import { ContactPickerModal } from '../ContactPickerModal';
 import { DateField } from '../DateTimeFields';
 import { FormSection } from './FormSection';
 import { RenamePartyPopup } from './FormKit';
-import { useConfirmNewParty } from './NewPartyConfirm';
+import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { PaymentEntryTable, type PaymentEntryTableHandle, type PaymentRow } from './PaymentEntryTable';
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { KeyboardSelect } from './KeyboardSelect';
@@ -334,9 +334,9 @@ function QuickPaymentForm() {
       // end that sends the reseller off to Your Customers first.
       let customer = selectedCustomer;
       if (!customer) {
-        const finalName = await askNewParty({ name: trimmedName, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
-        if (!finalName) return;
-        customer = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
+        const asked = await askNewParty({ name: trimmedName, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
+        if (!asked) return;
+        customer = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, ...withType(asked) });
       }
       await insertEntry.mutateAsync({
         [payTarget === 'vendor' ? 'vendor_id' : 'customer_id']: customer.id,
@@ -546,9 +546,9 @@ function QuickPaymentForm() {
             (customers ?? []).find((c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase()) ?? null;
         }
         if (!customer) {
-          const finalName = await askNewParty({ name: trimmedName, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
-          if (!finalName) return;
-          customer = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: row.pendingPhone });
+          const asked = await askNewParty({ name: trimmedName, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
+          if (!asked) return;
+          customer = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: row.pendingPhone, ...withType(asked) });
         }
         if (customer !== row.selectedCustomer) {
           updateRow(row.key, { selectedCustomer: customer, customerName: customer.name });
@@ -826,9 +826,9 @@ function QuickPaymentForm() {
                 dueOf={payTarget === 'vendor' ? dueOf : undefined}
                 onCreateParty={async (name) => {
                   try {
-                    const finalName = await askNewParty({ name, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
-                    if (!finalName) return null;
-                    return await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
+                    const asked = await askNewParty({ name, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
+                    if (!asked) return null;
+                    return await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, ...withType(asked) });
                   } catch (err) {
                     showAlert('Could not add ' + (payTarget === 'vendor' ? 'vendor' : 'customer'), getErrorMessage(err));
                     return null;

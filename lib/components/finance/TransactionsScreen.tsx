@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useRole } from '../../hooks/useAuth';
 import { sellsVehicles } from '../../utils/accountFeatures';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
-import { useConfirmNewParty } from './NewPartyConfirm';
+import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { highlightText } from './Highlight';
 import { useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate, useSupabaseUpsert, useSupabaseDelete } from '../../hooks/useSupabase';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
@@ -860,6 +860,7 @@ function TransactionForm({
     }
     // A name typed in the box is checked first; one the picker's own step already confirmed is not asked again.
     let finalName = name;
+    let typePatch: { party_type_id?: string } = {};
     if (confirmName) {
       const checked = await askNewParty({ name, kind: newPartyKind });
       if (!checked) {
@@ -868,10 +869,11 @@ function TransactionForm({
         setCustomerId(null);
         return false;
       }
-      finalName = checked;
+      finalName = checked.name;
+      typePatch = withType(checked);
     }
     try {
-      const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone });
+      const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone, ...typePatch });
       selectCustomer(created);
       return true;
     } catch (err) {
@@ -1028,9 +1030,9 @@ function TransactionForm({
           if (existing) {
             resolvedCustomerId = existing.id;
           } else {
-            const finalName = await askNewParty({ name: typed, kind: newPartyKind });
-            if (!finalName) return;
-            const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
+            const asked = await askNewParty({ name: typed, kind: newPartyKind });
+            if (!asked) return;
+            const created = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, ...withType(asked) });
             resolvedCustomerId = created.id;
             savedPartyName = created.name;
             setPartyName(created.name);
@@ -1594,9 +1596,9 @@ function TransactionForm({
               onUpdateRow={updateExpenseRow}
               onCreateParty={async (name) => {
                 try {
-                  const finalName = await askNewParty({ name: tidyName(name), kind: 'payee' });
-                  if (!finalName) return null;
-                  return await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
+                  const asked = await askNewParty({ name: tidyName(name), kind: 'payee' });
+                  if (!asked) return null;
+                  return await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, ...withType(asked) });
                 } catch (err) {
                   showAlert('Could not add vendor', getErrorMessage(err));
                   return null;
