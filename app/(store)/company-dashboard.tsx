@@ -618,7 +618,7 @@ export default function StoreDashboard() {
           {logoUrl ? (
             <Image source={{ uri: logoUrl }} style={{ width: 76, height: 76 }} resizeMode="cover" />
           ) : fallbackLogo ? (
-            <Image source={fallbackLogo} style={{ width: 68, height: 68 }} resizeMode="contain" />
+            <Image source={fallbackLogo} style={{ width: 72, height: 72 }} resizeMode="contain" />
           ) : (
             <Ionicons name="business" size={34} color="#1E3A8A" />
           )}
