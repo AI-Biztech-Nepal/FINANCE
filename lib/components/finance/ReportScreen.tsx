@@ -123,6 +123,8 @@ export function ReportScreen({ basePath }: { basePath: string }) {
     });
   }, [transactions, period, range.from, range.to]);
 
+  // Rent earned from the vehicles given out (the taxis): a direct income, in the trading account beside the sales.
+  const { data: rentals } = useSupabaseQuery('rentals', { filters: userId ? { owner_id: userId } : {}, all: true, enabled: !!userId });
   const { data: categories } = useSupabaseQuery('expense_categories', { filters: userId ? { owner_id: userId } : {}, enabled: !!userId });
   const { data: products } = useSupabaseQuery('products', {
     filters: userId ? { owner_id: userId } : {},
@@ -218,15 +220,31 @@ export function ReportScreen({ basePath }: { basePath: string }) {
     const sales = items;
     const directTotal = sum(direct);
     const indirectTotal = sum(indirect);
-    const gross = sales + closing - opening - purchase - directTotal; // + profit, - loss
+    // Rent earned in the period: for each rental, the days it was out within the period (to the day it came back, or
+    // today) at its rate per day.
+    const dayNo = (iso: string) => {
+      const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+      return Date.UTC(y, m - 1, d) / 86400000;
+    };
+    const todayIso = localTodayIso();
+    let rentIncome = 0;
+    for (const r of rentals ?? []) {
+      const from = start && start > r.start_date ? start : r.start_date;
+      const until = r.returned_on ?? todayIso;
+      const to = end && end < until ? end : until;
+      const days = dayNo(to) - dayNo(from) + 1;
+      if (days > 0) rentIncome += days * (Number(r.rate_per_day) || 0);
+    }
+    rentIncome = Math.round(rentIncome * 100) / 100;
+    const gross = sales + rentIncome + closing - opening - purchase - directTotal; // + profit, - loss
     const net = gross - indirectTotal;
     const bills = { sale: inRange.filter((t) => t.type === 'sale').length, purchase: inRange.filter((t) => t.type === 'purchase').length, expense: inRange.filter((t) => t.type === 'expense').length };
-    return { items, sales, purchase, direct, indirect, directTotal, indirectTotal, opening, closing, gross, net, bills };
-  }, [inRange, categories, products, transactions, period, range.from, range.to]);
+    return { items, sales, rentIncome, purchase, direct, indirect, directTotal, indirectTotal, opening, closing, gross, net, bills };
+  }, [inRange, categories, products, transactions, rentals, period, range.from, range.to]);
   const grossProfit = pl.gross;
   const netProfit = pl.net;
   // each side of the trading account totals the same; likewise the second part
-  const tradingTotal = pl.sales + pl.closing + (grossProfit < 0 ? -grossProfit : 0);
+  const tradingTotal = pl.sales + pl.rentIncome + pl.closing + (grossProfit < 0 ? -grossProfit : 0);
   const secondTotal = pl.indirectTotal + (grossProfit < 0 ? -grossProfit : 0) + (netProfit >= 0 ? netProfit : 0);
   const costOfGoods = pl.opening + pl.purchase + pl.directTotal - pl.closing;
   const companyName = useAuthStore((state) => state.profile)?.business_name ?? '';
@@ -260,6 +278,7 @@ export function ReportScreen({ basePath }: { basePath: string }) {
             [grossProfit >= 0 ? 'Gross profit c/o' : 'Gross loss c/o', n(Math.abs(grossProfit))],
             ['Sales accounts', n(pl.sales)],
             ['    Sales - items', n(pl.items)],
+            ...(pl.rentIncome > 0 ? [['Direct incomes - Rent', n(pl.rentIncome)]] : []),
             ['Closing stock', n(pl.closing)],
             ['Indirect expenses', n(pl.indirectTotal)],
             ...pl.indirect.map(([k, v]) => ['    ' + k, n(v)]),
@@ -366,6 +385,8 @@ export function ReportScreen({ basePath }: { basePath: string }) {
             <SideHead title="Particulars" />
             <Group id="sales" open={openGroups} onToggle={toggleGroup} label="Sales accounts" amount={pl.sales}
               rows={[['Sales - items', pl.items]]} onOpen={() => go('/sales-report')} />
+            {/* Rent earned from the vehicles given out in the period - a direct income. Opens Rent & EMI. */}
+            {pl.rentIncome > 0 && <Line label="Direct incomes · Rent" amount={pl.rentIncome} onPress={() => go('/rent')} />}
             {/* What is left on the shelf: the stock list, in-stock items only. */}
             <Line label="Closing stock" amount={pl.closing} onPress={() => go('/inventory?filter=in')} />
             {grossProfit < 0 ? <Line label="Gross loss c/o" amount={-grossProfit} tone="loss" bold /> : null}

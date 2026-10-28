@@ -23,7 +23,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const layout = useBookLayout();
   const userId = useAuthStore((state) => state.session?.user.id);
-  // Employees' daily rental wages up to today (see useRentalWageSync).
+  // The renters' daily rent lines up to today (see useRentalWageSync).
   useRentalWageSync(userId);
   const profile = useAuthStore((state) => state.profile);
   // Rent & EMI: two tabs - vehicles sold on instalments, and vehicles given on rent (`?tab=emi` opens on EMI).
@@ -38,11 +38,11 @@ export function RentScreen({ basePath }: { basePath: string }) {
     enabled: !!userId,
   });
 
-  // The employees' own ledgers: what they owe for the days out (the daily amount lines) and what they have handed
+  // The renters' own ledgers: what they owe for the days out (the Daily rent lines) and what they have handed
   // over (Received) - so the page shows what is still due from them.
   const { data: employeeLedger } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId });
   const employeeMoney = useMemo(() => {
-    const ids = new Set((rentals ?? []).map((r) => r.employee_id).filter((v): v is string => !!v));
+    const ids = new Set((rentals ?? []).map((r) => r.customer_id).filter((v): v is string => !!v));
     let owed = 0;
     let received = 0;
     for (const e of employeeLedger ?? []) {
@@ -61,9 +61,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
       [...(rentals ?? [])]
         .map((r) => {
           const f = rentalFigures(r, today);
-          // What the employee owes for it so far: the same days, at their daily amount (each day is on their ledger).
-          const wages = r.employee_id ? round2(f.days * Number(r.wage_per_day || 0)) : 0;
-          return { r, ...f, wages, status: rentalStatus(r, today) };
+          return { r, ...f, status: rentalStatus(r, today) };
         })
         .sort((a, b) => Number(!!a.r.returned_on) - Number(!!b.r.returned_on) || b.r.start_date.localeCompare(a.r.start_date)),
     [rentals, today]
@@ -73,7 +71,6 @@ export function RentScreen({ basePath }: { basePath: string }) {
     () => ({
       out: rows.filter((x) => !x.r.returned_on).length,
       total: round2(rows.reduce((s, x) => s + x.total, 0)),
-      wages: round2(rows.reduce((s, x) => s + x.wages, 0)),
     }),
     [rows]
   );
@@ -85,13 +82,8 @@ export function RentScreen({ basePath }: { basePath: string }) {
     summary: [
       { label: 'Out now', value: String(stats.out) },
       { label: 'Rent', value: `NPR ${money(stats.total)}` },
-      ...(stats.wages > 0
-        ? [
-            { label: 'To receive from employees', value: `NPR ${money(employeeMoney.owed || stats.wages)}` },
-            { label: 'Received from employees', value: `NPR ${money(employeeMoney.received)}` },
-            { label: 'Due from employees', value: `NPR ${money(employeeMoney.due)}` },
-          ]
-        : []),
+      { label: 'Received', value: `NPR ${money(employeeMoney.received)}` },
+      { label: 'Due', value: `NPR ${money(employeeMoney.due)}` },
       { label: 'Rentals', value: String(rows.length) },
     ],
     sections: [
@@ -101,13 +93,11 @@ export function RentScreen({ basePath }: { basePath: string }) {
           { label: 'Item' },
           { label: 'Model' },
           { label: 'Rented to' },
-          { label: 'Employee' },
           { label: 'From' },
           { label: 'To' },
           { label: 'Days', align: 'right' },
           { label: 'Rate/day', align: 'right' },
           { label: 'Rent', align: 'right' },
-          { label: 'To receive (employee)', align: 'right' },
           { label: 'Status' },
         ],
         rows: rows.map((x, i) => {
@@ -117,17 +107,15 @@ export function RentScreen({ basePath }: { basePath: string }) {
             x.r.car,
             x.r.model ?? '',
             x.r.customer_name ?? '',
-            x.r.employee_id ? x.r.employee_name ?? '' : '',
             toBsHistoryLabel(x.r.start_date),
             to ? toBsHistoryLabel(to) : '',
             String(x.days),
             money(x.r.rate_per_day),
             money(x.total),
-            x.wages ? money(x.wages) : '',
             x.status.label,
           ];
         }),
-        footer: ['', '', '', '', '', '', '', '', 'Total', money(stats.total), stats.wages ? money(stats.wages) : '', ''],
+        footer: ['', '', '', '', '', '', '', 'Total', money(stats.total), ''],
         emptyText: 'No rentals yet.',
       },
     ],
@@ -187,22 +175,6 @@ export function RentScreen({ basePath }: { basePath: string }) {
     ? [
         { key: 'item', label: 'Item', render: (x) => itemCell(x, false) },
         { key: 'renter', label: 'Rented to', width: 190, render: (x) => (x.r.customer_name ? num(x.r.customer_name, '#111827') : num('—', '#D1D5DB')) },
-        {
-          key: 'employee',
-          label: 'Employee',
-          width: 170,
-          render: (x) =>
-            x.r.employee_id ? (
-              <View style={{ minWidth: 0, gap: 2 }}>
-                {num(x.r.employee_name ?? '—', '#111827')}
-                <Text className="text-[11px] font-semibold" style={{ color: '#047857' }} numberOfLines={1}>
-                  {`To receive ${money(x.wages)} · NPR ${money(x.r.wage_per_day)}/day`}
-                </Text>
-              </View>
-            ) : (
-              num('—', '#D1D5DB')
-            ),
-        },
         { key: 'from', label: 'From', width: 120, render: (x) => dateCell(x.r.start_date) },
         { key: 'to', label: 'To', width: 120, render: (x) => dateCell(x.r.returned_on ?? x.r.end_date) },
         { key: 'days', label: 'Days', width: 64, align: 'right', render: (x) => num(String(x.days)) },
@@ -237,13 +209,9 @@ export function RentScreen({ basePath }: { basePath: string }) {
       <BookStats>
         <BookStat label="Out now" value={String(stats.out)} color="#1D4ED8" />
         <BookStat label="Rent" value={`NPR ${money(stats.total)}`} color="#374151" />
-        {stats.wages > 0 && (
-          <>
-            <BookStat label="To receive from employees" value={`NPR ${money(employeeMoney.owed || stats.wages)}`} color="#047857" />
-            <BookStat label="Received from employees" value={`NPR ${money(employeeMoney.received)}`} color="#047857" />
-            <BookStat label="Due from employees" value={`NPR ${money(employeeMoney.due)}`} color="#B91C1C" />
-          </>
-        )}
+        {/* The renters' ledgers: what they have paid on the Received page, and what is still due. */}
+        <BookStat label="Received" value={`NPR ${money(employeeMoney.received)}`} color="#047857" />
+        <BookStat label="Due" value={`NPR ${money(employeeMoney.due)}`} color="#B91C1C" />
         <BookStat label="Rentals" value={String(rows.length)} color="#374151" />
       </BookStats>
 
