@@ -27,12 +27,15 @@ export function PartyTypeField({
   value,
   onChange,
   required,
+  onCreated,
 }: {
   ownerId: string | undefined;
   value: string | null;
   onChange: (id: string | null) => void;
   /** Marks the label with a star - the form checks it. */
   required?: boolean;
+  /** Told the id of a ledger type this field has just made, so a form that is cancelled can take it back out. */
+  onCreated?: (id: string) => void;
 }) {
   const { types, available, create } = usePartyTypes(ownerId);
   // What has been typed; null means "show the chosen type's own name".
@@ -96,7 +99,9 @@ export function PartyTypeField({
     }
     setSaving(true);
     try {
-      choose((await create(typed)).id);
+      const made = await create(typed);
+      onCreated?.(made.id);
+      choose(made.id);
     } catch (err) {
       showAlert('Could not add the ledger type', getErrorMessage(err));
     } finally {

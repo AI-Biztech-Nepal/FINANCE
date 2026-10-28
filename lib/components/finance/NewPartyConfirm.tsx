@@ -33,8 +33,15 @@ function NewPartyDialog({
   onCancel: () => void;
 }) {
   const userId = useAuthStore((state) => state.session?.user.id);
-  const { types } = usePartyTypes(userId);
+  const { types, remove: removeType } = usePartyTypes(userId);
   const [name, setName] = useState(initial);
+  // A Ledger type made in this popup is kept only if the person is added: on Cancel it is taken back out.
+  const madeTypes = useRef<string[]>([]);
+  const cancel = () => {
+    for (const id of madeTypes.current) void removeType(id).catch(() => undefined);
+    madeTypes.current = [];
+    onCancel();
+  };
   // The Ledger type starts on the one that fits what is being added (a customer under Customer, a vendor or payee
   // under Vendor) - or the one the caller asked for - until another is picked or typed.
   const fitting = useMemo(() => {
@@ -48,8 +55,8 @@ function NewPartyDialog({
     if (name.trim()) onAdd({ name: name.trim(), partyTypeId });
   };
   return (
-    // No cross: it has to be answered with Cancel (the name is dropped) or Add (it is saved).
-    <PopupCard title={`Add new ${kind}`} onClose={onCancel} maxWidth={460} hideClose>
+    // No cross, but a click outside, Esc and Cancel all go back: the name is dropped and nothing is saved. Only Add saves.
+    <PopupCard title={`Add new ${kind}`} onClose={cancel} maxWidth={460} hideClose closeOnOutside>
       <Text className="text-[13px] text-gray-500">
         This {kind} is not saved yet. Check the name - fix it if it needs it - and the Ledger type it belongs to, then add.
       </Text>
@@ -70,15 +77,15 @@ function NewPartyDialog({
                 add();
               } else if (k.key === 'Escape') {
                 k.prevent();
-                onCancel();
+                cancel();
               }
             }}
             className={INPUT}
           />
         </Field>
       </FieldRow>
-      <PartyTypeField ownerId={userId} value={partyTypeId} onChange={setPicked} />
-      <FormActions onCancel={onCancel} onSave={add} saveLabel={`Add ${kind}`} />
+      <PartyTypeField ownerId={userId} value={partyTypeId} onChange={setPicked} onCreated={(id) => madeTypes.current.push(id)} />
+      <FormActions onCancel={cancel} onSave={add} saveLabel={`Add ${kind}`} />
     </PopupCard>
   );
 }
