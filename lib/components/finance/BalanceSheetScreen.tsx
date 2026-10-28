@@ -17,6 +17,7 @@ import Svg, { Circle, Defs, G, Line, LinearGradient as SvgGradient, Path, Stop, 
 import { useAuthStore } from '../../hooks/useAuth';
 import { useSupabaseQuery } from '../../hooks/useSupabase';
 import { useAccountBalances } from '../../hooks/useAccountBalances';
+import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { adStringToBs, bsToAdString, bsDaysInMonth, numericDateLabel, BS_MONTHS } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
@@ -102,6 +103,10 @@ const COMPARE: { key: Compare; label: string }[] = [
   { key: 'none', label: 'No comparison' },
 ];
 
+/** A ledger typed Director, Owner, Partner, Proprietor, Shareholder, Investor or Capital holds what that person has put
+ * into the business: it is the owner's capital (equity), not money owed to or by a customer or vendor. */
+const CAPITAL_TYPE = /\b(directors?|owners?|partners?|proprietors?|shareholders?|investors?|capital)\b/i;
+
 type Snapshot = {
   cash: number;
   banks: { id: string; name: string; balance: number }[];
@@ -113,6 +118,9 @@ type Snapshot = {
   creditors: number;
   creditorCount: number;
   customerAdvances: number;
+  /** What each director / owner has put into the business, net of what they took out (see CAPITAL_TYPE). */
+  capital: { id: string; name: string; amount: number }[];
+  capitalTotal: number;
   assets: number;
   liabilities: number;
   equity: number;
@@ -262,6 +270,18 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
 
   const balances = useAccountBalances(userId);
   const { data: customerEntries } = useSupabaseQuery('customer_ledger_entries', { filters: userId ? { owner_id: userId } : {}, all: true, enabled: !!userId });
+  // The parties whose Ledger type makes them the business's owners (see CAPITAL_TYPE).
+  const { data: parties } = useSupabaseQuery('customers', { filters: userId ? { owner_id: userId } : {}, enabled: !!userId });
+  const { nameById: partyTypeName } = usePartyTypes(userId);
+  const capitalParties = useMemo(
+    () =>
+      new Map(
+        (parties ?? [])
+          .filter((c) => c.party_type_id && CAPITAL_TYPE.test(partyTypeName.get(c.party_type_id) ?? ''))
+          .map((c) => [c.id, c.name] as const)
+      ),
+    [parties, partyTypeName]
+  );
   const { data: vendorEntries } = useSupabaseQuery('vendor_ledger_entries', { filters: userId ? { owner_id: userId } : {}, all: true, enabled: !!userId });
   const { data: products } = useSupabaseQuery('products', {
     filters: userId ? { owner_id: userId } : {},
@@ -304,6 +324,14 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
         if (dayOf(e.entry_date ?? e.created_at) > day) return;
         vend.set(e.vendor_id, (vend.get(e.vendor_id) ?? 0) + (e.entry_type === 'debit' ? e.amount : -e.amount));
       });
+      // An owner's two ledgers are their capital: what they put in (money received from them, owed to them) less what
+      // they took out. They are not debtors, creditors or advances.
+      const capital = [...capitalParties].map(([id, name]) => ({ id, name, amount: round2((vend.get(id) ?? 0) - (cust.get(id) ?? 0)) }));
+      for (const id of capitalParties.keys()) {
+        cust.delete(id);
+        vend.delete(id);
+      }
+      const capitalTotal = capital.reduce((s, c) => s + c.amount, 0);
       let debtors = 0;
       let debtorCount = 0;
       let customerAdvances = 0;
@@ -326,11 +354,12 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
       const liabilities = creditors + customerAdvances;
       return {
         cash, banks, bankTotal, debtors, debtorCount, vendorAdvances, stock, creditors, creditorCount, customerAdvances,
+        capital, capitalTotal,
         assets, liabilities, equity: assets - liabilities,
         currentRatio: liabilities > 0 ? assets / liabilities : null,
       };
     };
-  }, [balances, customerEntries, vendorEntries, stock]);
+  }, [balances, customerEntries, vendorEntries, stock, capitalParties]);
 
   const now = useMemo(() => snapshot(asOn), [snapshot, asOn]);
   const before = useMemo(() => (compareOn ? snapshot(compareOn) : null), [snapshot, compareOn]);
@@ -390,11 +419,19 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
     { label: 'Sundry creditors', sub: `${now.creditorCount} ${now.creditorCount === 1 ? 'vendor' : 'vendors'}`, amount: now.creditors, onPress: () => go('/to-give') },
     ...(now.customerAdvances > 0 ? [{ label: 'Advances received from customers', amount: now.customerAdvances, onPress: () => go('/to-receive') }] : []),
   ];
+  // Each owner's capital invested (their ledger opens from it), then the rest of equity - retained earnings, the
+  // balancing figure - so the total is still assets less liabilities.
   const equityRows: RowSpec[] = [
+    ...now.capital.map((c) => ({
+      label: 'Capital invested',
+      sub: c.name,
+      amount: c.amount,
+      onPress: () => router.push(withFrom(`${basePath}/customer/${c.id}`, 'balance-sheet') as never),
+    })),
     {
-      label: "Owner's capital & retained earnings",
+      label: now.capital.length ? 'Retained earnings' : "Owner's capital & retained earnings",
       sub: 'balancing figure',
-      amount: now.equity,
+      amount: round2(now.equity - now.capitalTotal),
       note: now.equity < 0 ? 'Deficit: liabilities are more than assets' : undefined,
     },
   ];
@@ -424,7 +461,7 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
       ...receivableRows.map((r) => ['Assets', 'Receivables & stock', r.label, round2(r.amount)]),
       ['Assets', '', 'Total assets', round2(now.assets)],
       ...liabilityRows.map((r) => ['Liabilities', 'Current liabilities', r.label, round2(r.amount)]),
-      ['Equity', 'Capital', "Owner's capital & retained earnings", round2(now.equity)],
+      ...equityRows.map((r) => ['Equity', 'Capital', [r.label, r.sub].filter(Boolean).join(' · '), round2(r.amount)]),
       ['', '', 'Total liabilities & equity', round2(now.liabilities + now.equity)],
     ];
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
