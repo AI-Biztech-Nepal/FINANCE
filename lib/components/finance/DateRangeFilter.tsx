@@ -7,6 +7,7 @@ import { useCalendarMode, type CalendarMode } from '../../hooks/useCalendarMode'
 import { BS_MONTHS, adStringToBs, bsDaysInMonth, bsToAdString } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import { DropdownPanel, useDropdown } from './DropdownMenu';
+import { themeColors } from '../../theme/accent';
 
 // Dates throughout are 'YYYY-MM-DD'; '' means "no limit on this side".
 
@@ -132,9 +133,9 @@ function DateFilterPopup({ from, to, onApply, idleLabel = 'Filter' }: {
           onPress={openDialog}
           accessibilityLabel="Filter by date"
           className="h-9 flex-row items-center rounded-lg border px-3"
-          style={{ gap: 6, borderColor: active ? '#2563EB' : '#D1D5DB', backgroundColor: active ? '#EFF6FF' : '#FFFFFF' }}
+          style={{ gap: 6, borderColor: active ? themeColors.c600 : '#D1D5DB', backgroundColor: active ? themeColors.c50 : '#FFFFFF' }}
         >
-          <Ionicons name="funnel-outline" size={14} color={active ? '#1D4ED8' : '#4B5563'} />
+          <Ionicons name="funnel-outline" size={14} color={active ? themeColors.c700 : '#4B5563'} />
           <Text className={`text-[13px] font-semibold ${active ? 'text-blue-700' : 'text-gray-700'}`} numberOfLines={1} style={{ maxWidth: 170 }}>
             {active ? rangeLabel(from, to, mode) : idleLabel}
           </Text>
@@ -167,7 +168,7 @@ function DateFilterPopup({ from, to, onApply, idleLabel = 'Filter' }: {
                     onPress={() => applyRange(start, today)}
                     accessibilityLabel={`Last ${p.label}`}
                     className="flex-1 items-center rounded-xl border py-2.5"
-                    style={{ borderColor: on ? '#2563EB' : '#D1D5DB', backgroundColor: on ? '#EFF6FF' : '#FFFFFF' }}
+                    style={{ borderColor: on ? themeColors.c600 : '#D1D5DB', backgroundColor: on ? themeColors.c50 : '#FFFFFF' }}
                   >
                     <Text className={`text-sm font-bold ${on ? 'text-blue-700' : 'text-gray-700'}`}>{p.label}</Text>
                   </Pressable>
@@ -201,7 +202,7 @@ function DateFilterPopup({ from, to, onApply, idleLabel = 'Filter' }: {
               <Pressable onPress={() => setOpen(false)} className="rounded-xl border border-gray-300 px-5 py-3">
                 <Text className="text-sm font-bold text-gray-600">Cancel</Text>
               </Pressable>
-              <Pressable onPress={apply} accessibilityLabel="Apply dates" className="rounded-xl px-6 py-3" style={{ backgroundColor: '#1D4ED8' }}>
+              <Pressable onPress={apply} accessibilityLabel="Apply dates" className="rounded-xl px-6 py-3" style={{ backgroundColor: themeColors.c700 }}>
                 <Text className="text-sm font-bold text-white">Apply</Text>
               </Pressable>
             </View>
@@ -278,12 +279,12 @@ function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts
       accessibilityRole="button"
       accessibilityState={{ selected: on }}
       className="flex-row items-center px-4 py-3"
-      style={{ gap: 10, backgroundColor: on ? '#EFF6FF' : undefined }}
+      style={{ gap: 10, backgroundColor: on ? themeColors.c50 : undefined }}
     >
       <Text className={`flex-1 text-[14px] ${on ? 'font-bold text-blue-700' : 'font-medium text-gray-900'}`} numberOfLines={1}>
         {label}
       </Text>
-      {on ? <Ionicons name="checkmark" size={17} color="#1D4ED8" /> : trailing ? <Ionicons name={trailing} size={16} color="#9CA3AF" /> : null}
+      {on ? <Ionicons name="checkmark" size={17} color={themeColors.c700} /> : trailing ? <Ionicons name={trailing} size={16} color="#9CA3AF" /> : null}
     </Pressable>
   );
 
@@ -299,13 +300,13 @@ function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts
           className="h-9 flex-row items-center rounded-lg border px-3"
           // One size whatever it says ("Today", "Aswin 25", a range): the arrows beside it would
           // otherwise shift about every time the day changes.
-          style={{ gap: 6, width: BUTTON_WIDTH, borderColor: active ? '#2563EB' : '#D1D5DB', backgroundColor: active ? '#EFF6FF' : '#FFFFFF' }}
+          style={{ gap: 6, width: BUTTON_WIDTH, borderColor: active ? themeColors.c600 : '#D1D5DB', backgroundColor: active ? themeColors.c50 : '#FFFFFF' }}
         >
-          <Ionicons name="funnel-outline" size={14} color={active ? '#1D4ED8' : '#4B5563'} />
+          <Ionicons name="funnel-outline" size={14} color={active ? themeColors.c700 : '#4B5563'} />
           <Text className={`flex-1 text-[13px] font-semibold ${active ? 'text-blue-700' : 'text-gray-700'}`} numberOfLines={1}>
             {active ? rangeLabel(from, to, mode) : idleLabel}
           </Text>
-          <Ionicons name="chevron-down" size={13} color={active ? '#1D4ED8' : '#6B7280'} />
+          <Ionicons name="chevron-down" size={13} color={active ? themeColors.c700 : '#6B7280'} />
         </Pressable>
       </View>
 
@@ -342,7 +343,7 @@ function DateFilterDropdown({ from, to, onApply, idleLabel = 'Filter', shortcuts
                 <Text className="text-[13px] font-bold text-gray-600">Clear</Text>
               </Pressable>
               <View className="flex-1" />
-              <Pressable onPress={apply} accessibilityLabel="Apply dates" className="rounded-lg px-5 py-2" style={{ backgroundColor: '#1D4ED8' }}>
+              <Pressable onPress={apply} accessibilityLabel="Apply dates" className="rounded-lg px-5 py-2" style={{ backgroundColor: themeColors.c700 }}>
                 <Text className="text-[13px] font-bold text-white">Apply</Text>
               </Pressable>
             </View>

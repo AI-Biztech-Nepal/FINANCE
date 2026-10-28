@@ -1,6 +1,7 @@
 // lib/utils/rental.ts
 import { round2 } from './money';
 import type { Rental } from '../../types/database.types';
+import { themeColors } from '../theme/accent';
 
 /** Whole days from one 'YYYY-MM-DD' to another (a day number, so differences are exact across months). */
 function dayNumber(iso: string): number {
@@ -26,5 +27,5 @@ export function rentalFigures(
 export function rentalStatus(r: Pick<Rental, 'end_date' | 'returned_on'>, today: string) {
   if (r.returned_on) return { label: 'Returned', color: '#374151', bg: '#F3F4F6' };
   if (r.end_date && r.end_date < today) return { label: 'Overdue', color: '#B91C1C', bg: '#FEF2F2' };
-  return { label: 'Out', color: '#1D4ED8', bg: '#EFF6FF' };
+  return { label: 'Out', color: themeColors.c700, bg: themeColors.c50 };
 }

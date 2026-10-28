@@ -15,6 +15,7 @@ import { localTodayIso } from '../../utils/localDate';
 import { round2 } from '../../utils/money';
 import { rentalFigures, rentalStatus } from '../../utils/rental';
 import type { PrintReport } from '../../utils/printReport';
+import { themeColors } from '../../theme/accent';
 
 /** Rent: the items given out on rent - who has each, from when, at what rate, and what it comes to. Kept
  * apart from Sale and Purchase bills: an item on rent comes back, so it is not a sale and does not leave
@@ -207,7 +208,7 @@ export function RentScreen({ basePath }: { basePath: string }) {
       ) : (
       <>
       <BookStats>
-        <BookStat label="Out now" value={String(stats.out)} color="#1D4ED8" />
+        <BookStat label="Out now" value={String(stats.out)} color={themeColors.c700} />
         <BookStat label="Rent" value={`NPR ${money(stats.total)}`} color="#374151" />
         {/* The renters' ledgers: what they have paid on the Received page, and what is still due. */}
         <BookStat label="Received" value={`NPR ${money(employeeMoney.received)}`} color="#047857" />

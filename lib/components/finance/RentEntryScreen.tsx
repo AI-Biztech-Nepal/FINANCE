@@ -16,7 +16,7 @@ import { KeyboardDateInput } from './KeyboardDateInput';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
 import { useConfirmSave } from './ConfirmSave';
 import { useConfirmNewParty, withType } from './NewPartyConfirm';
-import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
+import { entryAccent, entryShadow } from './entryTheme';
 import { MONEY } from './moneyColors';
 import { money } from './BookKit';
 import { buildCustomerSuggestions } from '../../utils/customerSuggestions';
@@ -80,7 +80,7 @@ export function RentEntryScreen({ basePath }: { basePath: string }) {
 function RentForm({ basePath, rental }: { basePath: string; rental: Rental | null }) {
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const desktopWeb = useIsWideWeb();
-  const accent = FINANCE_ENTRY_ACCENT;
+  const accent = entryAccent();
   const userId = useAuthStore((state) => state.session?.user.id);
   const today = localTodayIso();
   const owner: Record<string, string> = userId ? { owner_id: userId } : {};
@@ -521,7 +521,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
           onPress={handleSave}
           disabled={saving}
           className="items-center rounded-xl px-8 py-2.5 disabled:opacity-50"
-          style={{ backgroundColor: accent, boxShadow: `0 2px 6px ${FINANCE_ENTRY_SHADOW}` }}
+          style={{ backgroundColor: accent, boxShadow: `0 2px 6px ${entryShadow()}` }}
         >
           <Text className="text-sm font-bold text-white">{saving ? 'Saving…' : 'Save'}</Text>
         </Pressable>

@@ -1,11 +1,12 @@
 // lib/components/BarChart.tsx
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { themeColors } from '../theme/accent';
 
 export function BarChart({
   data,
   color = '#0D9488',
-  selectedColor = '#3b82f6',
+  selectedColor = themeColors.c500,
   height = 110,
   formatValue,
   formatLabel,

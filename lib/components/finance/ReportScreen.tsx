@@ -13,12 +13,10 @@ import { reportHtml, type PrintReport } from '../../utils/printReport';
 import { ExcelButton, PrintButton, exportReportDocument, printReportDocument } from './PrintButton';
 import { DateStepFilter, monthLabelOf, monthRange } from './DateRangeFilter';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
+import { themeColors } from '../../theme/accent';
 
 type Period = 'year' | 'all';
 
-const BRAND_DARK = '#1E3A8A';
-const BRAND = '#2563EB';
-const BRAND_TINT = '#EFF6FF';
 
 /** 1234567 -> "12,34,567"; paise only when there are some: 1234567.5 -> "12,34,567.50" */
 function inr(n: number): string {
@@ -31,17 +29,17 @@ function inr(n: number): string {
 
 function SideHead({ title }: { title: string }) {
   return (
-    <View className="mb-1 flex-row justify-between border-b-2 pb-2" style={{ borderColor: BRAND_DARK }}>
-      <Text className="text-[13px] font-bold" style={{ color: BRAND_DARK }}>{title}</Text>
+    <View className="mb-1 flex-row justify-between border-b-2 pb-2" style={{ borderColor: themeColors.c900 }}>
+      <Text className="text-[13px] font-bold" style={{ color: themeColors.c900 }}>{title}</Text>
       <Text className="text-[11px] font-semibold text-gray-500">NPR</Text>
     </View>
   );
 }
 
 function Line({ label, amount, tone, bold, muted, onPress }: { label: string; amount: number; tone?: 'profit' | 'loss'; bold?: boolean; muted?: boolean; onPress?: () => void }) {
-  const color = tone ? BRAND_DARK : muted ? '#94A3B8' : '#0F172A';
+  const color = tone ? themeColors.c900 : muted ? '#94A3B8' : '#0F172A';
   return (
-    <Pressable onPress={onPress} disabled={!onPress} className="flex-row justify-between border-b border-gray-100 py-2.5" style={tone ? { backgroundColor: BRAND_TINT, paddingHorizontal: 8, borderRadius: 6 } : undefined}>
+    <Pressable onPress={onPress} disabled={!onPress} className="flex-row justify-between border-b border-gray-100 py-2.5" style={tone ? { backgroundColor: themeColors.c50, paddingHorizontal: 8, borderRadius: 6 } : undefined}>
       <Text className={`text-[14px] ${bold ? 'font-bold' : ''}`} style={{ color: muted ? '#94A3B8' : '#0F172A' }}>{label}</Text>
       <Text className={`text-[14px] ${bold ? 'font-bold' : 'font-semibold'}`} style={{ color }}>{inr(amount)}</Text>
     </Pressable>
@@ -50,9 +48,9 @@ function Line({ label, amount, tone, bold, muted, onPress }: { label: string; am
 
 function TotalLine({ amount }: { amount: number }) {
   return (
-    <View className="my-1 flex-row justify-between border-y-2 py-2.5" style={{ borderColor: BRAND_DARK }}>
-      <Text className="text-[15px] font-bold" style={{ color: BRAND_DARK }}>Total</Text>
-      <Text className="text-[15px] font-bold" style={{ color: BRAND_DARK }}>{inr(amount)}</Text>
+    <View className="my-1 flex-row justify-between border-y-2 py-2.5" style={{ borderColor: themeColors.c900 }}>
+      <Text className="text-[15px] font-bold" style={{ color: themeColors.c900 }}>Total</Text>
+      <Text className="text-[15px] font-bold" style={{ color: themeColors.c900 }}>{inr(amount)}</Text>
     </View>
   );
 }
@@ -336,11 +334,11 @@ export function ReportScreen({ basePath }: { basePath: string }) {
       {toolbar ? <View className="mb-4">{toolbar}</View> : null}
 
       {/* the report heading: one brand-blue band with the period and the key figures */}
-      <View className="mb-4 overflow-hidden rounded-2xl" style={{ backgroundColor: BRAND_DARK }}>
+      <View className="mb-4 overflow-hidden rounded-2xl" style={{ backgroundColor: themeColors.c900 }}>
         <View className="p-5" style={{ gap: 4 }}>
-          <Text className="text-[11.5px] font-bold" style={{ color: '#BFDBFE', letterSpacing: 1.4 }}>FINANCE REPORT</Text>
+          <Text className="text-[11.5px] font-bold" style={{ color: themeColors.c200, letterSpacing: 1.4 }}>FINANCE REPORT</Text>
           <Text className="text-[24px] font-extrabold text-white" style={{ letterSpacing: 0.5 }}>PROFIT &amp; LOSS ACCOUNT REPORT</Text>
-          <Text className="text-[13px]" style={{ color: '#DBEAFE' }}>
+          <Text className="text-[13px]" style={{ color: themeColors.c100 }}>
             {companyName}{periodText ? `  ·  ${periodText}` : ''}
           </Text>
         </View>
@@ -358,7 +356,7 @@ export function ReportScreen({ basePath }: { basePath: string }) {
               className="px-5 py-4"
               style={{ flexGrow: 1, flexBasis: 170, borderLeftWidth: i === 0 ? 0 : 1, borderColor: 'rgba(255,255,255,0.18)' }}
             >
-              <Text className="text-[11.5px] font-semibold" style={{ color: '#BFDBFE' }}>{k.label}</Text>
+              <Text className="text-[11.5px] font-semibold" style={{ color: themeColors.c200 }}>{k.label}</Text>
               <Text className="mt-0.5 text-[19px] font-bold text-white">NPR {inr(k.value)}</Text>
             </Pressable>
           ))}

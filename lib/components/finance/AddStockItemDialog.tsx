@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { DialogButton } from './ConfirmSave';
 import { KeyInput } from './KeyInput';
-import { FINANCE_ENTRY_ACCENT } from './entryTheme';
+import { entryAccent } from './entryTheme';
 
 /** "Add new stock item" - the popup behind the dropdown's "+ Add ... as new
  * stock item" row. Nothing is created until Save; Cancel (or Esc, or a click
@@ -26,7 +26,7 @@ export function AddStockItemDialog({
   onSave: (name: string, rate: string) => void;
   onCancel: () => void;
 }) {
-  const accent = FINANCE_ENTRY_ACCENT;
+  const accent = entryAccent();
   const [name, setName] = useState(initialName);
   const [rate, setRate] = useState(initialRate);
   const nameRef = useRef<TextInput>(null);

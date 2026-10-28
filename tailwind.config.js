@@ -1,4 +1,11 @@
 /** @type {import('tailwindcss').Config} */
+
+// The app's accent colour is read from CSS variables (--accent-50 ... --accent-950: global.css has the blue ones,
+// lib/theme/accent.ts changes them for an account with its own colour), so every `blue-*`, `orange-*` and
+// `brand-*` class follows the account's colour without touching a screen.
+const accent = (shade) => `rgb(var(--accent-${shade}) / <alpha-value>)`;
+const accentScale = Object.fromEntries([50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((shade) => [shade, accent(shade)]));
+
 module.exports = {
   content: ['./app/**/*.{js,jsx,ts,tsx}', './lib/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
@@ -8,30 +15,20 @@ module.exports = {
       colors: {
         // Jageer's "professional blues and grays" theme.
         brand: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          500: '#3b82f6',
-          700: '#1d4ed8',
-          900: '#1e3a8a',
+          50: accent(50),
+          100: accent(100),
+          500: accent(500),
+          700: accent(700),
+          900: accent(900),
         },
         // App-wide brand accent lives on Tailwind's "orange" scale (every
         // `bg-orange-500` / `text-orange-600` / etc across the app resolves
         // through this one override), so a rebrand is one edit here instead
-        // of touching every screen. Standard Tailwind "blue", matching the
-        // company's blue-and-white color theme.
-        orange: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
-          950: '#172554',
-        },
+        // of touching every screen. It is blue (the company's blue-and-white
+        // color theme) unless the account has its own accent - and `blue`
+        // follows it too.
+        orange: accentScale,
+        blue: accentScale,
       },
     },
   },

@@ -18,6 +18,7 @@ import { localTodayIso } from '../../utils/localDate';
 import { useReportActions } from './PrintButton';
 import type { PrintReport, PrintSection } from '../../utils/printReport';
 import { round2, formatMoney } from '../../utils/money';
+import { themeColors } from '../../theme/accent';
 
 // Local date, not UTC - see localTodayIso.
 const todayIso = localTodayIso;
@@ -277,11 +278,11 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
     <ScrollView className="flex-1 bg-gray-50 px-6 pt-4" contentContainerStyle={{ paddingBottom: 40 }}>
       {showTransfer && userId && <TransferForm userId={userId} onDone={() => setShowTransfer(false)} />}
 
-      <View className="mb-3 rounded-2xl p-4" style={{ backgroundColor: balances.total >= 0 ? '#EFF6FF' : '#FEF2F2' }}>
-        <Text className="text-xs font-semibold" style={{ color: balances.total >= 0 ? '#2563EB' : '#DC2626' }}>
+      <View className="mb-3 rounded-2xl p-4" style={{ backgroundColor: balances.total >= 0 ? themeColors.c50 : '#FEF2F2' }}>
+        <Text className="text-xs font-semibold" style={{ color: balances.total >= 0 ? themeColors.c600 : '#DC2626' }}>
           Available Balance (Cash + Banks)
         </Text>
-        <Text className="text-2xl font-extrabold" style={{ color: balances.total >= 0 ? '#2563EB' : '#DC2626' }}>
+        <Text className="text-2xl font-extrabold" style={{ color: balances.total >= 0 ? themeColors.c600 : '#DC2626' }}>
           NPR {formatMoney(balances.total)}
         </Text>
       </View>
@@ -336,7 +337,7 @@ export function BankBalancesScreen({ basePath }: { basePath: string }) {
             >
               <View className="flex-row items-center gap-3">
                 <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
-                  <Ionicons name="business-outline" size={16} color="#2563EB" />
+                  <Ionicons name="business-outline" size={16} color={themeColors.c600} />
                 </View>
                 <Text className="flex-1 text-sm font-semibold text-gray-900">{acc.name}</Text>
                 <Text className="text-sm font-bold" style={{ color: acc.balance >= 0 ? '#059669' : '#DC2626' }}>

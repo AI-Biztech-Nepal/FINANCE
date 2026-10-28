@@ -1,7 +1,7 @@
 // lib/components/finance/ConfirmSave.tsx
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Modal, Platform, Pressable, Text, View } from 'react-native';
-import { FINANCE_ENTRY_ACCENT } from './entryTheme';
+import { entryAccent } from './entryTheme';
 
 export interface ConfirmSaveOptions {
   title: string;
@@ -26,7 +26,7 @@ export function DialogButton({
   buttonRef?: (el: View | null) => void;
 }) {
   const [focused, setFocused] = useState(false);
-  const accent = FINANCE_ENTRY_ACCENT;
+  const accent = entryAccent();
   return (
     <Pressable
       ref={buttonRef}
@@ -103,7 +103,7 @@ export function ConfirmSaveCard({
       {options.total && (
         <View className="mt-3 flex-row items-baseline justify-between px-1">
           <Text className="text-sm font-bold text-gray-900">{options.total.label}</Text>
-          <Text className="text-xl font-extrabold" style={{ color: options.total.color ?? FINANCE_ENTRY_ACCENT }}>
+          <Text className="text-xl font-extrabold" style={{ color: options.total.color ?? entryAccent() }}>
             {options.total.value}
           </Text>
         </View>

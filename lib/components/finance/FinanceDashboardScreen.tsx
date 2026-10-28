@@ -14,8 +14,8 @@ import { MONEY, type MoneyTone } from './moneyColors';
 import { CARD_SHADOW, Card, RecentActivityCard, SalesTrendCard } from './dashboard/FinanceDashboard';
 import { ENTRY_KINDS } from './entryKinds';
 import { formatMoney } from '../../utils/money';
+import { themeColors } from '../../theme/accent';
 
-const BLUE = '#2563EB';
 
 /** Space between blocks, and the gutter around the page - one value, so the
  * rhythm is the same between cards as it is at the edges. */
@@ -95,9 +95,9 @@ export function shortcuts(basePath: string): {
 // shortcuts() data/routing above, so restyling the grid can never touch the
 // key/label/icon/href it returns.
 const SHORTCUT_COLORS: Record<string, { bg: string; fg: string }> = {
-  daybook: { bg: '#EFF6FF', fg: '#1D4ED8' },
-  transactions: { bg: '#EFF6FF', fg: '#2563EB' },
-  customers: { bg: '#EFF6FF', fg: '#2563EB' },
+  daybook: { get bg() { return themeColors.c50; }, get fg() { return themeColors.c700; } },
+  transactions: { get bg() { return themeColors.c50; }, get fg() { return themeColors.c600; } },
+  customers: { get bg() { return themeColors.c50; }, get fg() { return themeColors.c600; } },
   'payment-in': { bg: '#ECFDF5', fg: '#059669' },
   'payment-out': { bg: '#FEF2F2', fg: '#DC2626' },
   sales: { bg: '#ECFDF5', fg: '#059669' },
@@ -105,7 +105,7 @@ const SHORTCUT_COLORS: Record<string, { bg: string; fg: string }> = {
   expenses: { bg: MONEY.out.bg, fg: MONEY.out.base },
   'bank-accounts': { bg: '#EEF2FF', fg: '#4F46E5' },
   inventory: { bg: '#F5F3FF', fg: '#7C3AED' },
-  report: { bg: '#EFF6FF', fg: '#2563EB' },
+  report: { get bg() { return themeColors.c50; }, get fg() { return themeColors.c600; } },
   quotation: { bg: '#FDF4FF', fg: '#A21CAF' },
 };
 
@@ -476,7 +476,7 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
       <Text className="mb-2 text-sm font-semibold text-gray-900">Shortcuts</Text>
       <View className="flex-row flex-wrap gap-3">
         {shortcuts(basePath).map((s) => {
-          const color = SHORTCUT_COLORS[s.key] ?? { bg: '#EFF6FF', fg: BLUE };
+          const color = SHORTCUT_COLORS[s.key] ?? { bg: themeColors.c50, fg: themeColors.c600 };
           return (
             <Pressable
               key={s.key}
@@ -500,7 +500,7 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
   const profileCompletionCard = profileCompletion < 100 && (
     <Pressable onPress={go('/profile')} accessibilityRole="button" accessibilityLabel="Complete your profile" className="overflow-hidden rounded-2xl">
       <LinearGradient
-        colors={['#2563EB', '#1D4ED8']}
+        colors={[themeColors.c600, themeColors.c700]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: fit ? 12 : 14, padding: fit ? 10 : 16 }}

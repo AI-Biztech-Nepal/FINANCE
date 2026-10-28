@@ -10,6 +10,7 @@ import { builtInLogo } from '../../lib/utils/accountFeatures';
 import { AccountSecurityCard } from '../../lib/components/auth/AccountSecurityCard';
 import { useSupabaseUpdate } from '../../lib/hooks/useSupabase';
 import { showAlert, getErrorMessage } from '../../lib/utils/alert';
+import { themeColors } from '../../lib/theme/accent';
 
 const FIELDS = [
   ['full_name', 'Your name', 'name'],
@@ -167,7 +168,7 @@ export default function StoreProfile() {
       <View
         ref={dropZone}
         className="mb-4 flex-row items-center rounded-2xl border-2 border-dashed p-4"
-        style={{ gap: 16, borderColor: dragging ? '#2563EB' : '#D1D5DB', backgroundColor: dragging ? '#EFF6FF' : '#FFFFFF' }}
+        style={{ gap: 16, borderColor: dragging ? themeColors.c600 : '#D1D5DB', backgroundColor: dragging ? themeColors.c50 : '#FFFFFF' }}
       >
         <Pressable
           onPress={pickLogo}
@@ -177,7 +178,7 @@ export default function StoreProfile() {
           {logoUrl || fallbackLogo ? (
             <Image source={logoUrl ? { uri: logoUrl } : fallbackLogo!} style={{ width: 76, height: 76 }} resizeMode="contain" />
           ) : (
-            <Ionicons name="cloud-upload-outline" size={28} color={dragging ? '#2563EB' : '#9CA3AF'} />
+            <Ionicons name="cloud-upload-outline" size={28} color={dragging ? themeColors.c600 : '#9CA3AF'} />
           )}
         </Pressable>
         <View className="flex-1" style={{ gap: 2 }}>

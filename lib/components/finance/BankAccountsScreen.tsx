@@ -11,6 +11,7 @@ import { useReportActions } from './PrintButton';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import type { BankAccount } from '../../../types/database.types';
+import { themeColors } from '../../theme/accent';
 
 const EMPTY_DETAILS: BankAccountDetails = { name: '', bank_name: null, account_number: null, account_holder_name: null, address: null };
 
@@ -269,7 +270,7 @@ export function BankAccountsScreen() {
       const sub = withDetails ? [row.acc.bank_name, row.acc.account_number ? `A/C ${row.acc.account_number}` : null].filter(Boolean).join(' · ') : '';
       return (
         <View className="flex-row items-center" style={{ gap: 10 }}>
-          <Ionicons name="business-outline" size={16} color="#2563EB" />
+          <Ionicons name="business-outline" size={16} color={themeColors.c600} />
           <View style={{ minWidth: 0, flexShrink: 1 }}>
             <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
               {row.acc.name}
@@ -360,7 +361,7 @@ export function BankAccountsScreen() {
                 className="mb-2.5 flex-row items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4"
               >
                 <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
-                  <Ionicons name="business-outline" size={16} color="#2563EB" />
+                  <Ionicons name="business-outline" size={16} color={themeColors.c600} />
                 </View>
                 <View className="flex-1">
                   <Text className="text-sm font-semibold text-gray-900">{acc.name}</Text>

@@ -7,8 +7,9 @@ import { type ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Text } from './CapsText';
 import { Ionicons } from '@expo/vector-icons';
-import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
+import { entryAccent, entryShadow } from './entryTheme';
 import { readKey } from '../../utils/webKeys';
+import { themeColors } from '../../theme/accent';
 
 export const INPUT = 'rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900';
 
@@ -116,7 +117,7 @@ export function FormActions({
         onPress={onSave}
         disabled={saving}
         className="items-center rounded-xl px-8 py-2.5 disabled:opacity-50"
-        style={{ backgroundColor: FINANCE_ENTRY_ACCENT, boxShadow: `0 2px 6px ${FINANCE_ENTRY_SHADOW}` }}
+        style={{ backgroundColor: entryAccent(), boxShadow: `0 2px 6px ${entryShadow()}` }}
       >
         <Text className="text-sm font-bold text-white">{saving ? 'Saving…' : saveLabel}</Text>
       </Pressable>
@@ -165,7 +166,7 @@ export function PopupCard({
             />
           )}
           <View className="w-full overflow-hidden rounded-2xl bg-white" style={{ maxWidth, maxHeight: '92%' }}>
-            <View className="flex-row items-center gap-2.5 px-5 py-4" style={{ backgroundColor: '#1D4ED8' }}>
+            <View className="flex-row items-center gap-2.5 px-5 py-4" style={{ backgroundColor: themeColors.c700 }}>
               <Text className="flex-1 text-[16px] font-bold text-white" numberOfLines={1}>
                 {title}
               </Text>

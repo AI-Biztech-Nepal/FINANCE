@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pill } from '../BookKit';
 import { MONEY } from '../moneyColors';
 import { type PartyStatus } from '../../../utils/ledgerStatement';
+import { themeColors } from '../../../theme/accent';
 
 /** Green = receivable, red = payable, grey = settled (plus amber for overdue). */
 export const LEDGER_TONE = {
@@ -97,7 +98,7 @@ export function Checkbox({ checked, partial, onPress, label }: { checked: boolea
       accessibilityState={{ checked: partial ? 'mixed' : checked }}
       accessibilityLabel={label}
       className="items-center justify-center rounded"
-      style={{ width: 18, height: 18, borderWidth: 1.5, borderColor: on ? '#2563EB' : '#9CA3AF', backgroundColor: on ? '#2563EB' : '#FFFFFF' }}
+      style={{ width: 18, height: 18, borderWidth: 1.5, borderColor: on ? themeColors.c600 : '#9CA3AF', backgroundColor: on ? themeColors.c600 : '#FFFFFF' }}
     >
       {on && <Ionicons name={partial && !checked ? 'remove' : 'checkmark'} size={13} color="#FFFFFF" />}
     </Pressable>
@@ -147,7 +148,7 @@ export function OptionMenuModal<K extends string>({
                   className="mb-1.5 flex-row items-center gap-2 rounded-lg border border-gray-100 px-2 py-2.5"
                   accessibilityState={{ selected: on }}
                 >
-                  <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={on ? '#2563EB' : '#D1D5DB'} />
+                  <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={on ? themeColors.c600 : '#D1D5DB'} />
                   <Text className="flex-1 text-sm font-medium text-gray-900" numberOfLines={1}>
                     {o.label}
                   </Text>

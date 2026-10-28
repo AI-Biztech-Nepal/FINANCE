@@ -51,6 +51,7 @@ import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { pickPhoneContact } from '../../utils/pickPhoneContact';
 import type { BusinessTransactionType, Customer, CustomerLedgerEntry, Profile } from '../../../types/database.types';
+import { accentAlpha, themeColors } from '../../theme/accent';
 
 /** A reference number and what it is the number of ("Sales no.", "Payment no.", ...). */
 interface LedgerReference {
@@ -298,7 +299,7 @@ function AddCustomerForm({ userId, basePath, initialName, onDone }: { userId: st
             />
             {Platform.OS !== 'web' && (
               <Pressable onPress={handlePickContact} hitSlop={8} className="px-2.5">
-                <Ionicons name="person-add-outline" size={18} color="#1d4ed8" />
+                <Ionicons name="person-add-outline" size={18} color={themeColors.c700} />
               </Pressable>
             )}
           </View>
@@ -424,7 +425,7 @@ function PartyCard({
     <Pressable
       onPress={() => (selecting ? onToggle() : onOpen())}
       className="mb-2.5 rounded-2xl border bg-white p-3.5"
-      style={{ borderColor: selected ? '#2563EB' : '#E5E7EB' }}
+      style={{ borderColor: selected ? themeColors.c600 : '#E5E7EB' }}
     >
       <View className="flex-row items-start" style={{ gap: 10 }}>
         {selecting && <Checkbox checked={selected} onPress={onToggle} label={`Select ${customer.name}`} />}
@@ -436,7 +437,7 @@ function PartyCard({
             </Text>
             {isApp && (
               <View className="flex-row items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5">
-                <Ionicons name="phone-portrait-outline" size={11} color="#2563eb" />
+                <Ionicons name="phone-portrait-outline" size={11} color={themeColors.c600} />
                 <Text className="text-[10px] font-bold text-blue-700">APP</Text>
               </View>
             )}
@@ -498,7 +499,7 @@ function AppCustomerRow({ entry }: { entry: AppCustomer }) {
           {profile.full_name ?? 'Unnamed'}
         </Text>
         <View className="flex-row items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5">
-          <Ionicons name="phone-portrait-outline" size={11} color="#2563eb" />
+          <Ionicons name="phone-portrait-outline" size={11} color={themeColors.c600} />
           <Text className="text-[10px] font-bold text-blue-700">APP</Text>
         </View>
       </View>
@@ -572,7 +573,7 @@ function BulkBar({
       className="h-8 flex-row items-center rounded-lg border border-blue-200 bg-white px-2.5"
       style={{ gap: 5 }}
     >
-      <Ionicons name={icon} size={14} color="#1D4ED8" />
+      <Ionicons name={icon} size={14} color={themeColors.c700} />
       <Text className="text-[12.5px] font-semibold text-blue-800">{label}</Text>
     </Pressable>
   );
@@ -901,7 +902,7 @@ function PartyLedgerPopup({
             className="h-9 flex-row items-center justify-center rounded-lg border border-gray-300 bg-white px-3"
             style={{ gap: 6 }}
           >
-            <Ionicons name="open-outline" size={16} color="#1D4ED8" />
+            <Ionicons name="open-outline" size={16} color={themeColors.c700} />
             {roomy && <Text className="text-[13px] font-semibold text-gray-700">Open ledger</Text>}
           </Pressable>
         </>
@@ -1338,11 +1339,11 @@ function LedgerList({ basePath }: { basePath: string }) {
         height: 50,
         gap: 10,
         borderWidth: 1.5,
-        borderColor: searchFocused === which ? '#2563EB' : '#E2E8F0',
-        boxShadow: searchFocused === which ? '0 0 0 4px rgba(37,99,235,0.12)' : '0 1px 2px rgba(16,24,40,0.05)',
+        borderColor: searchFocused === which ? themeColors.c600 : '#E2E8F0',
+        boxShadow: searchFocused === which ? `0 0 0 4px ${accentAlpha(600, 0.12)}` : '0 1px 2px rgba(16,24,40,0.05)',
       }}
     >
-      <Ionicons name={icon} size={19} color={searchFocused === which || value ? '#2563EB' : '#94A3B8'} />
+      <Ionicons name={icon} size={19} color={searchFocused === which || value ? themeColors.c600 : '#94A3B8'} />
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -1377,10 +1378,10 @@ function LedgerList({ basePath }: { basePath: string }) {
       <Pressable
         onPress={() => setTypeMenuOpenList(true)}
         className="flex-row items-center rounded-2xl bg-white px-4"
-        style={{ height: 50, gap: 8, flexGrow: 1, flexBasis: 200, borderWidth: 1.5, borderColor: typeFilter ? '#2563EB' : '#E2E8F0' }}
+        style={{ height: 50, gap: 8, flexGrow: 1, flexBasis: 200, borderWidth: 1.5, borderColor: typeFilter ? themeColors.c600 : '#E2E8F0' }}
         accessibilityLabel="Ledger type"
       >
-        <Ionicons name="pricetags-outline" size={18} color={typeFilter ? '#2563EB' : '#94A3B8'} />
+        <Ionicons name="pricetags-outline" size={18} color={typeFilter ? themeColors.c600 : '#94A3B8'} />
         <Text className="flex-1 text-[15px] text-gray-900" numberOfLines={1}>
           {typeChoices.find((c) => c.id === typeFilter)?.label ?? 'All types'}
         </Text>
@@ -1406,7 +1407,7 @@ function LedgerList({ basePath }: { basePath: string }) {
                       setTypeMenuOpenList(false);
                     }}
                     className={`flex-row items-center px-6 py-3.5 ${i < typeChoices.length - 1 ? 'border-b border-gray-100' : ''}`}
-                    style={on ? { backgroundColor: '#EFF6FF' } : undefined}
+                    style={on ? { backgroundColor: themeColors.c50 } : undefined}
                   >
                     <Text className={`flex-1 text-[15px] ${on ? 'font-bold text-blue-700' : 'font-semibold text-gray-900'}`}>{c.label}</Text>
                     <Text className="text-[13px] text-gray-500">{c.count}</Text>
@@ -1426,7 +1427,7 @@ function LedgerList({ basePath }: { basePath: string }) {
       {searchBox('name', search, setSearch, 'Search by ledger name or phone', 'search', 2)}
       {typeDropdown}
       {(!!search.trim() || !!typeFilter) && (
-        <Text className="text-[12.5px] font-semibold" style={{ color: '#1E3A8A' }}>
+        <Text className="text-[12.5px] font-semibold" style={{ color: themeColors.c900 }}>
           {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
         </Text>
       )}
@@ -1667,7 +1668,7 @@ function LedgerList({ basePath }: { basePath: string }) {
             <Text className="text-[13px] font-semibold text-gray-900">
               {highlight(nameCaps(d.row.name), search)}
             </Text>
-            {(d.row.kind === 'app' || (d.row.kind === 'customer' && d.row.isApp)) && <Pill text="APP" color="#1D4ED8" bg="#EFF6FF" />}
+            {(d.row.kind === 'app' || (d.row.kind === 'customer' && d.row.isApp)) && <Pill text="APP" color={themeColors.c700} bg={themeColors.c50} />}
           </View>
           {!!typeAndContact && (
             <Text className="text-[11px] text-gray-400" numberOfLines={1}>
@@ -1878,9 +1879,9 @@ function LedgerList({ basePath }: { basePath: string }) {
           <Pressable
             onPress={() => (selecting ? clearSelection() : setSelecting(true))}
             className="h-9 flex-row items-center rounded-lg border px-3"
-            style={{ gap: 6, borderColor: selecting ? '#2563EB' : '#D1D5DB', backgroundColor: selecting ? '#EFF6FF' : '#FFFFFF' }}
+            style={{ gap: 6, borderColor: selecting ? themeColors.c600 : '#D1D5DB', backgroundColor: selecting ? themeColors.c50 : '#FFFFFF' }}
           >
-            <Ionicons name="checkbox-outline" size={14} color={selecting ? '#1D4ED8' : '#4B5563'} />
+            <Ionicons name="checkbox-outline" size={14} color={selecting ? themeColors.c700 : '#4B5563'} />
             <Text className={`text-[13px] font-semibold ${selecting ? 'text-blue-700' : 'text-gray-700'}`}>{selecting ? 'Done' : 'Select'}</Text>
           </Pressable>
           <PrintButton onPress={() => printNow.current()} />

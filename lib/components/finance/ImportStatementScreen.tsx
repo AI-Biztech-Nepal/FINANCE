@@ -12,6 +12,7 @@ import { showAlert } from '../../utils/alert';
 import { DEBIT_TYPES, CREDIT_TYPES, type StatementAction } from '../../utils/parseStatement';
 import type { Customer } from '../../../types/database.types';
 import { formatMoney } from '../../utils/money';
+import { themeColors } from '../../theme/accent';
 
 const TYPE_META: Record<StatementAction, { label: string; color: string; bg: string }> = {
   payment_out: { label: 'Paid', color: '#DC2626', bg: '#FEF2F2' },
@@ -174,7 +175,7 @@ export function ImportStatementScreen() {
                       hitSlop={8}
                       className="mt-0.5"
                     >
-                      <Ionicons name={item.selected ? 'checkbox' : 'square-outline'} size={20} color="#2563EB" />
+                      <Ionicons name={item.selected ? 'checkbox' : 'square-outline'} size={20} color={themeColors.c600} />
                     </Pressable>
                     <View className="flex-1">
                       {/* Party name first, like party_name is the bold line

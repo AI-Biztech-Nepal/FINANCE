@@ -54,6 +54,7 @@ import type {
   LedgerEntryType,
   VendorLedgerEntry,
 } from '../../../types/database.types';
+import { themeColors } from '../../theme/accent';
 
 const TX_TYPE_LABEL: Record<BusinessTransactionType, string> = {
   sale: 'Sale bill',
@@ -106,7 +107,7 @@ function HeaderButton({ icon, label, danger, onPress }: { icon: keyof typeof Ion
       className="h-8 flex-row items-center rounded-lg border px-2.5"
       style={{ gap: 5, borderColor: danger ? '#FECACA' : '#D1D5DB', backgroundColor: danger ? '#FEF2F2' : '#FFFFFF' }}
     >
-      <Ionicons name={icon} size={13} color={danger ? '#DC2626' : '#2563EB'} />
+      <Ionicons name={icon} size={13} color={danger ? '#DC2626' : themeColors.c600} />
       <Text className="text-[12.5px] font-semibold" style={{ color: danger ? '#DC2626' : '#374151' }}>
         {label}
       </Text>
@@ -1628,7 +1629,7 @@ function VehicleEntries({
     render: (l) => (
       <View className="flex-row items-center justify-end" style={{ gap: 12 }}>
         <Pressable onPress={() => onEditRow(l.row)} hitSlop={6} accessibilityLabel="Edit entry">
-          <Ionicons name="create-outline" size={16} color="#2563EB" />
+          <Ionicons name="create-outline" size={16} color={themeColors.c600} />
         </Pressable>
         <Pressable onPress={() => onDeleteRow(l.row)} hitSlop={6} accessibilityLabel="Delete entry">
           <Ionicons name="trash-outline" size={16} color="#DC2626" />

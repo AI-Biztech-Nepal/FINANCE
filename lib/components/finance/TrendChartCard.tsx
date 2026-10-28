@@ -7,6 +7,7 @@ import { toBsDayChartLabel, toBsMonthChartLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import type { BusinessTransaction, BusinessTransactionType } from '../../../types/database.types';
 import { formatMoney } from '../../utils/money';
+import { themeColors } from '../../theme/accent';
 
 export type TrendMetric = 'all' | BusinessTransactionType;
 export type Granularity = 'week' | 'month';
@@ -14,7 +15,7 @@ export type Granularity = 'week' | 'month';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const METRIC_META: Record<TrendMetric, { label: string; color: string }> = {
-  all: { label: 'Available Balance', color: '#2563EB' },
+  all: { label: 'Available Balance', get color() { return themeColors.c600; } },
   sale: { label: 'Sales', color: '#059669' },
   purchase: { label: 'Purchase', color: '#dc2626' },
   expense: { label: 'Expenses', color: '#dc2626' },

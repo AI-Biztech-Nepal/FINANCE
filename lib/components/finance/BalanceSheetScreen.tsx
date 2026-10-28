@@ -24,17 +24,12 @@ import { localTodayIso } from '../../utils/localDate';
 import { round2 } from '../../utils/money';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../web/WebSidebarShell';
 import { shortcuts } from './FinanceDashboardScreen';
+import { themeColors } from '../../theme/accent';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INK = '#0F172A';
 const MUTED = '#64748B';
 const LINE = '#E2E8F0';
-const BRAND_DARK = '#1E3A8A';
-const BRAND = '#2563EB';
-const BRAND_TINT = '#EFF6FF';
-const RED = BRAND_DARK;
-const GREEN = BRAND_DARK;
-const AMBER = BRAND_DARK;
 const TABULAR: TextStyle = { fontVariant: ['tabular-nums'] };
 
 // ---------- numbers ----------
@@ -149,10 +144,10 @@ function Select<T extends string>({ label, value, options, onChange }: { label: 
                   setOpen(false);
                 }}
                 className="flex-row items-center px-4 py-3"
-                style={{ backgroundColor: o.key === value ? '#EFF6FF' : undefined }}
+                style={{ backgroundColor: o.key === value ? themeColors.c50 : undefined }}
               >
-                <Text className="flex-1 text-[14px]" style={{ color: o.key === value ? '#1D4ED8' : INK, fontWeight: o.key === value ? '700' : '500' }}>{o.label}</Text>
-                {o.key === value && <Ionicons name="checkmark" size={16} color="#1D4ED8" />}
+                <Text className="flex-1 text-[14px]" style={{ color: o.key === value ? themeColors.c700 : INK, fontWeight: o.key === value ? '700' : '500' }}>{o.label}</Text>
+                {o.key === value && <Ionicons name="checkmark" size={16} color={themeColors.c700} />}
               </Pressable>
             ))}
           </View>
@@ -174,9 +169,9 @@ function SheetRow({ r }: { r: RowSpec }) {
           {r.label}
           {r.sub ? <Text className="text-gray-400">  ·  {r.sub}</Text> : null}
         </Text>
-        {!!r.note && <Text className="mt-0.5 text-[11.5px]" style={{ color: RED }}>{r.note}</Text>}
+        {!!r.note && <Text className="mt-0.5 text-[11.5px]" style={{ color: themeColors.c900 }}>{r.note}</Text>}
       </View>
-      <Text className="text-[14px] font-bold" style={[{ color: negative ? RED : INK }, TABULAR]}>{inr(r.amount)}</Text>
+      <Text className="text-[14px] font-bold" style={[{ color: negative ? themeColors.c900 : INK }, TABULAR]}>{inr(r.amount)}</Text>
     </Pressable>
   );
 }
@@ -188,7 +183,7 @@ function Group({ title, rows, subtotalLabel, subtotal }: { title: string; rows: 
       {rows.length === 0 ? <Text className="py-3 text-[13px] text-gray-400">Nothing recorded</Text> : rows.map((r) => <SheetRow key={r.label} r={r} />)}
       <View className="flex-row items-center pt-2" style={{ gap: 8 }}>
         <Text className="flex-1 text-[12.5px] font-semibold text-gray-600">{subtotalLabel}</Text>
-        <Text className="text-[13px] font-bold text-gray-800" style={[{ color: subtotal < 0 ? RED : '#1F2937' }, TABULAR]}>{inr(subtotal)}</Text>
+        <Text className="text-[13px] font-bold text-gray-800" style={[{ color: subtotal < 0 ? themeColors.c900 : '#1F2937' }, TABULAR]}>{inr(subtotal)}</Text>
       </View>
     </View>
   );
@@ -213,8 +208,8 @@ function TrendChart({ labels, assets, liabilities }: { labels: string[]; assets:
     <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
       <Defs>
         <SvgGradient id="bsFill" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#1D4ED8" stopOpacity={0.18} />
-          <Stop offset="1" stopColor="#1D4ED8" stopOpacity={0.01} />
+          <Stop offset="0" stopColor={themeColors.c700} stopOpacity={0.18} />
+          <Stop offset="1" stopColor={themeColors.c700} stopOpacity={0.01} />
         </SvgGradient>
       </Defs>
       {ticks.map((t) => {
@@ -227,13 +222,13 @@ function TrendChart({ labels, assets, liabilities }: { labels: string[]; assets:
         );
       })}
       <Path d={`${path(assets)} L${x(assets.length - 1)},${H - bottom} L${x(0)},${H - bottom} Z`} fill="url(#bsFill)" />
-      <Path d={path(liabilities)} fill="none" stroke="#93C5FD" strokeWidth={3} strokeLinejoin="round" />
-      <Path d={path(assets)} fill="none" stroke="#1D4ED8" strokeWidth={3} strokeLinejoin="round" />
+      <Path d={path(liabilities)} fill="none" stroke={themeColors.c300} strokeWidth={3} strokeLinejoin="round" />
+      <Path d={path(assets)} fill="none" stroke={themeColors.c700} strokeWidth={3} strokeLinejoin="round" />
       {assets.map((v, i) => (
-        <Circle key={`a${i}`} cx={x(i)} cy={y(v)} r={4} fill="#FFFFFF" stroke="#1D4ED8" strokeWidth={2.5} />
+        <Circle key={`a${i}`} cx={x(i)} cy={y(v)} r={4} fill="#FFFFFF" stroke={themeColors.c700} strokeWidth={2.5} />
       ))}
       {liabilities.map((v, i) => (
-        <Circle key={`l${i}`} cx={x(i)} cy={y(v)} r={4} fill="#FFFFFF" stroke="#93C5FD" strokeWidth={2.5} />
+        <Circle key={`l${i}`} cx={x(i)} cy={y(v)} r={4} fill="#FFFFFF" stroke={themeColors.c300} strokeWidth={2.5} />
       ))}
       {assets.length > 0 && (
         <G>
@@ -448,7 +443,7 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
     alerts.push({ tone: cover >= 100 ? 'ok' : 'warning', text: `Cash & bank cover ${cover.toFixed(0)}% of what you owe vendors` });
   }
   if (alerts.every((a) => a.tone === 'ok')) alerts.unshift({ tone: 'ok', text: 'No problems found in the balance sheet' });
-  const toneColor = { critical: BRAND_DARK, warning: BRAND, ok: '#93C5FD' } as const;
+  const toneColor = { critical: themeColors.c900, warning: themeColors.c600, ok: themeColors.c300 } as const;
 
   // ---- export ----
   const exportCsv = () => {
@@ -476,21 +471,21 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
 
   const actionBtn = (label: string, icon: keyof typeof Ionicons.glyphMap, onPress: () => void, primary?: boolean) =>
     Platform.OS === 'web' ? (
-      <Pressable key={label} onPress={onPress} className="flex-row items-center rounded-xl px-3.5 py-2.5" style={{ gap: 6, backgroundColor: primary ? '#1D4ED8' : '#FFFFFF', borderWidth: primary ? 0 : 1, borderColor: LINE }}>
-        <Ionicons name={icon} size={15} color={primary ? '#FFFFFF' : '#1D4ED8'} />
+      <Pressable key={label} onPress={onPress} className="flex-row items-center rounded-xl px-3.5 py-2.5" style={{ gap: 6, backgroundColor: primary ? themeColors.c700 : '#FFFFFF', borderWidth: primary ? 0 : 1, borderColor: LINE }}>
+        <Ionicons name={icon} size={15} color={primary ? '#FFFFFF' : themeColors.c700} />
         <Text className="text-[13px] font-semibold" style={{ color: primary ? '#FFFFFF' : INK }}>{label}</Text>
       </Pressable>
     ) : null;
 
   const liabilitySide = (
     <View className="flex-1" style={{ minWidth: 0, paddingVertical: 4 }}>
-      <View className="flex-row justify-between border-b-2 pb-2.5" style={{ borderColor: BRAND_DARK }}>
+      <View className="flex-row justify-between border-b-2 pb-2.5" style={{ borderColor: themeColors.c900 }}>
         <Text className="text-[14px] font-bold text-gray-900">LIABILITIES &amp; CAPITAL</Text>
         <Text className="text-[12px] font-semibold text-gray-500">NPR</Text>
       </View>
       <Group title="Current liabilities" rows={liabilityRows} subtotalLabel="Total liabilities" subtotal={now.liabilities} />
       <Group title="Capital & reserves" rows={equityRows} subtotalLabel="Total equity" subtotal={now.equity} />
-      <View className="mt-4 flex-row border-t-2 pt-3" style={{ borderColor: BRAND_DARK }}>
+      <View className="mt-4 flex-row border-t-2 pt-3" style={{ borderColor: themeColors.c900 }}>
         <Text className="flex-1 text-[15px] font-bold text-gray-900">Total liabilities &amp; equity</Text>
         <Text className="text-[15px] font-bold text-gray-900" style={TABULAR}>{inr(now.liabilities + now.equity)}</Text>
       </View>
@@ -498,13 +493,13 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
   );
   const assetSide = (
     <View className="flex-1" style={{ minWidth: 0, paddingVertical: 4 }}>
-      <View className="flex-row justify-between border-b-2 pb-2.5" style={{ borderColor: BRAND_DARK }}>
+      <View className="flex-row justify-between border-b-2 pb-2.5" style={{ borderColor: themeColors.c900 }}>
         <Text className="text-[14px] font-bold text-gray-900">ASSETS</Text>
         <Text className="text-[12px] font-semibold text-gray-500">NPR</Text>
       </View>
       <Group title="Cash & bank" rows={cashRows} subtotalLabel="Total cash & bank" subtotal={cashTotal} />
       <Group title="Receivables & stock" rows={receivableRows} subtotalLabel="Total receivables & stock" subtotal={receivableTotal} />
-      <View className="mt-4 flex-row border-t-2 pt-3" style={{ borderColor: BRAND_DARK }}>
+      <View className="mt-4 flex-row border-t-2 pt-3" style={{ borderColor: themeColors.c900 }}>
         <Text className="flex-1 text-[15px] font-bold text-gray-900">Total assets</Text>
         <Text className="text-[15px] font-bold text-gray-900" style={TABULAR}>{inr(now.assets)}</Text>
       </View>
@@ -529,11 +524,11 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
       {!ready ? <Text className="py-6 text-center text-sm text-gray-400">Reading your books…</Text> : null}
 
       {/* the heading band: the same brand-blue band as the Profit & Loss report */}
-      <View className="overflow-hidden rounded-2xl" style={{ backgroundColor: BRAND_DARK }}>
+      <View className="overflow-hidden rounded-2xl" style={{ backgroundColor: themeColors.c900 }}>
         <View className="p-5" style={{ gap: 4 }}>
-          <Text className="text-[11.5px] font-bold" style={{ color: '#BFDBFE', letterSpacing: 1.4 }}>FINANCE REPORT</Text>
+          <Text className="text-[11.5px] font-bold" style={{ color: themeColors.c200, letterSpacing: 1.4 }}>FINANCE REPORT</Text>
           <Text className="text-[24px] font-extrabold text-white" style={{ letterSpacing: 0.5 }}>BALANCE SHEET</Text>
-          <Text className="text-[13px]" style={{ color: '#DBEAFE' }}>{company}  ·  as on {numericDateLabel(asOn)}</Text>
+          <Text className="text-[13px]" style={{ color: themeColors.c100 }}>{company}  ·  as on {numericDateLabel(asOn)}</Text>
         </View>
         <View className="flex-row flex-wrap border-t" style={{ borderColor: 'rgba(255,255,255,0.18)' }}>
           {[
@@ -543,10 +538,10 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
             { label: 'Current ratio', value: now.currentRatio == null ? '–' : now.currentRatio.toFixed(2), delta: null },
           ].map((k, i) => (
             <View key={k.label} className="px-5 py-4" style={{ flexGrow: 1, flexBasis: 200, borderLeftWidth: i === 0 ? 0 : 1, borderColor: 'rgba(255,255,255,0.18)' }}>
-              <Text className="text-[11.5px] font-semibold" style={{ color: '#BFDBFE' }}>{k.label}</Text>
+              <Text className="text-[11.5px] font-semibold" style={{ color: themeColors.c200 }}>{k.label}</Text>
               <Text className="mt-0.5 text-[19px] font-bold text-white" style={TABULAR}>{k.value}</Text>
               {k.delta != null && (
-                <Text className="text-[11.5px]" style={{ color: '#93C5FD' }}>
+                <Text className="text-[11.5px]" style={{ color: themeColors.c300 }}>
                   {k.delta >= 0 ? '▲' : '▼'} {Math.abs(k.delta) > 999 ? '999%+' : `${Math.abs(k.delta).toFixed(1)}%`} vs {compareLabel.toLowerCase()}
                 </Text>
               )}
@@ -561,9 +556,9 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
           <View className="flex-1 p-5" style={twoColumns ? { borderRightWidth: 1, borderColor: LINE } : { borderBottomWidth: 1, borderColor: LINE }}>{liabilitySide}</View>
           <View className="flex-1 p-5">{assetSide}</View>
         </View>
-        <View className="flex-row items-center border-t px-5 py-3" style={{ gap: 8, borderColor: LINE, backgroundColor: BRAND_TINT }}>
-          <Ionicons name={balanced ? 'checkmark-circle' : 'alert-circle'} size={18} color={BRAND} />
-          <Text className="flex-1 text-[13px] font-semibold" style={{ color: BRAND_DARK }}>
+        <View className="flex-row items-center border-t px-5 py-3" style={{ gap: 8, borderColor: LINE, backgroundColor: themeColors.c50 }}>
+          <Ionicons name={balanced ? 'checkmark-circle' : 'alert-circle'} size={18} color={themeColors.c600} />
+          <Text className="flex-1 text-[13px] font-semibold" style={{ color: themeColors.c900 }}>
             {balanced ? 'Balanced: Assets = Liabilities + Equity' : 'Out of balance'}  ·  {inr(now.assets)} = {inr(now.liabilities)} + ({inr(now.equity)})
           </Text>
         </View>
@@ -575,8 +570,8 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
           <View className="flex-row flex-wrap items-center" style={{ gap: 10 }}>
             <Text className="flex-1 text-[15px] font-bold text-gray-900">Assets vs liabilities</Text>
             <View className="flex-row" style={{ gap: 14 }}>
-              <View className="flex-row items-center" style={{ gap: 6 }}><View style={{ width: 12, height: 3, backgroundColor: '#1D4ED8' }} /><Text className="text-[12px] text-gray-600">Assets</Text></View>
-              <View className="flex-row items-center" style={{ gap: 6 }}><View style={{ width: 12, height: 3, backgroundColor: '#93C5FD' }} /><Text className="text-[12px] text-gray-600">Liabilities</Text></View>
+              <View className="flex-row items-center" style={{ gap: 6 }}><View style={{ width: 12, height: 3, backgroundColor: themeColors.c700 }} /><Text className="text-[12px] text-gray-600">Assets</Text></View>
+              <View className="flex-row items-center" style={{ gap: 6 }}><View style={{ width: 12, height: 3, backgroundColor: themeColors.c300 }} /><Text className="text-[12px] text-gray-600">Liabilities</Text></View>
             </View>
           </View>
           <Text className="mb-1 text-[12px] text-gray-500">Month end, last 7 months</Text>
@@ -604,7 +599,7 @@ export function BalanceSheetScreen({ basePath }: { basePath: string }) {
         <View className="flex-row flex-wrap" style={{ gap: 10 }}>
           {shortcuts(basePath).map((s) => (
             <Pressable key={s.key} onPress={() => router.push(s.href as never)} className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3 py-2.5" style={{ gap: 8 }}>
-              <Ionicons name={s.icon} size={16} color="#1D4ED8" />
+              <Ionicons name={s.icon} size={16} color={themeColors.c700} />
               <Text className="text-[13px] font-semibold text-gray-800">{s.label}</Text>
             </Pressable>
           ))}

@@ -14,6 +14,7 @@ import { localTodayIso } from '../../utils/localDate';
 import { journalNote, newJournalCode } from '../../utils/journalVoucher';
 import { tidyName } from '../../utils/nameCaps';
 import { formatMoney } from '../../utils/money';
+import { themeColors } from '../../theme/accent';
 
 type Person = { id: string; name: string };
 type Side = 'debit' | 'credit';
@@ -289,7 +290,7 @@ export function JournalVoucherForm({ ownerId, onDone }: { ownerId: string; onDon
             showWhenEmpty
             adornment={
               l.head.trim() !== '' ? (
-                <Text className="text-[10.5px] font-bold" style={{ color: l.person ? '#1D4ED8' : '#B45309' }}>
+                <Text className="text-[10.5px] font-bold" style={{ color: l.person ? themeColors.c700 : '#B45309' }}>
                   {l.person ? 'PERSON' : l.side === 'debit' ? 'EXPENSE' : '?'}
                 </Text>
               ) : undefined
@@ -349,7 +350,7 @@ export function JournalVoucherForm({ ownerId, onDone }: { ownerId: string; onDon
               className="flex-row items-center rounded-lg border border-gray-300 px-2.5 py-1.5"
               style={{ gap: 4 }}
             >
-              <Ionicons name="add" size={15} color="#1D4ED8" />
+              <Ionicons name="add" size={15} color={themeColors.c700} />
               <Text className="text-[12.5px] font-semibold text-blue-700">Add {side}</Text>
             </Pressable>
           </View>

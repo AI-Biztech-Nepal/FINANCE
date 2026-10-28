@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/hooks/useAuth';
 import { AuthScreen } from '../../lib/components/auth/AuthScreen';
 import { NewPasswordForm } from '../../lib/components/auth/NewPasswordForm';
+import { themeColors } from '../../lib/theme/accent';
 
 // Where the link in a password-reset email lands. Opening that link has
 // already signed the person in (and set the store's isRecovering flag), so all
@@ -28,7 +29,7 @@ export default function ResetPassword() {
   if (isLoading || leaving) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#1d4ed8" />
+        <ActivityIndicator size="large" color={themeColors.c700} />
       </View>
     );
   }

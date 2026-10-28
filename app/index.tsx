@@ -2,6 +2,7 @@
 import { ActivityIndicator, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuthStore } from '../lib/hooks/useAuth';
+import { themeColors } from '../lib/theme/accent';
 
 export default function Index() {
   const session = useAuthStore((state) => state.session);
@@ -19,7 +20,7 @@ export default function Index() {
   if (!profile) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#1d4ed8" />
+        <ActivityIndicator size="large" color={themeColors.c700} />
       </View>
     );
   }
