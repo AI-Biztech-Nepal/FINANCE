@@ -239,6 +239,28 @@ export interface Rental {
   updated_at: string;
 }
 
+/** A vehicle sold on instalments (see supabase/migrations/0019_emi_plans.sql). What has been paid is the customer's
+ * Received entries that name the vehicle; what is due is worked out from the plan (see lib/utils/emi.ts). */
+export interface EmiPlan {
+  id: string;
+  owner_id: string;
+  car: string;
+  model: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  sale_price: number;
+  down_payment: number;
+  installment: number;
+  months: number;
+  /** 'YYYY-MM-DD': the first instalment's day; the rest fall on the same day each month after it. */
+  first_due: string;
+  note: string | null;
+  /** Settled or ended early; null while it runs. */
+  closed_on: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Minimal shape expected by Supabase's generated Database type.
 // Expand this if/when you swap in the CLI-generated version.
 export interface Database {
@@ -292,6 +314,7 @@ export interface Database {
         Relationships: [];
       };
       rentals: { Row: Rental; Insert: Partial<Rental>; Update: Partial<Rental>; Relationships: [] };
+      emi_plans: { Row: EmiPlan; Insert: Partial<EmiPlan>; Update: Partial<EmiPlan>; Relationships: [] };
     };
   };
 }

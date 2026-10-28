@@ -1,13 +1,14 @@
 // lib/components/finance/RentScreen.tsx
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useRentalWageSync } from '../../hooks/useRentalWageSync';
 import { useSupabaseQuery } from '../../hooks/useSupabase';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
-import { BackButton, BookPage, BookStat, BookStats, BookTable, Pill, ToolbarButton, money, useBookLayout, useBookToolbar, type BookColumn } from './BookKit';
+import { BackButton, BookPage, BookStat, BookStats, BookTable, FilterTabs, Pill, ToolbarButton, money, useBookLayout, useBookToolbar, type BookColumn } from './BookKit';
+import { EmiPanel } from './EmiPanel';
 import { useReportActions } from './PrintButton';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
@@ -25,6 +26,9 @@ export function RentScreen({ basePath }: { basePath: string }) {
   // Employees' daily rental wages up to today (see useRentalWageSync).
   useRentalWageSync(userId);
   const profile = useAuthStore((state) => state.profile);
+  // Rent & EMI: two tabs - vehicles sold on instalments, and vehicles given on rent (`?tab=emi` opens on EMI).
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<'emi' | 'rent'>(tabParam === 'emi' ? 'emi' : 'rent');
   const today = localTodayIso();
   const owner: Record<string, string> = userId ? { owner_id: userId } : {};
   const { data: rentals, isLoading, error } = useSupabaseQuery('rentals', {
@@ -136,12 +140,16 @@ export function RentScreen({ basePath }: { basePath: string }) {
       left: layout.wide ? undefined : () => <BackButton onPress={() => router.back()} />,
       right: () => (
         <>
-          {reportButtons}
-          <ToolbarButton icon="add" label="New rental" onPress={() => openEntry()} />
+          {tab === 'rent' && reportButtons}
+          {tab === 'rent' ? (
+            <ToolbarButton icon="add" label="New rental" onPress={() => openEntry()} />
+          ) : (
+            <ToolbarButton icon="add" label="New EMI" onPress={() => router.push(`${basePath}/emi-entry` as never)} />
+          )}
         </>
       ),
     },
-    [reportButtons]
+    [reportButtons, tab]
   );
 
   const dateCell = (iso: string | null | undefined) =>
@@ -211,6 +219,21 @@ export function RentScreen({ basePath }: { basePath: string }) {
     <BookPage wide={layout.wide}>
       {toolbar}
 
+      <View className="flex-row">
+        <FilterTabs
+          options={[
+            { key: 'emi', label: 'EMI' },
+            { key: 'rent', label: 'Rent' },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+      </View>
+
+      {tab === 'emi' ? (
+        <EmiPanel userId={userId} basePath={basePath} full={layout.full} />
+      ) : (
+      <>
       <BookStats>
         <BookStat label="Out now" value={String(stats.out)} color="#1D4ED8" />
         <BookStat label="Rent" value={`NPR ${money(stats.total)}`} color="#374151" />
@@ -244,6 +267,8 @@ export function RentScreen({ basePath }: { basePath: string }) {
         Tap a rental to edit it. A rental is billed by the day, counting the day it was rented and every day since. Rent is kept apart from Sales,
         so an item on rent stays in your stock.
       </Text>
+      </>
+      )}
     </BookPage>
   );
 }
