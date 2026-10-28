@@ -275,6 +275,7 @@ export function BookTable<T>({
   bare,
   hideHeader,
   maxRows,
+  dense,
 }: {
   columns: BookColumn<T>[];
   rows: T[];
@@ -297,6 +298,8 @@ export function BookTable<T>({
   /** Past this many rows the table stops growing and scrolls inside itself - exactly this many rows show - with
    * its header row and totals footer kept in view (web). */
   maxRows?: number;
+  /** Tighter side padding in the cells, for a table with many columns that must all fit. */
+  dense?: boolean;
 }) {
   const limited = maxRows != null && maxRows > 0 && rows.length > maxRows && Platform.OS === 'web';
   // The page's own scroll pins the header; a table that scrolls inside itself pins it within that.
@@ -308,6 +311,7 @@ export function BookTable<T>({
     setHeights((prev) => (prev.rows[index] === h ? prev : { ...prev, rows: { ...prev.rows, [index]: h } }));
   const shown = limited ? Array.from({ length: maxRows! }, (_, i) => heights.rows[i]) : [];
   const scrollHeight = limited && shown.every((h) => h != null) ? shown.reduce((a, b) => a + b, 0) + heights.head + heights.foot : undefined;
+  const padX = dense ? 'px-1.5' : 'px-2.5';
   const cellStyle = (c: BookColumn<T>) => (c.width ? { width: c.width } : { flex: 1, minWidth: 0 });
   const lastIndex = columns.length - 1;
   const footerStart = footer ? columns.findIndex((c) => c.key in footer.cells) : -1;
@@ -322,7 +326,7 @@ export function BookTable<T>({
         {columns.map((c, i) => (
           <Text
             key={c.key}
-            className={`px-2.5 py-2 text-[11.5px] font-bold text-gray-600 ${i < lastIndex ? 'border-r border-gray-200' : ''} ${c.align === 'right' ? 'text-right' : ''}`}
+            className={`${padX} py-2 text-[11.5px] font-bold text-gray-600 ${i < lastIndex ? 'border-r border-gray-200' : ''} ${c.align === 'right' ? 'text-right' : ''}`}
             style={cellStyle(c)}
           >
             {c.label}
@@ -349,7 +353,7 @@ export function BookTable<T>({
               {columns.map((c, i) => (
                 <View
                   key={c.key}
-                  className={`px-2.5 py-2 ${i < lastIndex ? 'border-r border-gray-200' : ''}`}
+                  className={`${padX} py-2 ${i < lastIndex ? 'border-r border-gray-200' : ''}`}
                   style={[cellStyle(c), c.align === 'right' ? { alignItems: 'flex-end', justifyContent: 'center' } : { justifyContent: 'center' }]}
                 >
                   {c.render(row, index)}
@@ -371,7 +375,7 @@ export function BookTable<T>({
           {columns.slice(footerStart).map((c, i, arr) => (
             <View
               key={c.key}
-              className={`px-2.5 py-2 ${i < arr.length - 1 ? 'border-r border-gray-200' : ''}`}
+              className={`${padX} py-2 ${i < arr.length - 1 ? 'border-r border-gray-200' : ''}`}
               style={{ width: c.width, alignItems: 'flex-end', justifyContent: 'center' }}
             >
               {footer.cells[c.key]}

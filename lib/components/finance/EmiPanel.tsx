@@ -1,6 +1,6 @@
 // lib/components/finance/EmiPanel.tsx
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSupabaseInsert, useSupabaseQuery } from '../../hooks/useSupabase';
 import { BookStat, BookStats, BookTable, Pill, money, type BookColumn } from './BookKit';
@@ -16,8 +16,22 @@ const key = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, '
 
 type Direction = 'sale' | 'purchase';
 
-/** The least width the vehicle column keeps, so a vehicle's name is never squeezed. */
-const VEHICLE_MIN = 210;
+/** Each column's width in the full table: [narrowest, widest]. They share whatever the window gives, so every column
+ * fits with no sideways scroll, and the vehicle column - the one with no width - takes the rest. */
+const COLS = {
+  sn: [36, 44],
+  party: [100, 140],
+  price: [92, 104],
+  down: [84, 100],
+  inst: [112, 140],
+  paid: [92, 104],
+  overdue: [88, 100],
+  left: [92, 104],
+  next: [84, 108],
+  status: [84, 96],
+} as const;
+/** The room the vehicle column is kept before the others stop shrinking. */
+const VEHICLE_FLOOR = 170;
 
 /** The words of each side: customers paying us for vehicles we sold, or us paying vendors for stock we bought. */
 const WORDS: Record<Direction, { tab: string; party: string; price: string; paid: string; none: string; note: string }> = {
@@ -132,6 +146,12 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
     ) : (
       <Text className="text-[12.5px] text-gray-300">—</Text>
     );
+  // Every column stays and nothing scrolls: the widths slide from widest to narrowest with the room there is, keeping the
+  // vehicle column at least VEHICLE_FLOOR where it can.
+  const lows = Object.values(COLS).reduce((sum, c) => sum + c[0], 0);
+  const highs = Object.values(COLS).reduce((sum, c) => sum + c[1], 0);
+  const share = boxWidth > 0 ? Math.min(1, Math.max(0, (boxWidth - VEHICLE_FLOOR - lows) / (highs - lows))) : 1;
+  const w = (k: keyof typeof COLS) => Math.round(COLS[k][0] + share * (COLS[k][1] - COLS[k][0]));
   // The whole vehicle name is shown: it wraps onto another line rather than being cut short.
   const vehicle = (r: Row) => (
     <View style={{ minWidth: 0, gap: 2 }}>
@@ -143,15 +163,15 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   );
   const columns: BookColumn<Row>[] = full
     ? [
-        { key: 'sn', label: 'SN', width: 48, render: (_r, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
+        { key: 'sn', label: 'SN', width: w('sn'), render: (_r, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'vehicle', label: 'Vehicle', render: vehicle },
-        { key: 'customer', label: words.party, width: 150, render: (r) => <Text className="text-[12.5px] font-medium text-gray-900" numberOfLines={2}>{r.p.customer_name || '—'}</Text> },
-        { key: 'price', label: words.price, width: 108, align: 'right', render: (r) => fig(Number(r.p.sale_price)) },
-        { key: 'down', label: 'Down payment', width: 108, align: 'right', render: (r) => fig(Number(r.p.down_payment)) },
+        { key: 'customer', label: words.party, width: w('party'), render: (r) => <Text className="text-[12.5px] font-medium text-gray-900" numberOfLines={2}>{r.p.customer_name || '—'}</Text> },
+        { key: 'price', label: words.price, width: w('price'), align: 'right', render: (r) => fig(Number(r.p.sale_price)) },
+        { key: 'down', label: 'Down payment', width: w('down'), align: 'right', render: (r) => fig(Number(r.p.down_payment)) },
         {
           key: 'inst',
           label: 'Instalment',
-          width: 150,
+          width: w('inst'),
           align: 'right',
           render: (r) => (
             <View className="items-end">
@@ -160,11 +180,11 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
             </View>
           ),
         },
-        { key: 'paid', label: words.paid, width: 108, align: 'right', render: (r) => fig(r.paid, '#047857', true) },
-        { key: 'overdue', label: 'Overdue', width: 104, align: 'right', render: (r) => fig(r.overdue, '#B91C1C', true) },
-        { key: 'left', label: 'Remaining', width: 108, align: 'right', render: (r) => fig(r.remaining, '#111827', true) },
-        { key: 'next', label: 'Next due', width: 112, render: (r) => <Text className="text-[12.5px] text-gray-700">{r.next ? toBsHistoryLabel(r.next) : '—'}</Text> },
-        { key: 'status', label: 'Status', width: 96, render: (r) => <Pill text={r.status.label} color={r.status.color} bg={r.status.bg} /> },
+        { key: 'paid', label: words.paid, width: w('paid'), align: 'right', render: (r) => fig(r.paid, '#047857', true) },
+        { key: 'overdue', label: 'Overdue', width: w('overdue'), align: 'right', render: (r) => fig(r.overdue, '#B91C1C', true) },
+        { key: 'left', label: 'Remaining', width: w('left'), align: 'right', render: (r) => fig(r.remaining, '#111827', true) },
+        { key: 'next', label: 'Next due', width: w('next'), render: (r) => <Text className="text-[12.5px] text-gray-700">{r.next ? toBsHistoryLabel(r.next) : '—'}</Text> },
+        { key: 'status', label: 'Status', width: w('status'), render: (r) => <Pill text={r.status.label} color={r.status.color} bg={r.status.bg} /> },
       ]
     : [
         { key: 'vehicle', label: 'Vehicle', render: vehicle },
@@ -181,10 +201,6 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
           ),
         },
       ];
-  // Every column stays. The vehicle column is the one that takes what the others leave, and it keeps at least
-  // VEHICLE_MIN: when the window cannot give it that, the table scrolls sideways instead of squeezing the name.
-  const tableMin = columns.reduce((sum, c) => sum + (c.width ?? 0), 0) + VEHICLE_MIN;
-  const scrolls = full && boxWidth > 0 && boxWidth < tableMin;
 
   const table = (
     <BookTable
@@ -192,7 +208,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
       rows={rows}
       rowKey={(r) => r.p.id}
       onRowPress={(r) => open(r.p.id)}
-      stickyHeader={!scrolls}
+      stickyHeader
+      dense
       footer={{
         label: `${rows.length} ${rows.length === 1 ? 'plan' : 'plans'} · Total`,
         cells: full
@@ -268,15 +285,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
           <Text className="text-gray-500">{words.none}</Text>
         </View>
       ) : (
-        <View onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
-          {scrolls ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator>
-              <View style={{ width: tableMin }}>{table}</View>
-            </ScrollView>
-          ) : (
-            table
-          )}
-        </View>
+        <View onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>{table}</View>
       )}
       <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">{words.note}</Text>
       {confirmDialog}
