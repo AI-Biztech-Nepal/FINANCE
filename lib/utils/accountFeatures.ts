@@ -9,9 +9,11 @@ export function sellsVehicles(businessName: string | null | undefined): boolean 
 }
 
 /** A logo kept with the app for an account that has not uploaded one of its own (Company Details): Hamro G&G
- * Auto Enterprises, picked out by its business name - "G&G", "G & G" or "GnG", in any case. */
+ * Auto Enterprises, picked out by its business name - "G&G", "G & G" or "GnG", in any case - and Deeva Auto
+ * Enterprises. Both are made for a light background (no background of their own). */
 export function builtInLogo(businessName: string | null | undefined): number | null {
-  return /\bg\s*(&|n|and)\s*g\b/i.test(businessName ?? '') ? require('../../assets/logos/gng.png') : null;
+  if (/\bg\s*(&|n|and)\s*g\b/i.test(businessName ?? '')) return require('../../assets/logos/gng.png');
+  return sellsVehicles(businessName) ? require('../../assets/logos/deeva.png') : null;
 }
 
 /** The names of a bill's items, each once, in the order they are on the bill. */
