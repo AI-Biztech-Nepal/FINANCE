@@ -6,21 +6,29 @@
       "expo-document-picker",
       [
         "expo-image-picker",
-        { "photosPermission": "Finance needs access to your photos so you can attach a picture of a bill or product." }
+        {
+          "photosPermission": "Finance needs access to your photos so you can attach a picture of a bill or product."
+        }
       ],
       [
         "expo-contacts",
-        { "contactsPermission": "Finance needs access to your contacts so you can quickly fill in a customer's name and phone number." }
+        {
+          "contactsPermission": "Finance needs access to your contacts so you can quickly fill in a customer's name and phone number."
+        }
       ],
       "@react-native-community/datetimepicker",
       [
         "expo-local-authentication",
-        { "faceIDPermission": "Finance uses Face ID to quickly and securely unlock the app." }
+        {
+          "faceIDPermission": "Finance uses Face ID to quickly and securely unlock the app."
+        }
       ],
       "expo-secure-store",
       [
         "expo-audio",
-        { "microphonePermission": "Finance needs microphone access so you can add entries by voice." }
+        {
+          "microphonePermission": "Finance needs microphone access so you can add entries by voice."
+        }
       ],
       "expo-sharing",
       "expo-font",
@@ -28,6 +36,7 @@
     ],
     "name": "Finance",
     "slug": "store-books",
+    "owner": "ai-biztech-nepal",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -49,7 +58,10 @@
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "package": "com.storebooks.app"
     },
@@ -57,7 +69,10 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "3aeab32c-ecf0-417c-9da8-4b8e5b86c308"
+      }
     }
   }
 }
