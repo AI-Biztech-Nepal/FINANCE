@@ -211,19 +211,22 @@ export function BookStat({
   value,
   color,
   onPress,
+  active,
 }: {
   label: string;
   /** Already formatted, e.g. "NPR 12,000" or "14". */
   value: string;
   color: string;
   onPress?: () => void;
+  /** The tile whose filter is on: drawn with a border in its own colour. */
+  active?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5"
-      style={{ flexGrow: 1, flexBasis: 140 }}
+      className="rounded-xl border bg-white px-3.5 py-2.5"
+      style={{ flexGrow: 1, flexBasis: 140, borderColor: active ? color : '#E5E7EB', borderWidth: active ? 2 : 1 }}
     >
       <Text className="text-[11px] font-semibold capitalize tracking-wide text-gray-400">{label}</Text>
       <Text className="mt-0.5 text-[16px] font-extrabold" style={{ color }}>

@@ -7,6 +7,7 @@ import { useAuthStore } from '../../hooks/useAuth';
 import { useRentalWageSync } from '../../hooks/useRentalWageSync';
 import { useSupabaseQuery } from '../../hooks/useSupabase';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
+import { journalOf } from '../../utils/journalVoucher';
 import { BackButton, BookPage, BookStat, BookStats, BookTable, FilterTabs, Pill, ToolbarButton, money, useBookLayout, useBookToolbar, type BookColumn } from './BookKit';
 import { EmiPanel } from './EmiPanel';
 import { useReportActions } from './PrintButton';
@@ -38,20 +39,21 @@ export function RentScreen({ basePath }: { basePath: string }) {
     enabled: !!userId,
   });
 
-  // The renters' own ledgers: what they owe for the days out (the Daily rent lines) and what they have handed
-  // over (Received) - so the page shows what is still due from them.
-  const { data: employeeLedger } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId });
-  const employeeMoney = useMemo(() => {
-    const ids = new Set((rentals ?? []).map((r) => r.customer_id).filter((v): v is string => !!v));
-    let owed = 0;
-    let received = 0;
-    for (const e of employeeLedger ?? []) {
-      if (!ids.has(e.customer_id)) continue;
-      if (e.entry_type === 'credit') received += Number(e.amount);
-      else if (e.source_type === 'rental_wage') owed += Number(e.amount);
+  // What each renter paid for the vehicle they rent: their Received entries whose remark starts with it (pick the
+  // vehicle in Item on the Received page). Payments for anything else - a vehicle they bought - are not rent.
+  const { data: renterLedger } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId });
+  const rentPaid = useMemo(() => {
+    const key = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const map = new Map<string, number>();
+    for (const e of renterLedger ?? []) {
+      if (e.entry_type !== 'credit' || !e.note || journalOf(e.note)) continue;
+      const k = `${e.customer_id}|${key(e.note.split(' · ')[0])}`;
+      map.set(k, (map.get(k) ?? 0) + Number(e.amount));
     }
-    return { owed: round2(owed), received: round2(received), due: round2(Math.max(0, owed - received)) };
-  }, [rentals, employeeLedger]);
+    return (r: { customer_id: string | null; car: string }) => (r.customer_id ? map.get(`${r.customer_id}|${key(r.car)}`) ?? 0 : 0);
+  }, [renterLedger]);
+  // The tile picked narrows the table: still out, paid something, or still owing.
+  const [show, setShow] = useState<'all' | 'out' | 'received' | 'due'>('all');
 
   const openEntry = (id?: string) => router.push((id ? `${basePath}/rent-entry?id=${id}` : `${basePath}/rent-entry`) as never);
 
@@ -61,16 +63,20 @@ export function RentScreen({ basePath }: { basePath: string }) {
       [...(rentals ?? [])]
         .map((r) => {
           const f = rentalFigures(r, today);
-          return { r, ...f, status: rentalStatus(r, today) };
+          const paid = round2(rentPaid(r));
+          return { r, ...f, paid, left: round2(Math.max(0, f.total - paid)), status: rentalStatus(r, today) };
         })
         .sort((a, b) => Number(!!a.r.returned_on) - Number(!!b.r.returned_on) || b.r.start_date.localeCompare(a.r.start_date)),
-    [rentals, today]
+    [rentals, today, rentPaid]
   );
   type Row = (typeof rows)[number];
+  const shown = rows.filter((x) => (show === 'out' ? !x.r.returned_on : show === 'received' ? x.paid > 0 : show === 'due' ? x.left > 0 : true));
   const stats = useMemo(
     () => ({
       out: rows.filter((x) => !x.r.returned_on).length,
       total: round2(rows.reduce((s, x) => s + x.total, 0)),
+      paid: round2(rows.reduce((s, x) => s + x.paid, 0)),
+      left: round2(rows.reduce((s, x) => s + x.left, 0)),
     }),
     [rows]
   );
@@ -82,8 +88,8 @@ export function RentScreen({ basePath }: { basePath: string }) {
     summary: [
       { label: 'Out now', value: String(stats.out) },
       { label: 'Rent', value: `NPR ${money(stats.total)}` },
-      { label: 'Received', value: `NPR ${money(employeeMoney.received)}` },
-      { label: 'Due', value: `NPR ${money(employeeMoney.due)}` },
+      { label: 'Received', value: `NPR ${money(stats.paid)}` },
+      { label: 'Due', value: `NPR ${money(stats.left)}` },
       { label: 'Rentals', value: String(rows.length) },
     ],
     sections: [
@@ -98,9 +104,11 @@ export function RentScreen({ basePath }: { basePath: string }) {
           { label: 'Days', align: 'right' },
           { label: 'Rate/day', align: 'right' },
           { label: 'Rent', align: 'right' },
+          { label: 'Received', align: 'right' },
+          { label: 'Due', align: 'right' },
           { label: 'Status' },
         ],
-        rows: rows.map((x, i) => {
+        rows: shown.map((x, i) => {
           const to = x.r.returned_on ?? x.r.end_date;
           return [
             String(i + 1),
@@ -112,10 +120,12 @@ export function RentScreen({ basePath }: { basePath: string }) {
             String(x.days),
             money(x.r.rate_per_day),
             money(x.total),
+            x.paid ? money(x.paid) : '',
+            x.left ? money(x.left) : '',
             x.status.label,
           ];
         }),
-        footer: ['', '', '', '', '', '', '', 'Total', money(stats.total), ''],
+        footer: ['', '', '', '', '', '', '', 'Total', money(stats.total), money(stats.paid), money(stats.left), ''],
         emptyText: 'No rentals yet.',
       },
     ],
@@ -171,8 +181,11 @@ export function RentScreen({ basePath }: { basePath: string }) {
     </View>
   );
 
+  const figure = (v: number, color: string) => (v ? num(money(v), color, true) : num('—', '#D1D5DB'));
+  // The Ledger's table layout: SN, the rental, its days and rate, then the money - rent, received (green), due (red).
   const columns: BookColumn<Row>[] = layout.full
     ? [
+        { key: 'sn', label: 'SN', width: 52, render: (_x, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'item', label: 'Item', render: (x) => itemCell(x, false) },
         { key: 'renter', label: 'Rented to', width: 190, render: (x) => (x.r.customer_name ? num(x.r.customer_name, '#111827') : num('—', '#D1D5DB')) },
         { key: 'from', label: 'From', width: 120, render: (x) => dateCell(x.r.start_date) },
@@ -180,12 +193,27 @@ export function RentScreen({ basePath }: { basePath: string }) {
         { key: 'days', label: 'Days', width: 64, align: 'right', render: (x) => num(String(x.days)) },
         { key: 'rate', label: 'Rate / day', width: 104, align: 'right', render: (x) => num(money(x.r.rate_per_day)) },
         { key: 'total', label: 'Rent', width: 112, align: 'right', render: (x) => num(money(x.total), '#111827', true) },
+        { key: 'paid', label: 'Received', width: 112, align: 'right', render: (x) => figure(x.paid, '#047857') },
+        { key: 'left', label: 'Due', width: 112, align: 'right', render: (x) => figure(x.left, '#B91C1C') },
         { key: 'status', label: 'Status', width: 100, render: (x) => <Pill text={x.status.label} color={x.status.color} bg={x.status.bg} /> },
       ]
     : [
         { key: 'item', label: 'Item', render: (x) => itemCell(x, true) },
         { key: 'total', label: 'Rent', width: 100, align: 'right', render: (x) => num(money(x.total), '#111827', true) },
+        { key: 'left', label: 'Due', width: 96, align: 'right', render: (x) => figure(x.left, '#B91C1C') },
       ];
+  const sum = (f: (x: Row) => number) => round2(shown.reduce((s, x) => s + f(x), 0));
+  const footer = {
+    label: `${shown.length} ${shown.length === 1 ? 'rental' : 'rentals'} · Total`,
+    cells: layout.full
+      ? {
+          total: num(money(sum((x) => x.total)), '#111827', true),
+          paid: figure(sum((x) => x.paid), '#047857'),
+          left: figure(sum((x) => x.left), '#B91C1C'),
+        }
+      : { total: num(money(sum((x) => x.total)), '#111827', true), left: figure(sum((x) => x.left), '#B91C1C') },
+  };
+  const pick = (k: typeof show) => setShow((cur) => (cur === k ? 'all' : k));
 
   return (
     <BookPage wide={layout.wide}>
@@ -207,12 +235,12 @@ export function RentScreen({ basePath }: { basePath: string }) {
       ) : (
       <>
       <BookStats>
-        <BookStat label="Out now" value={String(stats.out)} color="#1D4ED8" />
-        <BookStat label="Rent" value={`NPR ${money(stats.total)}`} color="#374151" />
-        {/* The renters' ledgers: what they have paid on the Received page, and what is still due. */}
-        <BookStat label="Received" value={`NPR ${money(employeeMoney.received)}`} color="#047857" />
-        <BookStat label="Due" value={`NPR ${money(employeeMoney.due)}`} color="#B91C1C" />
-        <BookStat label="Rentals" value={String(rows.length)} color="#374151" />
+        {/* Each tile narrows the table to its rentals; a second tap (or Rent / Rentals) shows them all again. */}
+        <BookStat label="Out now" value={String(stats.out)} color="#1D4ED8" onPress={() => pick('out')} active={show === 'out'} />
+        <BookStat label="Rent" value={`NPR ${money(stats.total)}`} color="#374151" onPress={() => setShow('all')} />
+        <BookStat label="Received" value={`NPR ${money(stats.paid)}`} color="#047857" onPress={() => pick('received')} active={show === 'received'} />
+        <BookStat label="Due" value={`NPR ${money(stats.left)}`} color="#B91C1C" onPress={() => pick('due')} active={show === 'due'} />
+        <BookStat label="Rentals" value={String(rows.length)} color="#374151" onPress={() => setShow('all')} active={show === 'all'} />
       </BookStats>
 
       {error ? (
@@ -228,11 +256,11 @@ export function RentScreen({ basePath }: { basePath: string }) {
           <Text className="mt-2 text-gray-500">{isLoading ? 'Loading…' : 'No rentals yet. Tap New rental.'}</Text>
         </View>
       ) : (
-        <BookTable columns={columns} rows={rows} rowKey={(x) => x.r.id} onRowPress={(x) => openEntry(x.r.id)} />
+        <BookTable columns={columns} rows={shown} rowKey={(x) => x.r.id} onRowPress={(x) => openEntry(x.r.id)} footer={footer} stickyHeader />
       )}
 
       <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
-        Tap a rental to edit it. A rental is billed by the day, counting the day it was rented and every day since. Rent is kept apart from Sales,
+        Tap a rental to edit it. Received is what the renter paid on the Received page with the vehicle picked in Item. A rental is billed by the day, counting the day it was rented and every day since. Rent is kept apart from Sales,
         so an item on rent stays in your stock.
       </Text>
       </>
