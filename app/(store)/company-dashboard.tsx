@@ -21,7 +21,7 @@ import { supabase } from '../../lib/supabase';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../../lib/components/web/WebSidebarShell';
 import { CARD_SHADOW, RecentActivityCard } from '../../lib/components/finance/dashboard/FinanceDashboard';
 import { formatMoney } from '../../lib/utils/money';
-import { builtInLogo } from '../../lib/utils/accountFeatures';
+import { builtInLogo, builtInLogoLarge } from '../../lib/utils/accountFeatures';
 
 const npr = (n: number) => `NPR ${formatMoney(n)}`;
 /** 1,23,456 -> "1.23L", 12,34,567 -> "12.3L", 1,23,45,678 -> "1.23Cr": short money for charts. */
@@ -449,6 +449,7 @@ export default function StoreDashboard() {
   const [mode] = useCalendarMode();
   const [period, setPeriod] = useState<PeriodKey>('this_fy');
   const [periodOpen, setPeriodOpen] = useState(false);
+  const [logoOpen, setLogoOpen] = useState(false);
   const periodLabel = PERIODS.find((p) => p.key === period)?.label ?? 'This fiscal year';
   const range = useMemo(() => periodRange(period, mode), [period, mode]);
   const prevRange = useMemo(() => periodRange(period, mode, 1), [period, mode]);
@@ -582,6 +583,7 @@ export default function StoreDashboard() {
   const company = profile?.business_name?.trim() || profile?.full_name || 'Your company';
   // No logo uploaded: the one the app keeps for this company, if any.
   const fallbackLogo = logoUrl ? null : builtInLogo(company);
+  const largeLogo = logoUrl ? null : builtInLogoLarge(company);
   const details = [
     profile?.business_address && { icon: 'location-outline' as const, text: profile.business_address },
     profile?.business_phone && { icon: 'call-outline' as const, text: profile.business_phone },
@@ -614,7 +616,13 @@ export default function StoreDashboard() {
   const hero = (
     <LinearGradient colors={['#0F172A', '#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 20, padding: wide ? 28 : 20 }}>
       <View className="flex-row flex-wrap items-center" style={{ gap: 18 }}>
-        <View className="items-center justify-center overflow-hidden rounded-2xl bg-white" style={{ width: 76, height: 76 }}>
+        <Pressable
+          onPress={() => setLogoOpen(true)}
+          disabled={!logoUrl && !fallbackLogo}
+          accessibilityLabel="View the logo larger"
+          className="items-center justify-center overflow-hidden rounded-2xl bg-white"
+          style={{ width: 76, height: 76 }}
+        >
           {logoUrl ? (
             <Image source={{ uri: logoUrl }} style={{ width: 76, height: 76 }} resizeMode="cover" />
           ) : fallbackLogo ? (
@@ -622,7 +630,16 @@ export default function StoreDashboard() {
           ) : (
             <Ionicons name="business" size={34} color="#1E3A8A" />
           )}
-        </View>
+        </Pressable>
+        {/* The square is small, so tapping it shows the logo large and clear. */}
+        <Modal visible={logoOpen} transparent animationType="fade" onRequestClose={() => setLogoOpen(false)}>
+          <Pressable onPress={() => setLogoOpen(false)} className="flex-1 items-center justify-center bg-black/50 px-4">
+            <View className="w-full rounded-2xl bg-white p-6" style={{ maxWidth: 620 }}>
+              <Image source={logoUrl ? { uri: logoUrl } : largeLogo!} style={{ width: '100%', height: 200 }} resizeMode="contain" />
+              <Text className="mt-3 text-center text-[12px] text-gray-400">Tap anywhere to close</Text>
+            </View>
+          </Pressable>
+        </Modal>
         <View style={{ flex: 1, minWidth: 220, gap: 6 }}>
           <Text className="text-[12px] font-semibold tracking-wider text-blue-200">COMPANY OVERVIEW</Text>
           <Text className="text-[26px] font-extrabold text-white" numberOfLines={2}>{company}</Text>

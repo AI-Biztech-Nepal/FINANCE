@@ -16,6 +16,11 @@ export function builtInLogo(businessName: string | null | undefined): number | n
   return sellsVehicles(businessName) ? require('../../assets/logos/deeva.png') : null;
 }
 
+/** The same built-in logo at full size, for showing it large (the small one is made for the little icon square). */
+export function builtInLogoLarge(businessName: string | null | undefined): number | null {
+  return sellsVehicles(businessName) ? require('../../assets/logos/deeva-large.png') : builtInLogo(businessName);
+}
+
 /** The names of a bill's items, each once, in the order they are on the bill. */
 export function itemListOf(items: BillItem[] | null | undefined): string[] {
   const seen = new Set<string>();
