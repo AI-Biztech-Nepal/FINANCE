@@ -272,7 +272,7 @@ function QuickPaymentForm() {
   // a real customer_id, so this shouldn't mean a trip to Your Customers
   // first. If the phone number already matches someone saved, use that
   // record instead of creating an unlinked duplicate.
-  async function handleSelectNew(name: string, phone: string | null) {
+  async function handleSelectNew(name: string, phone: string | null, partyTypeId: string | null) {
     if (!userId) return;
     setShowPicker(false);
     if (phone) {
@@ -283,7 +283,7 @@ function QuickPaymentForm() {
       }
     }
     try {
-      const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone });
+      const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone, ...(partyTypeId ? { party_type_id: partyTypeId } : {}) });
       selectCustomer(created);
     } catch (err) {
       showAlert('Could not add customer', getErrorMessage(err));
@@ -452,7 +452,7 @@ function QuickPaymentForm() {
 
   // Same "typed a name that isn't saved yet -> save it now" behavior as
   // handleSelectNew above, just targeting whichever row's picker is open.
-  async function handleSelectNewForRow(name: string, phone: string | null) {
+  async function handleSelectNewForRow(name: string, phone: string | null, partyTypeId: string | null) {
     if (!userId || !activeRowKey) return;
     const key = activeRowKey;
     setActiveRowKey(null);
@@ -464,7 +464,7 @@ function QuickPaymentForm() {
       }
     }
     try {
-      const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone });
+      const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone, ...(partyTypeId ? { party_type_id: partyTypeId } : {}) });
       updateRow(key, { selectedCustomer: created, customerName: created.name });
     } catch (err) {
       showAlert('Could not add customer', getErrorMessage(err));
@@ -691,6 +691,7 @@ function QuickPaymentForm() {
         onSelectCustomer={selectCustomer}
         onSelectNew={handleSelectNew}
         onClose={() => setShowPicker(false)}
+        partyKind={payTarget === 'vendor' ? 'vendor' : 'customer'}
       />
       <BankAccountPickerModal
         visible={showAccountPicker}
@@ -910,6 +911,7 @@ function QuickPaymentForm() {
           onSelectCustomer={selectCustomerForRow}
           onSelectNew={handleSelectNewForRow}
           onClose={() => setActiveRowKey(null)}
+          partyKind={payTarget === 'vendor' ? 'vendor' : 'customer'}
         />
         <BankAccountPickerModal
           visible={showAccountPicker}

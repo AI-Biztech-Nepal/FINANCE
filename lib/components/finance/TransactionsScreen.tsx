@@ -844,9 +844,10 @@ function TransactionForm({
   // a real customer here too when this is a bill, same as Quick Payment
   // already does.
   /** Resolves to whether a party is now picked (false when the confirmation was cancelled or the save failed). */
-  async function handleSelectPartyNew(name: string, phone: string | null, confirmName = false): Promise<boolean> {
+  async function handleSelectPartyNew(name: string, phone: string | null, partyTypeId?: string | null, confirmName = false): Promise<boolean> {
     setShowPartyPicker(false);
-    if (!phone && !isBill) {
+    // `partyTypeId` given: the picker's popup already confirmed this person (a null is "no Ledger type").
+    if (!phone && !isBill && partyTypeId === undefined && !confirmName) {
       setPartyName(name);
       setCustomerId(null);
       return true;
@@ -860,7 +861,7 @@ function TransactionForm({
     }
     // A name typed in the box is checked first; one the picker's own step already confirmed is not asked again.
     let finalName = name;
-    let typePatch: { party_type_id?: string } = {};
+    let typePatch: { party_type_id?: string } = partyTypeId ? { party_type_id: partyTypeId } : {};
     if (confirmName) {
       const checked = await askNewParty({ name, kind: newPartyKind });
       if (!checked) {
@@ -1306,14 +1307,16 @@ function TransactionForm({
   // Same "a plain typed name with no phone just fills party_name, a phone
   // number links or creates a real customer" behavior as handleSelectPartyNew
   // above (expense never requires a real customer_id, unlike a bill).
-  async function handleSelectNewPartyForExpenseRow(name: string, phone: string | null) {
+  async function handleSelectNewPartyForExpenseRow(name: string, phone: string | null, partyTypeId: string | null) {
     const key = activePartyRowKey;
     setActivePartyRowKey(null);
-    if (key) await attachContactToExpenseRow(key, name, phone);
+    if (key) await attachContactToExpenseRow(key, name, phone, partyTypeId);
   }
 
-  async function attachContactToExpenseRow(key: string, name: string, phone: string | null) {
-    if (!phone) {
+  // `partyTypeId` given: the picker's popup already confirmed this person (a null is "no Ledger type"); left out
+  // (a phone contact picked from the payee list), the confirmation popup is asked here before anything is saved.
+  async function attachContactToExpenseRow(key: string, name: string, phone: string | null, partyTypeId?: string | null) {
+    if (!phone && partyTypeId === undefined) {
       updateExpenseRow(key, { partyName: name, customerId: null });
       return;
     }
@@ -1322,8 +1325,20 @@ function TransactionForm({
       updateExpenseRow(key, { partyName: existing.name, customerId: existing.id });
       return;
     }
+    let finalName = name;
+    let typePatch: { party_type_id?: string } = partyTypeId ? { party_type_id: partyTypeId } : {};
+    if (partyTypeId === undefined) {
+      const asked = await askNewParty({ name, kind: 'payee' });
+      if (!asked) {
+        // Cancelled: the name is dropped, so it cannot be saved by accident.
+        updateExpenseRow(key, { partyName: '', customerId: null });
+        return;
+      }
+      finalName = asked.name;
+      typePatch = withType(asked);
+    }
     try {
-      const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone });
+      const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone, ...typePatch });
       updateExpenseRow(key, { partyName: created.name, customerId: created.id });
     } catch (err) {
       showAlert('Could not add customer', getErrorMessage(err));
@@ -1651,6 +1666,7 @@ function TransactionForm({
           onSelectCustomer={selectPartyForExpenseRow}
           onSelectNew={handleSelectNewPartyForExpenseRow}
           onClose={() => setActivePartyRowKey(null)}
+          partyKind="payee"
         />
         <CategoryPickerModal
           visible={activeCategoryRowKey != null}
@@ -1722,7 +1738,7 @@ function TransactionForm({
                     options={vendorOptions}
                     onSelectOption={async (opt, via) => {
                       if (opt.key === ADD_PARTY_KEY) {
-                        const added = await handleSelectPartyNew(tidyName(partyName.trim()), null, true);
+                        const added = await handleSelectPartyNew(tidyName(partyName.trim()), null, undefined, true);
                         if (added && via !== 'tab') billNoRef.current?.focus();
                         return;
                       }
@@ -1733,7 +1749,7 @@ function TransactionForm({
                         setPartyName(s.name);
                         setCustomerId(s.customer.id);
                       } else {
-                        await handleSelectPartyNew(s.name, s.phone);
+                        await handleSelectPartyNew(s.name, s.phone, undefined, true);
                       }
                     }}
                     inputRef={(el) => {
@@ -2037,6 +2053,7 @@ function TransactionForm({
           onSelectCustomer={selectCustomer}
           onSelectNew={handleSelectPartyNew}
           onClose={() => setShowPartyPicker(false)}
+          partyKind={newPartyKind}
         />
       </View>
     );
@@ -2368,6 +2385,7 @@ function TransactionForm({
         onSelectCustomer={selectCustomer}
         onSelectNew={handleSelectPartyNew}
         onClose={() => setShowPartyPicker(false)}
+        partyKind={newPartyKind}
       />
       <View className="flex-row gap-2">
         <Pressable onPress={onCancel} className="flex-1 items-center rounded-lg border border-gray-300 py-2.5">

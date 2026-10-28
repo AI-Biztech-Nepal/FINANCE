@@ -115,14 +115,19 @@ export function PartyMoveField({
 
   // A phone contact or typed name that is not saved yet is saved as a real person now,
   // the way the Sale / Payment forms do - unless someone with that phone already exists.
-  async function handleSelectNew(name: string, phone: string | null) {
+  async function handleSelectNew(name: string, phone: string | null, partyTypeId: string | null) {
     const existing = phone ? (customers ?? []).find((c) => c.phone === phone) : undefined;
     if (existing) {
       pick(existing.id, existing.name);
       return;
     }
     try {
-      const created = await createCustomer.mutateAsync({ owner_id: ownerId, name: nameCaps(name.trim()), phone });
+      const created = await createCustomer.mutateAsync({
+        owner_id: ownerId,
+        name: nameCaps(name.trim()),
+        phone,
+        ...(partyTypeId ? { party_type_id: partyTypeId } : {}),
+      });
       pick(created.id, created.name);
     } catch (err) {
       setPicking(false);

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../hooks/useAuth';
-import { useSupabaseQuery, useSupabaseUpdate, useSupabaseDelete } from '../../hooks/useSupabase';
+import { useSupabaseQuery, useSupabaseInsert, useSupabaseUpdate, useSupabaseDelete } from '../../hooks/useSupabase';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { useAccountBalances } from '../../hooks/useAccountBalances';
 import { DateField } from '../DateTimeFields';
@@ -381,6 +381,7 @@ function EditEntryModal({ target, onClose }: { target: EditTarget | null; onClos
   const bankAccounts = useBankAccounts(userId);
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [showPartyPicker, setShowPartyPicker] = useState(false);
+  const createCustomer = useSupabaseInsert('customers');
   const { data: allParties } = useSupabaseQuery('customers', { filters: userId ? { owner_id: userId } : {}, enabled: !!userId });
   const updates = {
     customer_ledger_entries: useSupabaseUpdate('customer_ledger_entries'),
@@ -630,7 +631,17 @@ function EditEntryModal({ target, onClose }: { target: EditTarget | null; onClos
           setForm((f) => (f ? { ...f, partyId: c.id } : f));
           setShowPartyPicker(false);
         }}
-        onSelectNew={() => setShowPartyPicker(false)}
+        // A person who is not saved yet is added (after the confirmation popup) and the entry moves to them.
+        onSelectNew={async (name, phone, partyTypeId) => {
+          if (!userId) return;
+          const existing = phone ? (allParties ?? []).find((c) => c.phone === phone) : undefined;
+          try {
+            const person = existing ?? (await createCustomer.mutateAsync({ owner_id: userId, name, phone, ...(partyTypeId ? { party_type_id: partyTypeId } : {}) }));
+            setForm((f) => (f ? { ...f, partyId: person.id } : f));
+          } catch (err) {
+            showAlert('Could not add this person', getErrorMessage(err));
+          }
+        }}
         onClose={() => setShowPartyPicker(false)}
       />
 

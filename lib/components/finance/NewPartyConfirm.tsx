@@ -10,10 +10,22 @@ import { readKey } from '../../utils/webKeys';
 
 export type NewPartyKind = 'customer' | 'vendor' | 'payee';
 
-/** What the popup answers with: the name to save, and the Ledger type to file the person under (null: none). */
+/** What the popup answers with: the name to save, the Ledger type to file the person under (null: none) and,
+ * when the popup asked for one, the phone number (null: none). */
 export interface NewPartyAnswer {
   name: string;
   partyTypeId: string | null;
+  phone: string | null;
+}
+
+export interface AskNewPartyOptions {
+  name: string;
+  kind: NewPartyKind;
+  typeId?: string | null;
+  /** Show a Phone box (optional for the person to fill). */
+  askPhone?: boolean;
+  /** The phone the box starts with. */
+  phone?: string | null;
 }
 
 /** The type to save on the new customer row: `{ ...withType(answer) }`. */
@@ -23,18 +35,23 @@ function NewPartyDialog({
   kind,
   initial,
   typeId,
+  askPhone,
+  initialPhone,
   onAdd,
   onCancel,
 }: {
   kind: NewPartyKind;
   initial: string;
   typeId?: string | null;
+  askPhone?: boolean;
+  initialPhone: string | null;
   onAdd: (answer: NewPartyAnswer) => void;
   onCancel: () => void;
 }) {
   const userId = useAuthStore((state) => state.session?.user.id);
   const { types, remove: removeType } = usePartyTypes(userId);
   const [name, setName] = useState(initial);
+  const [phone, setPhone] = useState(initialPhone ?? '');
   // A Ledger type made in this popup is kept only if the person is added: on Cancel it is taken back out.
   const madeTypes = useRef<string[]>([]);
   const cancel = () => {
@@ -52,7 +69,7 @@ function NewPartyDialog({
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
   const partyTypeId = picked === undefined ? fitting : picked;
   const add = () => {
-    if (name.trim()) onAdd({ name: name.trim(), partyTypeId });
+    if (name.trim()) onAdd({ name: name.trim(), partyTypeId, phone: phone.trim() || null });
   };
   return (
     // No cross, but a click outside, Esc and Cancel all go back: the name is dropped and nothing is saved. Only Add saves.
@@ -83,6 +100,28 @@ function NewPartyDialog({
             className={INPUT}
           />
         </Field>
+        {askPhone && (
+          <Field label="Phone (optional)" basis={150}>
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="98XXXXXXXX"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="phone-pad"
+              onKeyPress={(e) => {
+                const k = readKey(e);
+                if (k.key === 'Enter') {
+                  k.prevent();
+                  add();
+                } else if (k.key === 'Escape') {
+                  k.prevent();
+                  cancel();
+                }
+              }}
+              className={INPUT}
+            />
+          </Field>
+        )}
       </FieldRow>
       <PartyTypeField ownerId={userId} value={partyTypeId} onChange={setPicked} onCreated={(id) => madeTypes.current.push(id)} />
       <FormActions onCancel={cancel} onSave={add} saveLabel={`Add ${kind}`} />
@@ -93,26 +132,21 @@ function NewPartyDialog({
 /** `const { askNewParty, dialog } = useConfirmNewParty()` - `await askNewParty({ name, kind })` right before a
  * new customer / vendor is saved from a typed name. It opens a popup with the name in an editable box and the
  * Ledger type it will be filed under: resolves to the name and type to save ("Add"), or null on Cancel / Esc -
- * then nothing is saved. `typeId` starts the Ledger type on a given one (an employee). Render `{dialog}`
- * anywhere in the screen. */
+ * then nothing is saved. `typeId` starts the Ledger type on a given one (an employee). `askPhone` adds an
+ * optional Phone box (starting at `phone`). Render `{dialog}` anywhere in the screen. */
 export function useConfirmNewParty(): {
-  askNewParty: (options: { name: string; kind: NewPartyKind; typeId?: string | null }) => Promise<NewPartyAnswer | null>;
+  askNewParty: (options: AskNewPartyOptions) => Promise<NewPartyAnswer | null>;
   dialog: ReactNode;
 } {
-  const [pending, setPending] = useState<{
-    name: string;
-    kind: NewPartyKind;
-    typeId?: string | null;
-    resolve: (answer: NewPartyAnswer | null) => void;
-  } | null>(null);
+  const [pending, setPending] = useState<(AskNewPartyOptions & { resolve: (answer: NewPartyAnswer | null) => void }) | null>(null);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
 
   const askNewParty = useCallback(
-    ({ name, kind, typeId }: { name: string; kind: NewPartyKind; typeId?: string | null }) => {
+    (options: AskNewPartyOptions) => {
       // A second ask while one is already up must not stack another.
       if (pendingRef.current) return Promise.resolve<NewPartyAnswer | null>(null);
-      return new Promise<NewPartyAnswer | null>((resolve) => setPending({ name, kind, typeId, resolve }));
+      return new Promise<NewPartyAnswer | null>((resolve) => setPending({ ...options, resolve }));
     },
     []
   );
@@ -123,7 +157,15 @@ export function useConfirmNewParty(): {
   };
 
   const dialog = pending ? (
-    <NewPartyDialog kind={pending.kind} initial={pending.name} typeId={pending.typeId} onAdd={(answer) => finish(answer)} onCancel={() => finish(null)} />
+    <NewPartyDialog
+      kind={pending.kind}
+      initial={pending.name}
+      typeId={pending.typeId}
+      askPhone={pending.askPhone}
+      initialPhone={pending.phone ?? null}
+      onAdd={(answer) => finish(answer)}
+      onCancel={() => finish(null)}
+    />
   ) : null;
   return { askNewParty, dialog };
 }
