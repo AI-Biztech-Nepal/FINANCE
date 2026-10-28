@@ -734,6 +734,10 @@ function TransactionForm({
   // The "Add new stock item" popup opened from the desktop item dropdown: which
   // row asked for it, and the name / rate typed there so far.
   const [addStockFor, setAddStockFor] = useState<{ index: number; name: string; rate: string } | null>(null);
+  // Items added to the stock from this form, for the moment before the stock list has loaded them.
+  const addedStockNames = useRef(new Set<string>());
+  // The same popup asked from a save (or the item picker): a promise that resolves to the item to add, or null on Cancel.
+  const [stockAsk, setStockAsk] = useState<{ name: string; rate: string; resolve: (answer: { name: string; rate: string } | null) => void } | null>(null);
 
   // Discount is typed as a plain NPR amount (its % is only ever a derived
   // read-out); VAT is typed as a percentage (defaulting to Nepal's standard
@@ -939,6 +943,7 @@ function TransactionForm({
         purchase_price: type === 'purchase' && amount > 0 ? amount : null,
         stock_level: 0,
       });
+      addedStockNames.current.add(name.trim().toLowerCase());
       return null;
     } catch (err) {
       const msg = getErrorMessage(err);
@@ -970,24 +975,56 @@ function TransactionForm({
     if (index != null) setTimeout(() => itemsTableRef.current?.focusRow(index, 0), 80);
   }
 
+  function askNewStockItem(name: string, rate: string) {
+    return new Promise<{ name: string; rate: string } | null>((resolve) => setStockAsk({ name, rate, resolve }));
+  }
+  const answerStockAsk = (answer: { name: string; rate: string } | null) => {
+    stockAsk?.resolve(answer);
+    setStockAsk(null);
+  };
+  const stockAskDialog = stockAsk ? (
+    <AddStockItemDialog
+      sale={type === 'sale'}
+      initialName={stockAsk.name}
+      initialRate={stockAsk.rate}
+      saveLabel="Add item"
+      onSave={(name, rate) => answerStockAsk({ name, rate })}
+      onCancel={() => answerStockAsk(null)}
+    />
+  ) : null;
+
   // Typing a brand-new item used to only ever add it to this one bill's
   // line items, invisibly to the catalog - the next time "Pick from your
   // stock" opened, that same name wouldn't show up, since nothing was ever
   // saved anywhere. It is now added to the stock (above), on a sale as well as
   // a purchase.
   async function handlePickCustomItem(name: string, rate: string) {
-    const row: ItemRowState = { description: name, qty: '1', rate: rate.trim() };
+    // The picker goes first (two popups open at once fight over the keyboard focus). A name that is not in the
+    // stock yet is only added after the popup's Add - Cancel leaves the bill as it was.
+    setShowItemPicker(false);
+    let finalName = name;
+    let finalRate = rate;
+    const inStock = products.some((p) => p.name.trim().toLowerCase() === name.trim().toLowerCase());
+    if (!inStock) {
+      const asked = await askNewStockItem(name, rate);
+      if (!asked) {
+        setEditingItemIndex(null);
+        return;
+      }
+      finalName = asked.name;
+      finalRate = asked.rate;
+    }
+    const row: ItemRowState = { description: finalName, qty: '1', rate: finalRate.trim() };
     if (editingItemIndex != null) updateItem(editingItemIndex, row);
     else setItems((prev) => [...prev, row]);
-    setShowItemPicker(false);
     setEditingItemIndex(null);
-    await addStockItem(name, rate);
+    await addStockItem(finalName, finalRate);
   }
 
   async function handleSave() {
     if (saving) return;
     if (isBill) {
-      const validItems = items.filter(isSavableItem);
+      let validItems = items.filter(isSavableItem);
       if (validItems.length === 0) {
         showAlert('Add at least one item', 'Enter a description and a quantity for at least one item. The rate can be left blank.');
         return;
@@ -1020,6 +1057,34 @@ function TransactionForm({
       if (!ok) return;
       setSaving(true);
       try {
+        // An item the bill names that is not in the stock yet is checked first - its name and cost rate editable, the
+        // same popup as the dropdown's "Add as new stock item". Cancel (or Esc, or a click outside) goes back to the
+        // bill with nothing saved: not the item, not the vendor / customer, not the bill.
+        const stockKnown = new Set([...products.map((p) => p.name.trim().toLowerCase()), ...addedStockNames.current]);
+        const newStock = new Map<string, { name: string; rate: string }>();
+        for (const r of validItems) {
+          const key = r.description.trim().toLowerCase();
+          if (!key || stockKnown.has(key) || newStock.has(key)) continue;
+          const asked = await askNewStockItem(r.description.trim(), r.rate);
+          if (!asked) {
+            const at = items.findIndex((i) => i.description.trim().toLowerCase() === key);
+            if (at >= 0) setTimeout(() => itemsTableRef.current?.focusRow(at, 0), 80);
+            return;
+          }
+          newStock.set(key, asked);
+        }
+        // A name changed in the popup is changed on the bill's lines too, so they still match the stock item.
+        const renamed = new Map<string, string>();
+        for (const [key, asked] of newStock) if (asked.name.trim().toLowerCase() !== key) renamed.set(key, asked.name.trim());
+        if (renamed.size) {
+          const rename = <T extends { description: string }>(r: T): T => {
+            const to = renamed.get(r.description.trim().toLowerCase());
+            return to ? { ...r, description: to } : r;
+          };
+          validItems = validItems.map(rename);
+          setItems((prev) => prev.map(rename));
+        }
+        const newStockRate = new Map([...newStock.values()].map((a) => [a.name.trim().toLowerCase(), a.rate]));
         // A name typed in full without picking it from the list still means
         // the saved party of that name - and a brand-new name is saved as a
         // new customer/vendor on the spot, same as Quick Payment does.
@@ -1050,7 +1115,7 @@ function TransactionForm({
           const name = r.description.trim();
           if (!name || known.has(name.toLowerCase())) continue;
           known.add(name.toLowerCase());
-          await createStockProduct(name, r.rate);
+          await createStockProduct(name, newStockRate.get(name.toLowerCase()) ?? r.rate);
         }
         // A purchase's rate is what the item cost. A product first bought with no rate has no cost price,
         // so its stock value stays blank - the first rate a purchase bill gives it becomes its cost price.
@@ -2035,6 +2100,8 @@ function TransactionForm({
 
         {newPartyDialog}
 
+        {stockAskDialog}
+
         {addStockFor && (
           <AddStockItemDialog
             sale={type === 'sale'}
@@ -2377,6 +2444,7 @@ function TransactionForm({
       />
       {confirmDialog}
       {newPartyDialog}
+      {stockAskDialog}
       <ContactPickerModal
         visible={showPartyPicker}
         initialQuery={partyPickerQuery}

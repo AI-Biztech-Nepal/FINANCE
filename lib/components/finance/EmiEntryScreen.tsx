@@ -11,7 +11,7 @@ import { KeyInput } from './KeyInput';
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
 import { useConfirmSave } from './ConfirmSave';
-import { useConfirmNewParty } from './NewPartyConfirm';
+import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { money } from './BookKit';
 import { emiFigures, addMonths } from '../../utils/emi';
@@ -120,10 +120,10 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   async function pickCustomer(opt: SuggestOption) {
     if (opt.key === ADD_PARTY_KEY) {
       if (!userId) return;
-      const finalName = await askNewParty({ name: customerName.trim(), kind: 'customer' });
-      if (!finalName) return;
+      const asked = await askNewParty({ name: customerName.trim(), kind: 'customer' });
+      if (!asked) return;
       try {
-        const created = await createCustomer.mutateAsync({ owner_id: userId, name: finalName, phone: null });
+        const created = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, ...withType(asked) });
         setCustomerId(created.id);
         setCustomerName(created.name);
       } catch (err) {

@@ -13,6 +13,7 @@ export function AddStockItemDialog({
   sale,
   initialName,
   initialRate,
+  saveLabel = 'Save',
   onSave,
   onCancel,
 }: {
@@ -20,6 +21,8 @@ export function AddStockItemDialog({
   sale?: boolean;
   initialName: string;
   initialRate: string;
+  /** The words on the button that adds the item. */
+  saveLabel?: string;
   onSave: (name: string, rate: string) => void;
   onCancel: () => void;
 }) {
@@ -97,7 +100,7 @@ export function AddStockItemDialog({
 
           <View className="mt-5 flex-row" style={{ gap: 10 }}>
             <DialogButton label="Cancel" onPress={onCancel} />
-            <DialogButton label="Save" onPress={submit} primary disabled={!canSave} />
+            <DialogButton label={saveLabel} onPress={submit} primary disabled={!canSave} />
           </View>
         </Pressable>
       </Pressable>
