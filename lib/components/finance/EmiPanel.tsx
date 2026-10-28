@@ -1,39 +1,120 @@
 // lib/components/finance/EmiPanel.tsx
-import { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { useSupabaseQuery } from '../../hooks/useSupabase';
+import { useSupabaseInsert, useSupabaseQuery } from '../../hooks/useSupabase';
 import { BookStat, BookStats, BookTable, Pill, money, type BookColumn } from './BookKit';
-import { emiFigures } from '../../utils/emi';
+import { useConfirmSave } from './ConfirmSave';
+import { EMI_STOCK_MONTHS, EMI_STOCK_RATE, emiDirection, emiFigures, emiStockPlans } from '../../utils/emi';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import { journalOf } from '../../utils/journalVoucher';
 import { round2 } from '../../utils/money';
+import { showAlert, getErrorMessage } from '../../utils/alert';
 
 const key = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 
-/** The EMI tab of Rent & EMI: every vehicle sold on instalments - what it comes to, what the customer has paid (their
- * Received entries naming the vehicle), what is overdue, what is left and when the next instalment falls. */
+type Direction = 'sale' | 'purchase';
+
+/** The words of each side: customers paying us for vehicles we sold, or us paying vendors for stock we bought. */
+const WORDS: Record<Direction, { tab: string; party: string; price: string; paid: string; none: string; note: string }> = {
+  sale: {
+    tab: 'Customers pay us',
+    party: 'Customer',
+    price: 'Sale price',
+    paid: 'Received',
+    none: 'No EMI sales yet. Add one with New EMI.',
+    note: 'Received is what the customer paid for the vehicle on the Received page (pick the vehicle in Item). The down payment is due on the sale; each instalment on its day. The sale itself is its Sale bill.',
+  },
+  purchase: {
+    tab: 'We pay vendors',
+    party: 'Vendor',
+    price: 'Purchase price',
+    paid: 'Paid',
+    none: 'No stock bought on EMI yet. Add one with New EMI, or add the stock you have above.',
+    note: 'Paid is what you paid the vendor for the item on the Paid page (pick the item in Item). The down payment is due on the purchase; each instalment on its day. The purchase itself is its Purchase bill.',
+  },
+};
+
+/** The EMI tab of Rent & EMI, both ways. Customers pay us: every vehicle sold on instalments - what it comes to, what the
+ * customer has paid (their Received entries naming the vehicle), what is overdue, what is left and when the next
+ * instalment falls. We pay vendors: the stock bought on instalments, the same figures from the Paid entries on the
+ * vendor's ledger - with a button that puts all the stock on the shelf in, 12 months at 10% a month (flat). */
 export function EmiPanel({ userId, basePath, full }: { userId: string | undefined; basePath: string; full: boolean }) {
   const today = localTodayIso();
+  const [dir, setDir] = useState<Direction>('sale');
+  const words = WORDS[dir];
   const owner: Record<string, string> = userId ? { owner_id: userId } : {};
   const { data: plans, error } = useSupabaseQuery('emi_plans', { filters: owner, orderBy: { column: 'first_due', ascending: false }, all: true, enabled: !!userId });
   const { data: received } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId });
+  const { data: paidOut } = useSupabaseQuery('vendor_ledger_entries', { filters: owner, all: true, enabled: !!userId });
+  const { data: products } = useSupabaseQuery('products', { filters: owner, all: true, enabled: !!userId && dir === 'purchase' });
+  const { data: bills } = useSupabaseQuery('business_transactions', { filters: { ...owner, type: 'purchase' }, all: true, enabled: !!userId && dir === 'purchase' });
+  const createPlan = useSupabaseInsert('emi_plans');
+  const { confirm, dialog: confirmDialog } = useConfirmSave();
+  const [adding, setAdding] = useState(false);
 
   const rows = useMemo(() => {
-    // What each customer paid for each vehicle: their Received entries whose remark starts with it.
+    // What was paid for each vehicle: the Received entries (customers) / Paid entries (vendors) whose remark starts with it.
     const paidBy = new Map<string, number>();
     for (const e of received ?? []) {
       if (e.entry_type !== 'credit' || !e.note || journalOf(e.note)) continue;
-      const k = `${e.customer_id}|${key(e.note.split(' · ')[0])}`;
+      const k = `sale|${e.customer_id}|${key(e.note.split(' · ')[0])}`;
+      paidBy.set(k, (paidBy.get(k) ?? 0) + Number(e.amount));
+    }
+    for (const e of paidOut ?? []) {
+      if (e.entry_type !== 'credit' || !e.note || journalOf(e.note)) continue;
+      const k = `purchase|${e.vendor_id}|${key(e.note.split(' · ')[0])}`;
       paidBy.set(k, (paidBy.get(k) ?? 0) + Number(e.amount));
     }
     return (plans ?? [])
-      .map((p) => ({ p, ...emiFigures(p, paidBy.get(`${p.customer_id}|${key(p.car)}`) ?? 0, today) }))
+      .filter((p) => emiDirection(p) === dir)
+      .map((p) => ({ p, ...emiFigures(p, paidBy.get(`${dir}|${p.customer_id}|${key(p.car)}`) ?? 0, today) }))
       .sort((a, b) => Number(a.status.label === 'Completed') - Number(b.status.label === 'Completed') || b.overdue - a.overdue);
-  }, [plans, received, today]);
+  }, [plans, received, paidOut, dir, today]);
   type Row = (typeof rows)[number];
   const sum = (f: (r: Row) => number) => round2(rows.reduce((s, r) => s + f(r), 0));
+  const countOf = (d: Direction) => (plans ?? []).filter((p) => emiDirection(p) === d).length;
+
+  // The stock on the shelf that is not in EMI yet.
+  const stock = useMemo(
+    () => (dir === 'purchase' ? emiStockPlans({ products: products ?? [], bills: bills ?? [], plans: plans ?? [], today, months: EMI_STOCK_MONTHS, rate: EMI_STOCK_RATE }) : null),
+    [dir, products, bills, plans, today]
+  );
+
+  async function addStock() {
+    if (!userId || !stock || adding || stock.rows.length === 0) return;
+    const n = stock.rows.length;
+    const price = round2(stock.rows.reduce((s, r) => s + Number(r.sale_price), 0));
+    const toPay = round2(stock.rows.reduce((s, r) => s + Number(r.down_payment) + Number(r.installment) * Number(r.months), 0));
+    const ok = await confirm({
+      title: `Add ${n} stock ${n === 1 ? 'item' : 'items'} to EMI?`,
+      rows: [
+        { label: 'Items', value: String(n) },
+        { label: 'Purchase price', value: `NPR ${money(price)}` },
+        { label: 'Plan', value: `${EMI_STOCK_MONTHS} months · ${EMI_STOCK_RATE}% a month, flat` },
+        ...(stock.noPrice.length ? [{ label: 'Left out (no purchase price)', value: String(stock.noPrice.length) }] : []),
+      ],
+      total: { label: 'To pay with interest', value: `NPR ${money(toPay)}`, color: '#B91C1C' },
+    });
+    if (!ok) return;
+    setAdding(true);
+    let added = 0;
+    try {
+      for (const row of stock.rows) {
+        await createPlan.mutateAsync({ owner_id: userId, ...row });
+        added += 1;
+      }
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      showAlert(
+        `Added ${added} of ${n}`,
+        /direction|interest_rate|product_id|schema cache/i.test(msg) ? 'Run supabase/migrations/0021_emi_direction_interest.sql in Supabase first, then try again.' : msg
+      );
+    } finally {
+      setAdding(false);
+    }
+  }
 
   const open = (id?: string) => router.push((id ? `${basePath}/emi-entry?id=${id}` : `${basePath}/emi-entry`) as never);
   const fig = (v: number, color = '#111827', bold = false) =>
@@ -58,22 +139,22 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
     ? [
         { key: 'sn', label: 'SN', width: 52, render: (_r, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'vehicle', label: 'Vehicle', render: vehicle },
-        { key: 'customer', label: 'Customer', width: 170, render: (r) => <Text className="text-[12.5px] font-medium text-gray-900" numberOfLines={1}>{r.p.customer_name || '—'}</Text> },
-        { key: 'price', label: 'Sale price', width: 115, align: 'right', render: (r) => fig(Number(r.p.sale_price)) },
+        { key: 'customer', label: words.party, width: 170, render: (r) => <Text className="text-[12.5px] font-medium text-gray-900" numberOfLines={1}>{r.p.customer_name || '—'}</Text> },
+        { key: 'price', label: words.price, width: 115, align: 'right', render: (r) => fig(Number(r.p.sale_price)) },
         { key: 'down', label: 'Down payment', width: 115, align: 'right', render: (r) => fig(Number(r.p.down_payment)) },
         {
           key: 'inst',
           label: 'Instalment',
-          width: 140,
+          width: 150,
           align: 'right',
           render: (r) => (
             <View className="items-end">
               <Text className="text-[12.5px] font-medium text-gray-900">{money(Number(r.p.installment))}</Text>
-              <Text className="text-[11px] text-gray-400">{`× ${r.p.months} months · ${r.dueCount} due`}</Text>
+              <Text className="text-[11px] text-gray-400">{`× ${r.p.months} months${Number(r.p.interest_rate) > 0 ? ` · ${Number(r.p.interest_rate)}%/mo` : ''} · ${r.dueCount} due`}</Text>
             </View>
           ),
         },
-        { key: 'paid', label: 'Received', width: 115, align: 'right', render: (r) => fig(r.paid, '#047857', true) },
+        { key: 'paid', label: words.paid, width: 115, align: 'right', render: (r) => fig(r.paid, '#047857', true) },
         { key: 'overdue', label: 'Overdue', width: 110, align: 'right', render: (r) => fig(r.overdue, '#B91C1C', true) },
         { key: 'left', label: 'Remaining', width: 115, align: 'right', render: (r) => fig(r.remaining, '#111827', true) },
         { key: 'next', label: 'Next due', width: 125, render: (r) => <Text className="text-[12.5px] text-gray-700">{r.next ? toBsHistoryLabel(r.next) : '—'}</Text> },
@@ -97,20 +178,60 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
 
   return (
     <>
+      {/* Which way: customers paying us, or us paying vendors. */}
+      <View className="flex-row" style={{ gap: 8 }}>
+        {(['sale', 'purchase'] as const).map((d) => {
+          const on = dir === d;
+          return (
+            <Pressable
+              key={d}
+              onPress={() => setDir(d)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              className="flex-row items-center rounded-full border px-4 py-2"
+              style={{ gap: 8, borderColor: on ? '#2563EB' : '#D1D5DB', backgroundColor: on ? '#EFF6FF' : '#FFFFFF' }}
+            >
+              <Text className="text-[13px] font-semibold" style={{ color: on ? '#1D4ED8' : '#4B5563' }}>{WORDS[d].tab}</Text>
+              <Text className="text-[12px] font-bold" style={{ color: on ? '#1D4ED8' : '#9CA3AF' }}>{countOf(d)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* The stock on the shelf, bought on EMI: one tap puts it all in. */}
+      {dir === 'purchase' && stock && (stock.rows.length > 0 || stock.noPrice.length > 0) && (
+        <View className="flex-row flex-wrap items-center rounded-xl border border-gray-200 bg-white px-4 py-3" style={{ gap: 12 }}>
+          <View style={{ flex: 1, minWidth: 220, gap: 2 }}>
+            <Text className="text-[13px] font-semibold text-gray-900">
+              {stock.rows.length > 0 ? `${stock.rows.length} stock ${stock.rows.length === 1 ? 'item is' : 'items are'} not in EMI yet` : 'Nothing left to add'}
+            </Text>
+            <Text className="text-[12px] text-gray-500">
+              {`Bought on EMI: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a month on the price (flat), from the vendor on the purchase bill.`}
+              {stock.noPrice.length > 0 ? ` ${stock.noPrice.length} with no purchase price yet ${stock.noPrice.length === 1 ? 'is' : 'are'} left out.` : ''}
+            </Text>
+          </View>
+          {stock.rows.length > 0 && (
+            <Pressable onPress={() => void addStock()} disabled={adding} className="rounded-lg bg-blue-600 px-4 py-2.5 disabled:opacity-50">
+              <Text className="text-[13px] font-bold text-white">{adding ? 'Adding…' : `Add ${stock.rows.length} to EMI`}</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
       <BookStats>
         <BookStat label="Running" value={String(rows.filter((r) => r.status.label !== 'Completed').length)} color="#1D4ED8" />
-        <BookStat label="Received" value={`NPR ${money(sum((r) => r.paid))}`} color="#047857" />
+        <BookStat label={words.paid} value={`NPR ${money(sum((r) => r.paid))}`} color="#047857" />
         <BookStat label="Overdue" value={`NPR ${money(sum((r) => r.overdue))}`} color="#B91C1C" />
         <BookStat label="Remaining" value={`NPR ${money(sum((r) => r.remaining))}`} color="#111827" />
       </BookStats>
       {error ? (
         <View className="rounded-xl border border-red-200 bg-red-50 p-4">
           <Text className="text-[13px] font-semibold text-red-700">EMI plans could not be loaded.</Text>
-          <Text className="mt-1 text-[12px] text-red-600">Run supabase/migrations/0019_emi_plans.sql in Supabase first.</Text>
+          <Text className="mt-1 text-[12px] text-red-600">Run supabase/migrations/0019_emi_plans.sql and 0021_emi_direction_interest.sql in Supabase first.</Text>
         </View>
       ) : rows.length === 0 ? (
         <View className="items-center rounded-xl border border-gray-300 bg-white py-10">
-          <Text className="text-gray-500">No EMI sales yet. Add one with New EMI.</Text>
+          <Text className="text-gray-500">{words.none}</Text>
         </View>
       ) : (
         <BookTable
@@ -131,9 +252,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
           }}
         />
       )}
-      <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
-        Received is what the customer paid for the vehicle on the Received page (pick the vehicle in Item). The down payment is due on the sale; each instalment on its day. The sale itself is its Sale bill.
-      </Text>
+      <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">{words.note}</Text>
+      {confirmDialog}
     </>
   );
 }

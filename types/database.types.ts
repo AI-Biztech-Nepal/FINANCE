@@ -239,8 +239,10 @@ export interface Rental {
   updated_at: string;
 }
 
-/** A vehicle sold on instalments (see supabase/migrations/0019_emi_plans.sql). What has been paid is the customer's
- * Received entries that name the vehicle; what is due is worked out from the plan (see lib/utils/emi.ts). */
+/** A vehicle on instalments (see supabase/migrations/0019_emi_plans.sql and 0021_emi_direction_interest.sql). Sold to a
+ * customer ('sale', the default): what has been paid is the customer's Received entries that name the vehicle. Bought
+ * from a vendor ('purchase'): the Paid entries on the vendor's ledger that name it. What is due is worked out from the
+ * plan (see lib/utils/emi.ts). */
 export interface EmiPlan {
   id: string;
   owner_id: string;
@@ -257,6 +259,13 @@ export interface EmiPlan {
   note: string | null;
   /** Settled or ended early; null while it runs. */
   closed_on: string | null;
+  /** 'sale': the customer pays us; 'purchase': we pay the vendor (held in customer_id / customer_name). Absent on a
+   * plan made before 0021 - that is a sale. */
+  direction?: 'sale' | 'purchase';
+  /** Percent per month, flat on the financed amount. Absent / 0: no interest. */
+  interest_rate?: number;
+  /** The stock item a purchase plan was made from. */
+  product_id?: string | null;
   created_at: string;
   updated_at: string;
 }

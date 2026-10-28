@@ -14,7 +14,7 @@ import { useConfirmSave } from './ConfirmSave';
 import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { money } from './BookKit';
-import { emiFigures, addMonths } from '../../utils/emi';
+import { EMI_STOCK_RATE, addMonths, emiDirection, emiFigures, flatInstallment } from '../../utils/emi';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
@@ -55,6 +55,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const { data: products } = useSupabaseQuery('products', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
   const { data: customers } = useSupabaseQuery('customers', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
   const { data: received } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId && !!plan });
+  const { data: paidOut } = useSupabaseQuery('vendor_ledger_entries', { filters: owner, all: true, enabled: !!userId && !!plan });
   const createPlan = useSupabaseInsert('emi_plans');
   const updatePlan = useSupabaseUpdate('emi_plans');
   const deletePlan = useSupabaseDelete('emi_plans');
@@ -62,6 +63,11 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const { confirm: confirmSave, dialog: confirmDialog } = useConfirmSave();
   const { askNewParty, dialog: newPartyDialog } = useConfirmNewParty();
 
+  // Sold to a customer (they pay us) or bought from a vendor (we pay them). The vendor is kept where the customer is.
+  const [direction, setDirection] = useState<'sale' | 'purchase'>(plan ? emiDirection(plan) : 'sale');
+  const [rate, setRate] = useState(plan ? String(plan.interest_rate ?? 0) : String(EMI_STOCK_RATE));
+  const buying = direction === 'purchase';
+  const partyWord = buying ? 'Vendor' : 'Customer';
   const [car, setCar] = useState(plan?.car ?? '');
   const [model, setModel] = useState(plan?.model ?? '');
   const [customerId, setCustomerId] = useState<string | null>(plan?.customer_id ?? null);
@@ -76,9 +82,10 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const [focused, setFocused] = useState<'car' | 'customer' | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Financed: the price less the down payment. Typing the months fills the instalment when it is empty.
+  // Financed: the price less the down payment. The instalment it comes to: the financed amount over the months, plus the
+  // interest - the rate % of the financed amount every month (flat).
   const financed = Math.max(0, (Number(price) || 0) - (Number(down) || 0));
-  const suggestedInstallment = Number(months) > 0 ? Math.ceil(financed / Number(months)) : 0;
+  const suggestedInstallment = flatInstallment(financed, Number(months), Number(rate) || 0);
 
   const carOptions = useMemo<SuggestOption[]>(() => {
     const q = car.trim().toLowerCase();
@@ -102,10 +109,12 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const paid = useMemo(() => {
     if (!plan || !customerId) return 0;
     const k = car.trim().replace(/\s+/g, ' ').toLowerCase();
-    return (received ?? [])
-      .filter((e) => e.customer_id === customerId && e.entry_type === 'credit' && (e.note ?? '').split(' · ')[0].trim().replace(/\s+/g, ' ').toLowerCase() === k)
-      .reduce((s, e) => s + Number(e.amount), 0);
-  }, [received, plan, customerId, car]);
+    const names = (note: string | null) => (note ?? '').split(' · ')[0].trim().replace(/\s+/g, ' ').toLowerCase() === k;
+    // What the customer paid (their Received entries) or what we paid the vendor (the Paid entries on their ledger).
+    return buying
+      ? (paidOut ?? []).filter((e) => e.vendor_id === customerId && e.entry_type === 'credit' && names(e.note)).reduce((s, e) => s + Number(e.amount), 0)
+      : (received ?? []).filter((e) => e.customer_id === customerId && e.entry_type === 'credit' && names(e.note)).reduce((s, e) => s + Number(e.amount), 0);
+  }, [received, paidOut, buying, plan, customerId, car]);
   const figures = emiFigures(
     { down_payment: Number(down) || 0, installment: Number(installment) || 0, months: Number(months) || 1, first_due: firstDue, closed_on: closedOn || null },
     paid,
@@ -120,7 +129,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   async function pickCustomer(opt: SuggestOption) {
     if (opt.key === ADD_PARTY_KEY) {
       if (!userId) return;
-      const asked = await askNewParty({ name: customerName.trim(), kind: 'customer' });
+      const asked = await askNewParty({ name: customerName.trim(), kind: buying ? 'vendor' : 'customer' });
       if (!asked) return;
       try {
         const created = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, ...withType(asked) });
@@ -138,20 +147,21 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   async function handleSave() {
     if (!userId || saving) return;
     if (!car.trim()) return showAlert('Add the vehicle', 'Type the vehicle, or pick one from your stock.');
-    if (!customerId) return showAlert('Pick the customer', 'Choose the customer from the list (or add them), so their payments are matched.');
+    if (!customerId) return showAlert(`Pick the ${partyWord.toLowerCase()}`, `Choose the ${partyWord.toLowerCase()} from the list (or add them), so their payments are matched.`);
     if (!(Number(months) > 0)) return showAlert('Add the months', 'How many monthly instalments?');
     if (!(Number(installment) > 0)) return showAlert('Add the instalment', 'The amount due each month.');
     const ok = await confirmSave({
       title: `Save ${plan ? 'changes to this' : 'this'} EMI?`,
       rows: [
         { label: 'Vehicle', value: [car.trim(), model.trim()].filter(Boolean).join(' · ') },
-        { label: 'Customer', value: customerName.trim() },
-        { label: 'Sale price', value: `NPR ${formatMoney(Number(price) || 0)}` },
+        { label: partyWord, value: customerName.trim() },
+        { label: buying ? 'Purchase price' : 'Sale price', value: `NPR ${formatMoney(Number(price) || 0)}` },
         { label: 'Down payment', value: `NPR ${formatMoney(Number(down) || 0)}` },
         { label: 'Instalment', value: `NPR ${formatMoney(Number(installment) || 0)} × ${months} months` },
+        ...(Number(rate) > 0 ? [{ label: 'Interest', value: `${Number(rate)}% a month, flat` }] : []),
         { label: 'First due', value: toBsHistoryLabel(firstDue) },
       ],
-      total: { label: 'To collect', value: `NPR ${formatMoney(figures.total)}`, color: '#047857' },
+      total: { label: buying ? 'To pay' : 'To collect', value: `NPR ${formatMoney(figures.total)}`, color: buying ? '#B91C1C' : '#047857' },
     });
     if (!ok) return;
     const values = {
@@ -166,6 +176,9 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
       first_due: firstDue,
       closed_on: closedOn || null,
       note: note.trim() || null,
+      // Only what differs from a plain sale is sent, so a sale without interest saves as it always did.
+      ...(buying ? { direction } : {}),
+      ...(Number(rate) > 0 || plan?.interest_rate ? { interest_rate: Number(rate) || 0 } : {}),
     };
     setSaving(true);
     try {
@@ -213,7 +226,29 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
       <View className="rounded-2xl border border-gray-200 bg-white p-5" style={{ boxShadow: CARD_SHADOW, zIndex: 20 }}>
         <View className="mb-4 flex-row items-center gap-2">
           <Ionicons name="card-outline" size={14} color="#6B7280" />
-          <Text className="text-[11px] font-bold tracking-wider text-gray-500">EMI SALE</Text>
+          <Text className="text-[11px] font-bold tracking-wider text-gray-500">{buying ? 'EMI PURCHASE' : 'EMI SALE'}</Text>
+        </View>
+        {/* Which way: a vehicle sold to a customer (they pay us), or stock bought from a vendor (we pay them). */}
+        <View className="mb-4 flex-row flex-wrap" style={{ gap: 8 }}>
+          {([
+            ['sale', 'Sold on EMI - customer pays us'],
+            ['purchase', 'Bought on EMI - we pay the vendor'],
+          ] as const).map(([d, label]) => {
+            const on = direction === d;
+            return (
+              <Pressable
+                key={d}
+                onPress={() => setDirection(d)}
+                disabled={!!plan}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                className="rounded-full border px-4 py-2"
+                style={{ borderColor: on ? accent : '#D1D5DB', backgroundColor: on ? '#EFF6FF' : '#FFFFFF', opacity: plan && !on ? 0.4 : 1 }}
+              >
+                <Text className="text-[12.5px] font-semibold" style={{ color: on ? accent : '#4B5563' }}>{label}</Text>
+              </Pressable>
+            );
+          })}
         </View>
         <View className="flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14, zIndex: focused ? 30 : 0 }}>
           <Box label="Vehicle" basis={260} raised={focused === 'car'}>
@@ -233,7 +268,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
             />
           </Box>
           {field('Model', model, setModel, { placeholder: 'Model' })}
-          <Box label="Customer" basis={260} raised={focused === 'customer'}>
+          <Box label={partyWord} basis={260} raised={focused === 'customer'}>
             <SuggestInput
               value={customerName}
               onChangeText={(v) => {
@@ -244,8 +279,8 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               onSelectOption={(opt) => void pickCustomer(opt)}
               onFocus={() => setFocused('customer')}
               onBlur={() => setFocused((f) => (f === 'customer' ? null : f))}
-              placeholder="Who bought it?"
-              accessibilityLabel="Customer"
+              placeholder={buying ? 'Who did you buy it from?' : 'Who bought it?'}
+              accessibilityLabel={partyWord}
               accent={accent}
               inputClassName="rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-900"
               inputStyle={inputStyle(focused === 'customer')}
@@ -256,9 +291,10 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
           </Box>
         </View>
         <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
-          {field('Sale price (NPR)', price, setPrice, { numeric: true })}
+          {field(buying ? 'Purchase price (NPR)' : 'Sale price (NPR)', price, setPrice, { numeric: true })}
           {field('Down payment (NPR)', down, setDown, { numeric: true })}
           {field('Months', months, setMonths, { numeric: true, basis: 110 })}
+          {field('Interest (% / month)', rate, setRate, { numeric: true, basis: 130 })}
           <Box
             label="Instalment / month (NPR)"
             basis={190}
@@ -298,8 +334,8 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
 
       <View className="rounded-2xl border border-gray-200 bg-white p-4" style={{ boxShadow: CARD_SHADOW }}>
         {[
-          { label: 'To collect (down + instalments)', value: figures.total, color: '#111827' },
-          { label: 'Received so far', value: figures.paid, color: '#047857' },
+          { label: buying ? 'To pay (down + instalments)' : 'To collect (down + instalments)', value: figures.total, color: '#111827' },
+          { label: buying ? 'Paid so far' : 'Received so far', value: figures.paid, color: '#047857' },
           { label: `Due by today (${figures.dueCount} of ${months || 0} instalments)`, value: figures.dueByNow, color: '#111827' },
           { label: 'Overdue', value: figures.overdue, color: '#B91C1C' },
           { label: 'Remaining', value: figures.remaining, color: '#111827' },
@@ -310,7 +346,9 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
           </View>
         ))}
         <Text className="mt-2 text-[11px] text-gray-400">
-          {figures.next ? `Next instalment: ${toBsHistoryLabel(figures.next)}. ` : ''}Payments are the customer's Received entries naming this vehicle.
+          {figures.next ? `Next instalment: ${toBsHistoryLabel(figures.next)}. ` : ''}
+          {buying ? "Payments are the Paid entries on the vendor's ledger naming this item." : "Payments are the customer's Received entries naming this vehicle."}
+          {' '}The instalment is the financed amount ÷ months, plus the interest rate % of it every month (flat).
         </Text>
       </View>
 
