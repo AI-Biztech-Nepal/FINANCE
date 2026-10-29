@@ -390,7 +390,7 @@ export function ReportScreen({ basePath }: { basePath: string }) {
             <Group id="sales" open={openGroups} onToggle={toggleGroup} label="Sales accounts" amount={pl.sales}
               rows={[['Sales - items', pl.items]]} onOpen={() => go('/sales-report')} />
             {/* Rent earned from the vehicles given out in the period - a direct income. Opens Rent & EMI. */}
-            {pl.rentIncome > 0 && <Line label="Direct incomes · Rent" amount={pl.rentIncome} onPress={() => go('/rent')} />}
+            {pl.rentIncome > 0 && <Line label="Direct incomes · Rent" amount={pl.rentIncome} onPress={() => go('/rent?tab=rent')} />}
             {/* What is left on the shelf: the stock list, in-stock items only. */}
             <Line label="Closing stock" amount={pl.closing} onPress={() => go('/inventory?filter=in')} />
             {grossProfit < 0 ? <Line label="Gross loss c/o" amount={-grossProfit} tone="loss" bold /> : null}

@@ -73,7 +73,7 @@ export function RentEntryScreen({ basePath }: { basePath: string }) {
   const { data: rental, isLoading } = useSupabaseRow('rentals', id);
   // The form starts from the rental being edited, so it waits for it - and a rental that is gone goes back to the list.
   if (id && isLoading) return null;
-  if (id && !rental) return <Redirect href={`${basePath}/rent` as never} />;
+  if (id && !rental) return <Redirect href={`${basePath}/rent?tab=rent` as never} />;
   return <RentForm key={id ?? 'new'} basePath={basePath} rental={id ? rental ?? null : null} />;
 }
 
@@ -222,7 +222,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
-    else router.replace(`${basePath}/rent` as never);
+    else router.replace(`${basePath}/rent?tab=rent` as never);
   };
 
   async function pickRenter(opt: SuggestOption, via: 'enter' | 'tab' | 'click') {

@@ -27,9 +27,9 @@ export function RentScreen({ basePath }: { basePath: string }) {
   // The renters' daily rent lines up to today (see useRentalWageSync).
   useRentalWageSync(userId);
   const profile = useAuthStore((state) => state.profile);
-  // Rent & EMI: two tabs - vehicles sold on instalments, and vehicles given on rent (`?tab=emi` opens on EMI).
+  // Rent & EMI: two tabs - vehicles sold on instalments, and vehicles given on rent. It opens on EMI (`?tab=rent` opens on Rent).
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
-  const [tab, setTab] = useState<'emi' | 'rent'>(tabParam === 'emi' ? 'emi' : 'rent');
+  const [tab, setTab] = useState<'emi' | 'rent'>(tabParam === 'rent' ? 'rent' : 'emi');
   const today = localTodayIso();
   const owner: Record<string, string> = userId ? { owner_id: userId } : {};
   const { data: rentals, isLoading, error } = useSupabaseQuery('rentals', {
