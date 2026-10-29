@@ -58,6 +58,7 @@ export const FINANCE_WIDE_ROUTES = [
   '/bank-balances',
   '/import-statement',
   '/inventory',
+  '/stock',
   '/report',
 ];
 

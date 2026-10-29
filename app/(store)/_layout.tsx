@@ -57,12 +57,19 @@ const NAV_ITEMS: WebNavItem[] = [
   },
 ];
 
-// A vehicle account also rents its cars out and sells them on EMI: Rent & EMI is a page of its own in the side panel,
-// just below Dashboard (not one of Finance's pages).
-function withRent(items: WebNavItem[]): WebNavItem[] {
+// A vehicle account also rents its cars out and sells them on EMI, and keeps Stock and Inventory as two lists: Stock
+// (only what is still in hand) stays one of Finance's pages, where Stock and Inventory was; Rent & EMI and then
+// Inventory (every vehicle, in stock and sold) are pages of their own in the side panel, just below Dashboard.
+function vehicleNav(items: WebNavItem[]): WebNavItem[] {
+  const stock: WebNavItem = { href: '/(store)/stock', label: 'Stock', icon: 'cube' };
+  const own: WebNavItem[] = [
+    { href: '/(store)/rent', label: 'Rent & EMI', icon: 'car' },
+    { href: '/(store)/inventory', label: 'Inventory', icon: 'layers' },
+  ];
   const at = items.findIndex((item) => item.href.endsWith('/company-dashboard'));
-  const rent: WebNavItem = { href: '/(store)/rent', label: 'Rent & EMI', icon: 'car' };
-  return [...items.slice(0, at + 1), rent, ...items.slice(at + 1)];
+  return [...items.slice(0, at + 1), ...own, ...items.slice(at + 1)].map((item) =>
+    item.children ? { ...item, children: item.children.map((child) => (child.href.endsWith('/inventory') ? stock : child)) } : item
+  );
 }
 
 const HIDDEN: [string, string][] = [
@@ -72,8 +79,10 @@ const HIDDEN: [string, string][] = [
   ['customers', 'Ledger'],
   ['customer/[id]', 'Ledger'],
   ['transactions', 'Statement'],
-  // Stock and Inventory is one of Finance's pages now (side panel, and a tile on the Finance page on a phone).
+  // Stock and Inventory is one of Finance's pages now (side panel, and a tile on the Finance page on a phone). A vehicle
+  // account has it as Inventory, and Stock (only what is in hand) in Finance - see vehicleNav.
   ['inventory', 'Stock and Inventory'],
+  ['stock', 'Stock'],
   ['quick-payment', 'Quick Payment'],
   ['voucher', 'Journal Voucher'],
   ['received', 'Total Received'],
@@ -96,10 +105,8 @@ export default function StoreLayout() {
   const { width } = useWindowDimensions();
   const isWideWeb = Platform.OS === 'web' && width >= WEB_SIDEBAR_MIN_WIDTH;
   const profile = useAuthStore((state) => state.profile);
-  const navItems = useMemo(
-    () => (sellsVehicles(profile?.business_name?.trim() || profile?.full_name) ? withRent(NAV_ITEMS) : NAV_ITEMS),
-    [profile?.business_name, profile?.full_name]
-  );
+  const vehicles = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+  const navItems = useMemo(() => (vehicles ? vehicleNav(NAV_ITEMS) : NAV_ITEMS), [vehicles]);
   const tabs = (
     <Tabs
       backBehavior="history"
@@ -127,7 +134,7 @@ export default function StoreLayout() {
         options={{ title: 'Finance', tabBarIcon: ({ color, focused }) => <TabIcon name="wallet" color={color} focused={focused} /> }}
       />
       {HIDDEN.map(([name, title]) => (
-        <Tabs.Screen key={name} name={name} options={{ href: null, title }} />
+        <Tabs.Screen key={name} name={name} options={{ href: null, title: vehicles && name === 'inventory' ? 'Inventory' : title }} />
       ))}
     </Tabs>
   );

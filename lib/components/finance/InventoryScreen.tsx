@@ -526,7 +526,8 @@ function StockItemPopup({
  * A reseller buys stock from here too (the Buy Stock button, on to the wholesale marketplace) - what
  * arrives comes back as a Purchase bill, so it is in the item's stock-in history. Tapping an item
  * opens that history. Read-only: products are managed by admins, not from here. */
-export function InventoryScreen({ basePath }: { basePath: string }) {
+/** `inStockOnly`: the Stock page - only what is still in hand, no All / In stock / Out tabs. */
+export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: string; inStockOnly?: boolean }) {
   const layout = useBookLayout();
   const cameFrom = useCameFrom(basePath);
   const userId = useAuthStore((state) => state.session?.user.id);
@@ -557,7 +558,8 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
   const [search, setSearch] = useState('');
   // `?filter=in` (Closing stock on the Profit & Loss): only what is still on the shelf.
   const { filter: filterParam } = useLocalSearchParams<{ filter?: string }>();
-  const [filter, setFilter] = useState<StatusFilter>(filterParam === 'in' || filterParam === 'out' ? filterParam : 'all');
+  const [chosenFilter, setFilter] = useState<StatusFilter>(filterParam === 'in' || filterParam === 'out' ? filterParam : 'all');
+  const filter: StatusFilter = inStockOnly ? 'in' : chosenFilter;
   const createProduct = useSupabaseInsert('products');
   const updateProduct = useSupabaseUpdate('products');
   const queryClient = useQueryClient();
@@ -586,7 +588,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       right: (inBar) => (
         <>
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Search your products" wide={inBar} />
-          <FilterTabs options={FILTERS} value={filter} onChange={setFilter} />
+          {!inStockOnly && <FilterTabs options={FILTERS} value={filter} onChange={setFilter} />}
           {reportButtons}
           <ToolbarButton icon="add" label="Add product" onPress={() => setEditing({ id: null, form: EMPTY_FORM })} />
         </>
@@ -1101,9 +1103,9 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
   function buildReport(): PrintReport {
     const cell = (v: number | null) => (v == null ? '' : rs(v));
     return {
-      title: 'Stock and Inventory',
+      title: inStockOnly ? 'Stock' : vehicles ? 'Inventory' : 'Stock and Inventory',
       businessName: profile?.business_name ?? profile?.full_name ?? '',
-      subtitle: [filter === 'out' ? 'Out of stock' : filter === 'in' ? 'In stock' : null, search.trim() ? `Matching "${search.trim()}"` : null].filter(Boolean).join(' · ') || undefined,
+      subtitle: [filter === 'out' ? 'Out of stock' : filter === 'in' && !inStockOnly ? 'In stock' : null, search.trim() ? `Matching "${search.trim()}"` : null].filter(Boolean).join(' · ') || undefined,
       printedOn: toBsHistoryLabel(localTodayIso()),
       summary: [
         { label: 'In stock', value: String(stats.items) },
@@ -1258,13 +1260,13 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       {toolbar}
 
       <BookStats>
-        <BookStat label="In stock" value={String(stats.items)} color="#374151" onPress={() => setFilter((f) => (f === 'in' ? 'all' : 'in'))} />
+        <BookStat label="In stock" value={String(stats.items)} color="#374151" onPress={inStockOnly ? undefined : () => setFilter((f) => (f === 'in' ? 'all' : 'in'))} />
         {vehicles ? (
           <BookStat label="Profit / Loss" value={`NPR ${profitText(stats.profit)}`} color={profitColor(stats.profit)} />
         ) : (
           <BookStat label="Stock value (cost)" value={`NPR ${money(stats.value)}`} color="#1D4ED8" />
         )}
-        <BookStat label="Out of stock" value={String(stats.out)} color="#B91C1C" onPress={toggleOut} />
+        <BookStat label="Out of stock" value={String(stats.out)} color="#B91C1C" onPress={inStockOnly ? undefined : toggleOut} />
       </BookStats>
 
       {filteredRows.length === 0 ? (
