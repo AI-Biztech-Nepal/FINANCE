@@ -424,7 +424,9 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         ))}
         <Text className="mt-2 text-[11px] text-gray-400">
           {figures.next ? `Next instalment: ${toBsHistoryLabel(figures.next)}. ` : ''}
-          {buying ? "Payments are the Paid entries on the vendor's ledger naming this item." : "Payments are the customer's Received entries naming this vehicle."}
+          {buying
+            ? "The down payment counts as paid. Instalments paid are the Paid entries on the vendor's ledger naming this item."
+            : "The down payment counts as received. Instalments received are the customer's Received entries naming this vehicle."}
           {' '}The instalment is worked out the way banks do: the yearly interest, charged each month on what is still unpaid (reducing balance), so every month pays the same.
         </Text>
       </View>

@@ -41,7 +41,7 @@ const WORDS: Record<Direction, { tab: string; party: string; price: string; paid
     price: 'Sale price',
     paid: 'Received',
     none: 'No EMI sales yet. Add one with New EMI, or add all your sold vehicles above.',
-    note: 'Received is what the customer paid for the vehicle on the Received page (pick the vehicle in Item). The down payment is due on the sale; each instalment on its day. The sale itself is its Sale bill.',
+    note: 'Received is what the customer paid for the vehicle on the Received page (pick the vehicle in Item). It includes the down payment, which is entered once it is paid; each instalment is due on its day. The sale itself is its Sale bill.',
   },
   purchase: {
     tab: 'We pay vendors',
@@ -49,7 +49,7 @@ const WORDS: Record<Direction, { tab: string; party: string; price: string; paid
     price: 'Purchase price',
     paid: 'Paid',
     none: 'No vehicles bought on EMI yet. Add one with New EMI, or add all your vehicles above.',
-    note: 'Paid is what you paid the vendor for the item on the Paid page (pick the item in Item). The down payment is due on the purchase; each instalment on its day. The purchase itself is its Purchase bill.',
+    note: 'Paid is what you paid the vendor for the item on the Paid page (pick the item in Item). It includes the down payment, which is entered once it is paid; each instalment is due on its day. The purchase itself is its Purchase bill.',
   },
 };
 
