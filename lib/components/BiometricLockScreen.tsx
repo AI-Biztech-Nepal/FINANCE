@@ -26,7 +26,7 @@ export function BiometricLockScreen() {
   return (
     <View className="flex-1 items-center justify-center bg-white px-8">
       <AppLogo size={120} />
-      <Text className="mb-1 mt-6 text-xl font-extrabold text-gray-900">Finance is locked</Text>
+      <Text className="mb-1 mt-6 text-xl font-extrabold text-gray-900">Finance Nepal is locked</Text>
       <Text className="mb-8 text-center text-sm text-gray-500">
         {failed ? 'Authentication failed or was cancelled.' : 'Verify your identity to continue.'}
       </Text>

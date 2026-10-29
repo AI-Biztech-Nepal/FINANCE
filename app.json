@@ -7,34 +7,34 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Finance needs access to your photos so you can attach a picture of a bill or product."
+          "photosPermission": "Finance Nepal needs access to your photos so you can attach a picture of a bill or product."
         }
       ],
       [
         "expo-contacts",
         {
-          "contactsPermission": "Finance needs access to your contacts so you can quickly fill in a customer's name and phone number."
+          "contactsPermission": "Finance Nepal needs access to your contacts so you can quickly fill in a customer's name and phone number."
         }
       ],
       "@react-native-community/datetimepicker",
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Finance uses Face ID to quickly and securely unlock the app."
+          "faceIDPermission": "Finance Nepal uses Face ID to quickly and securely unlock the app."
         }
       ],
       "expo-secure-store",
       [
         "expo-audio",
         {
-          "microphonePermission": "Finance needs microphone access so you can add entries by voice."
+          "microphonePermission": "Finance Nepal needs microphone access so you can add entries by voice."
         }
       ],
       "expo-sharing",
       "expo-font",
       "expo-asset"
     ],
-    "name": "Finance",
+    "name": "Finance Nepal",
     "slug": "store-books",
     "owner": "ai-biztech-nepal",
     "version": "1.0.0",

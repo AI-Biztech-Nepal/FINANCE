@@ -181,7 +181,7 @@ export function WebSidebarShell({
         >
           <AppLogo size={34} />
           <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>
-            {sellsVehicles(profile?.business_name?.trim() || profile?.full_name) ? 'DEEVA' : 'Finance'}
+            {sellsVehicles(profile?.business_name?.trim() || profile?.full_name) ? 'DEEVA' : 'Finance Nepal'}
           </Text>
         </Pressable>
 

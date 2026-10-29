@@ -88,7 +88,7 @@ export function ImportStatementScreen() {
       'Import finished',
       failed > 0
         ? `Added ${imported} ${imported === 1 ? 'entry' : 'entries'}. ${failed} couldn't be saved.`
-        : `Added ${imported} ${imported === 1 ? 'entry' : 'entries'} to Finance.`
+        : `Added ${imported} ${imported === 1 ? 'entry' : 'entries'} to Finance Nepal.`
     );
     if (imported > 0) router.back();
   }
