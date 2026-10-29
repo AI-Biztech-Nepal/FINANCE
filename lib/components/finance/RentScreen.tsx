@@ -1,12 +1,13 @@
 // lib/components/finance/RentScreen.tsx
 import { useMemo, useState } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useRentalWageSync } from '../../hooks/useRentalWageSync';
 import { useSupabaseQuery } from '../../hooks/useSupabase';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
+import { usePartyDestination } from '../../hooks/usePartyDestination';
 import { journalOf } from '../../utils/journalVoucher';
 import { BackButton, BookPage, BookStat, BookStats, BookTable, FilterTabs, Pill, ToolbarButton, money, useBookLayout, useBookToolbar, type BookColumn } from './BookKit';
 import { EmiPanel } from './EmiPanel';
@@ -56,6 +57,10 @@ export function RentScreen({ basePath }: { basePath: string }) {
   const [show, setShow] = useState<'all' | 'out' | 'received' | 'due'>('all');
 
   const openEntry = (id?: string) => router.push((id ? `${basePath}/rent-entry?id=${id}` : `${basePath}/rent-entry`) as never);
+  // A rental opens its renter's ledger (the way the Ledger opens a person); one with no renter picked opens the rental.
+  const hrefFor = usePartyDestination(userId, basePath);
+  const openRenter = (r: { id: string; customer_id: string | null }) =>
+    r.customer_id ? router.push(hrefFor(r.customer_id) as never) : openEntry(r.id);
 
   // Items still out first, then the rest - newest first in each.
   const rows = useMemo(
@@ -182,6 +187,18 @@ export function RentScreen({ basePath }: { basePath: string }) {
   );
 
   const figure = (v: number, color: string) => (v ? num(money(v), color, true) : num('—', '#D1D5DB'));
+  // The pencil at the end of a row: edit the rental itself (the row opens the renter's ledger).
+  const editColumn: BookColumn<Row> = {
+    key: 'edit',
+    label: '',
+    width: 40,
+    align: 'right',
+    render: (x) => (
+      <Pressable onPress={() => openEntry(x.r.id)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Edit this rental">
+        <Ionicons name="create-outline" size={16} color="#6B7280" />
+      </Pressable>
+    ),
+  };
   // The Ledger's table layout: SN, the rental, its days and rate, then the money - rent, received (green), due (red).
   const columns: BookColumn<Row>[] = layout.full
     ? [
@@ -196,11 +213,13 @@ export function RentScreen({ basePath }: { basePath: string }) {
         { key: 'paid', label: 'Received', width: 112, align: 'right', render: (x) => figure(x.paid, '#047857') },
         { key: 'left', label: 'Due', width: 112, align: 'right', render: (x) => figure(x.left, '#B91C1C') },
         { key: 'status', label: 'Status', width: 100, render: (x) => <Pill text={x.status.label} color={x.status.color} bg={x.status.bg} /> },
+        editColumn,
       ]
     : [
         { key: 'item', label: 'Item', render: (x) => itemCell(x, true) },
         { key: 'total', label: 'Rent', width: 100, align: 'right', render: (x) => num(money(x.total), '#111827', true) },
         { key: 'left', label: 'Due', width: 96, align: 'right', render: (x) => figure(x.left, '#B91C1C') },
+        editColumn,
       ];
   const sum = (f: (x: Row) => number) => round2(shown.reduce((s, x) => s + f(x), 0));
   const footer = {
@@ -256,11 +275,11 @@ export function RentScreen({ basePath }: { basePath: string }) {
           <Text className="mt-2 text-gray-500">{isLoading ? 'Loading…' : 'No rentals yet. Tap New rental.'}</Text>
         </View>
       ) : (
-        <BookTable columns={columns} rows={shown} rowKey={(x) => x.r.id} onRowPress={(x) => openEntry(x.r.id)} footer={footer} stickyHeader />
+        <BookTable columns={columns} rows={shown} rowKey={(x) => x.r.id} onRowPress={(x) => openRenter(x.r)} footer={footer} stickyHeader />
       )}
 
       <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
-        Tap a rental to edit it. Received is what the renter paid on the Received page with the vehicle picked in Item. A rental is billed by the day, counting the day it was rented and every day since. Rent is kept apart from Sales,
+        Tap a rental to open the renter's ledger; the pencil edits the rental. Received is what the renter paid on the Received page with the vehicle picked in Item. A rental is billed by the day, counting the day it was rented and every day since. Rent is kept apart from Sales,
         so an item on rent stays in your stock.
       </Text>
       </>
