@@ -574,6 +574,8 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
   // The item whose stock history is open in a popup, and a bill opened from it.
   const [viewingKey, setViewingKey] = useState<string | null>(null);
   const [viewingTx, setViewingTx] = useState<BusinessTransaction | null>(null);
+  // The Stock table's width as drawn, so its columns can share it (see `spread`).
+  const [tableWidth, setTableWidth] = useState(0);
 
   // Print and Excel: the list as it is on screen (see buildReport, below).
   const reportButtons = useReportActions(() => buildReport());
@@ -909,6 +911,9 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
   });
   const chevronColumn: BookColumn<InventoryRow> = { key: 'act', label: '', width: 34, align: 'right', render: () => <Ionicons name="chevron-forward" size={14} color="#D1D5DB" /> };
   // Stock: each item in hand - its vendor, the day it came in and how many there are. No money: that is Inventory's.
+  // With so few columns they share the table's width - SN and the arrow fixed, each other column its part of the rest,
+  // Item whatever is left (about a fifth) - never narrower than they need.
+  const spread = (part: number, min: number) => Math.max(min, Math.round(part * Math.max(0, tableWidth - 86)));
   const stockColumns: BookColumn<InventoryRow>[] = layout.full
     ? [
         snColumn(52),
@@ -921,10 +926,10 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
             </Text>
           ),
         },
-        ...(vehicles ? [vendorColumn] : []),
-        { key: 'in', label: 'Came in on', width: 130, render: (r) => (lastIn(r) ? num(toBsHistoryLabel(lastIn(r)!.day)) : dash) },
-        stockColumn(84),
-        { key: 'status', label: 'Status', width: 90, render: (r) => <Pill text={STATUS[r.status].label} color={STATUS[r.status].color} bg={STATUS[r.status].bg} /> },
+        ...(vehicles ? [{ ...vendorColumn, width: spread(0.3, 170) }] : []),
+        { key: 'in', label: 'Came in on', width: spread(0.2, 130), render: (r) => (lastIn(r) ? num(toBsHistoryLabel(lastIn(r)!.day)) : dash) },
+        stockColumn(spread(0.13, 84)),
+        { key: 'status', label: 'Status', width: spread(0.13, 90), render: (r) => <Pill text={STATUS[r.status].label} color={STATUS[r.status].color} bg={STATUS[r.status].bg} /> },
         chevronColumn,
       ]
     : [
@@ -1361,6 +1366,10 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
         <View className="items-center rounded-xl border border-gray-300 bg-white py-10">
           <Ionicons name="cube-outline" size={28} color="#D1D5DB" />
           <Text className="mt-2 text-gray-500">{rows.length > 0 ? 'No matches.' : 'No products yet. Tap Add product.'}</Text>
+        </View>
+      ) : inStockOnly ? (
+        <View onLayout={(e) => setTableWidth(e.nativeEvent.layout.width)}>
+          <BookTable columns={columns} rows={filteredRows} rowKey={(r) => r.key} onRowPress={(r) => setViewingKey(r.key)} footer={footer} />
         </View>
       ) : (
         <BookTable columns={columns} rows={filteredRows} rowKey={(r) => r.key} onRowPress={(r) => setViewingKey(r.key)} footer={footer} />
