@@ -526,7 +526,8 @@ function StockItemPopup({
  * A reseller buys stock from here too (the Buy Stock button, on to the wholesale marketplace) - what
  * arrives comes back as a Purchase bill, so it is in the item's stock-in history. Tapping an item
  * opens that history. Read-only: products are managed by admins, not from here. */
-/** `inStockOnly`: the Stock page - only what is still in hand, no All / In stock / Out tabs. */
+/** `inStockOnly`: the Stock page - only what is still in hand and how many, no All / In stock / Out tabs and no
+ * money (prices, payments, dues, profit are Inventory's). */
 export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: string; inStockOnly?: boolean }) {
   const layout = useBookLayout();
   const cameFrom = useCameFrom(basePath);
@@ -815,6 +816,7 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
       dues: round2(filteredRows.reduce((sum, r) => sum + (r.dues ?? 0), 0)),
       profit: round2(filteredRows.reduce((sum, r) => sum + (r.profit ?? 0), 0)),
       value: filteredRows.reduce((sum, r) => sum + (r.value ?? 0), 0),
+      units: filteredRows.reduce((sum, r) => sum + (r.stockLevel ?? 0), 0),
     }),
     [filteredRows]
   );
@@ -828,6 +830,10 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
 
   const stockColor = (r: InventoryRow) => (r.status === 'out' ? '#B91C1C' : '#111827');
 
+  // The Stock page's detail: the item's latest Purchase bill line - the day it came in.
+  const lastIn = (r: InventoryRow) =>
+    (movementsByName.get(nameKey(r.name)) ?? []).reduce<Movement | null>((a, m) => (m.dir === 'in' && (!a || m.day > a.day) ? m : a), null);
+
   const itemCell = (r: InventoryRow, compact: boolean) => (
     <View style={{ minWidth: 0, gap: 2 }}>
       <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
@@ -839,7 +845,7 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
           {highlightText([r.category, r.model].filter(Boolean).join(' · '), search)}
         </Text>
       )}
-      {compact && (
+      {compact && !inStockOnly && (
         <Text className="text-[11px] text-gray-400" numberOfLines={1}>
           {vehicles
             ? r.dues != null
@@ -894,7 +900,54 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
         </Text>
       ),
   };
-  const columns: BookColumn<InventoryRow>[] = layout.full
+  const stockColumn = (width: number): BookColumn<InventoryRow> => ({
+    key: 'stock',
+    label: 'In stock',
+    width,
+    align: 'right',
+    render: (r) => (r.stockLevel != null ? num(qty(r.stockLevel), stockColor(r), true) : dash),
+  });
+  const chevronColumn: BookColumn<InventoryRow> = { key: 'act', label: '', width: 34, align: 'right', render: () => <Ionicons name="chevron-forward" size={14} color="#D1D5DB" /> };
+  // Stock: each item in hand - its vendor, the day it came in and how many there are. No money: that is Inventory's.
+  const stockColumns: BookColumn<InventoryRow>[] = layout.full
+    ? [
+        snColumn(52),
+        {
+          key: 'item',
+          label: 'Item',
+          render: (r) => (
+            <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
+              {highlightText(r.name, search)}
+            </Text>
+          ),
+        },
+        ...(vehicles ? [vendorColumn] : []),
+        { key: 'in', label: 'Came in on', width: 130, render: (r) => (lastIn(r) ? num(toBsHistoryLabel(lastIn(r)!.day)) : dash) },
+        stockColumn(84),
+        { key: 'status', label: 'Status', width: 90, render: (r) => <Pill text={STATUS[r.status].label} color={STATUS[r.status].color} bg={STATUS[r.status].bg} /> },
+        chevronColumn,
+      ]
+    : [
+        snColumn(38),
+        {
+          key: 'item',
+          label: 'Item',
+          render: (r) => (
+            <View style={{ minWidth: 0, gap: 2 }}>
+              <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
+                {highlightText(r.name, search)}
+              </Text>
+              <Text className="text-[11px] text-gray-400" numberOfLines={1}>
+                {[r.vendor || null, lastIn(r) ? `In ${toBsHistoryLabel(lastIn(r)!.day)}` : null].filter(Boolean).join(' · ') || 'No purchase bill'}
+              </Text>
+            </View>
+          ),
+        },
+        stockColumn(70),
+      ];
+  const columns: BookColumn<InventoryRow>[] = inStockOnly
+    ? stockColumns
+    : layout.full
     ? [
         snColumn(52),
         { key: 'item', label: 'Item', render: (r) => itemCell(r, false) },
@@ -924,7 +977,9 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
         { key: 'price', label: 'Price', width: 80, align: 'right', render: (r) => (r.price != null ? num(rs(r.price)) : dash) },
       ];
 
-  const footer = layout.full
+  const footer = inStockOnly
+    ? { label: 'Totals', cells: { stock: <Text className="text-[13px] font-extrabold text-gray-900">{qty(totals.units)}</Text> } }
+    : layout.full
     ? {
         label: 'Totals',
         cells: {
@@ -1107,14 +1162,45 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
       businessName: profile?.business_name ?? profile?.full_name ?? '',
       subtitle: [filter === 'out' ? 'Out of stock' : filter === 'in' && !inStockOnly ? 'In stock' : null, search.trim() ? `Matching "${search.trim()}"` : null].filter(Boolean).join(' · ') || undefined,
       printedOn: toBsHistoryLabel(localTodayIso()),
-      summary: [
+      summary: inStockOnly
+        ? [
+            { label: 'In stock', value: String(stats.items) },
+            { label: 'Out of stock', value: String(stats.out) },
+          ]
+        : [
         { label: 'In stock', value: String(stats.items) },
         vehicles
           ? { label: 'Profit / Loss', value: `NPR ${stats.profit < 0 ? '-' : ''}${money(Math.abs(stats.profit))}` }
           : { label: 'Stock value (cost)', value: `NPR ${money(stats.value)}` },
         { label: 'Out of stock', value: String(stats.out) },
       ],
-      sections: [
+      sections: inStockOnly
+        ? [
+            {
+              columns: [
+                { label: 'SN' },
+                { label: 'Item' },
+                ...(vehicles ? [{ label: 'Vendor' }] : []),
+                { label: 'Came in on' },
+                { label: 'In stock', align: 'right' as const },
+                { label: 'Status' },
+              ],
+              rows: filteredRows.map((r, n) => {
+                const m = lastIn(r);
+                return [
+                  String(n + 1),
+                  r.name,
+                  ...(vehicles ? [r.vendor] : []),
+                  m ? toBsHistoryLabel(m.day) : '',
+                  r.stockLevel != null ? qty(r.stockLevel) : '',
+                  STATUS[r.status].label,
+                ];
+              }),
+              footer: ['', 'Totals', ...(vehicles ? [''] : []), '', qty(totals.units), ''],
+              emptyText: rows.length > 0 ? 'No matches.' : 'Nothing in stock.',
+            },
+          ]
+        : [
         {
           columns: [
             { label: 'SN' },
@@ -1156,7 +1242,9 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
           emptyText: rows.length > 0 ? 'No matches.' : 'Nothing bought or sold yet.',
         },
       ],
-      note: vehicles
+      note: inStockOnly
+        ? 'What is in hand today.'
+        : vehicles
         ? 'Total paid is what has been paid on the car (payments naming it); Remaining dues is its purchase bill less that. Profit / Loss is what it sold for less its cost; "est." is what it would make at its selling price, not sold yet.'
         : 'Sold and Purchased count the units on Sale and Purchase bills, matched to products by item name.',
     };
@@ -1261,7 +1349,7 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
 
       <BookStats>
         <BookStat label="In stock" value={String(stats.items)} color="#374151" onPress={inStockOnly ? undefined : () => setFilter((f) => (f === 'in' ? 'all' : 'in'))} />
-        {vehicles ? (
+        {inStockOnly ? null : vehicles ? (
           <BookStat label="Profit / Loss" value={`NPR ${profitText(stats.profit)}`} color={profitColor(stats.profit)} />
         ) : (
           <BookStat label="Stock value (cost)" value={`NPR ${money(stats.value)}`} color="#1D4ED8" />
@@ -1279,8 +1367,10 @@ export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: s
       )}
 
       <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
-        Tap an item to see every unit that came in and went out, and to edit it. Sold and Purchased count the units on your Sale and Purchase bills, matched to
-        products by item name. Items marked "Bills only" were typed into a bill and are not tracked products yet - open one to start tracking it.
+        Tap an item to see every unit that came in and went out, and to edit it.
+        {inStockOnly
+          ? ''
+          : ' Sold and Purchased count the units on your Sale and Purchase bills, matched to products by item name. Items marked "Bills only" were typed into a bill and are not tracked products yet - open one to start tracking it.'}
       </Text>
 
       {viewingRow && (
