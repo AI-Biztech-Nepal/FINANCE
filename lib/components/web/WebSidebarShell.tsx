@@ -4,6 +4,7 @@ import { router, usePathname, useGlobalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
 import { AppLogo } from '../AppLogo';
+import { sellsVehicles } from '../../utils/accountFeatures';
 
 export interface WebNavItem {
   href: string;
@@ -170,8 +171,8 @@ export function WebSidebarShell({
           paddingHorizontal: 14,
         }}
       >
-        {/* The brand mark: the app's own logo and name. Pressing it goes back to the first page of the
-            side panel (the Dashboard). */}
+        {/* The brand mark: the app's own logo and name (DEEVA on Deeva Auto's account). Pressing it goes back to the
+            first page of the side panel (the Dashboard). */}
         <Pressable
           onPress={() => items[0] && router.push(items[0].href as never)}
           accessibilityRole="link"
@@ -179,7 +180,9 @@ export function WebSidebarShell({
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, marginBottom: 20 }}
         >
           <AppLogo size={34} />
-          <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>Finance</Text>
+          <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>
+            {sellsVehicles(profile?.business_name?.trim() || profile?.full_name) ? 'DEEVA' : 'Finance'}
+          </Text>
         </Pressable>
 
         {/* The nav list scrolls on its own (minHeight: 0 lets a flex child
