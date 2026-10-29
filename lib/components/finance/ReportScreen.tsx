@@ -332,7 +332,16 @@ export function ReportScreen({ basePath }: { basePath: string }) {
     const paid = expenses + toCustomers + toVendors + walkInBought;
     return { walkIn, customers, expenses, toCustomers, toVendors, walkInBought, received, paid };
   }, [transactions, customerEntries, vendorEntries, period, range.from, range.to]);
-  const costOfGoods = pl.opening + pl.purchase + pl.directTotal - pl.closing;
+  // What is owed to you and by you today, for the band's Receivable and Payable cards: each person's balance on their
+  // ledger, the ones that come out owing added up - the way the Receivable and Payable Reports add up.
+  const owed = useMemo(() => {
+    const owing = (balances: Map<string, number>) => round2([...balances.values()].reduce((sum, b) => sum + (b > 0 ? b : 0), 0));
+    const receive = new Map<string, number>();
+    for (const e of customerEntries ?? []) receive.set(e.customer_id, (receive.get(e.customer_id) ?? 0) + (e.entry_type === 'credit' ? -1 : 1) * Number(e.amount));
+    const give = new Map<string, number>();
+    for (const e of vendorEntries ?? []) give.set(e.vendor_id, (give.get(e.vendor_id) ?? 0) + (e.entry_type === 'credit' ? -1 : 1) * Number(e.amount));
+    return { receivable: owing(receive), payable: owing(give) };
+  }, [customerEntries, vendorEntries]);
   const companyName = useAuthStore((state) => state.profile)?.business_name ?? '';
   const totals = { sale: pl.income, purchase: pl.purchase, expense: pl.directTotal + pl.indirectTotal };
 
@@ -425,7 +434,8 @@ export function ReportScreen({ basePath }: { basePath: string }) {
     <ScrollView className="flex-1 bg-gray-50 px-6 pt-4" contentContainerStyle={{ paddingBottom: 40 }}>
       {toolbar ? <View className="mb-4">{toolbar}</View> : null}
 
-      {/* the report heading: one brand-blue band with the period and the key figures */}
+      {/* the report heading: one brand-blue band with the period, and a card for each of the Report's own pages (the
+          ones under Report in the side panel) - the period's sales, purchases and expenses, and what is owed today */}
       <View className="mb-4 overflow-hidden rounded-2xl" style={{ backgroundColor: banner.solid }}>
         <View className="p-5" style={{ gap: 4 }}>
           <Text className="text-[11.5px] font-bold" style={{ color: banner.label, letterSpacing: 1.4 }}>FINANCE REPORT</Text>
@@ -436,11 +446,11 @@ export function ReportScreen({ basePath }: { basePath: string }) {
         </View>
         <View className="flex-row flex-wrap border-t" style={{ borderColor: 'rgba(255,255,255,0.18)' }}>
           {[
-            { label: 'Sales & direct income', value: pl.income, sub: `${pl.bills.sale} sale ${pl.bills.sale === 1 ? 'bill' : 'bills'}`, path: '/sales-report' },
-            { label: 'Cost of goods', value: costOfGoods, sub: `${pl.bills.purchase} purchase ${pl.bills.purchase === 1 ? 'bill' : 'bills'}`, path: '/purchase-report' },
-            { label: grossProfit >= 0 ? 'Gross profit' : 'Gross loss', value: Math.abs(grossProfit), sub: pl.income > 0 ? `${((Math.abs(grossProfit) / pl.income) * 100).toFixed(1)}% of sales` : 'No sales', path: '/sales-report' },
-            { label: 'Indirect expenses', value: pl.indirectTotal, sub: `${pl.indirect.length} expense ${pl.indirect.length === 1 ? 'head' : 'heads'}`, path: '/expense-report' },
-            { label: netProfit >= 0 ? 'Net profit' : 'Net loss', value: Math.abs(netProfit), sub: pl.income > 0 ? `${((Math.abs(netProfit) / pl.income) * 100).toFixed(1)}% net margin` : 'No sales', path: '/expense-report' },
+            { label: 'Sales Report', value: pl.items + pl.services, path: '/sales-report' },
+            { label: 'Purchase Report', value: pl.purchase, path: '/purchase-report' },
+            { label: 'Expenses Report', value: pl.directTotal + pl.indirectTotal, path: '/expense-report' },
+            { label: 'Receivable Report', value: owed.receivable, path: '/to-receive' },
+            { label: 'Payable Report', value: owed.payable, path: '/to-give' },
           ].map((k, i) => (
             <Pressable
               key={k.label}
