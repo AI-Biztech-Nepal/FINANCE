@@ -28,15 +28,14 @@ const financeNavRank = (key: string) => {
 
 // Every report there is (the same list the Report page itself shows, see ReportScreen.tsx),
 // nested under Report in the side panel - a family of report types one step in, all reachable
-// without opening the Report page first.
+// without opening the Report page first. Total Received and Total Paid are not in it: they open from
+// the Total received / Total paid cards on the Ledger (and on the Finance page).
 const REPORT_FAMILY: WebNavItem[] = [
   { href: '/(store)/sales-report', label: 'Sales Report', icon: 'trending-up' },
   { href: '/(store)/purchase-report', label: 'Purchase Report', icon: 'cart' },
   { href: '/(store)/expense-report', label: 'Expenses Report', icon: 'receipt' },
   { href: '/(store)/to-receive', label: 'Receivable Report', icon: 'people' },
   { href: '/(store)/to-give', label: 'Payable Report', icon: 'storefront' },
-  { href: '/(store)/received', label: 'Total Received', icon: 'arrow-down-circle' },
-  { href: '/(store)/paid', label: 'Total Paid', icon: 'arrow-up-circle' },
 ];
 
 const NAV_ITEMS: WebNavItem[] = [
