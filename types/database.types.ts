@@ -20,6 +20,8 @@ export interface Profile {
   business_address: string | null;
   business_phone: string | null;
   business_logo_path: string | null;
+  /** Label and details of the Cash account (0025): { name, bank_name, account_number, account_holder_name, address }. */
+  cash_account?: Record<string, string | null> | null;
   created_at: string;
   updated_at: string;
 }
@@ -189,6 +191,10 @@ export interface BusinessTransaction {
   items: BillItem[];
   discount_amount: number;
   vat_amount: number;
+  /** Services on a Sale (installation, repair ...) or bought in on a Purchase (outsourced work); the total. */
+  installation_charge?: number;
+  /** The service lines behind it: [{ name, amount }]. Discount and VAT apply to them with the items. */
+  service_charges?: { name: string; amount: number }[];
   expense_category_id: string | null;
   payment_mode: PaymentMode;
   bank_account_id: string | null;
