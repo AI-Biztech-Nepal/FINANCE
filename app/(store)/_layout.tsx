@@ -85,6 +85,7 @@ const HIDDEN: [string, string][] = [
   ['stock', 'Stock'],
   ['quick-payment', 'Quick Payment'],
   ['voucher', 'Journal Voucher'],
+  ['contra', 'Contra'],
   ['received', 'Total Received'],
   ['paid', 'Total Paid'],
   ['sales-report', 'Sales Report'],

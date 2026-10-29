@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, TextInput, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
+import { useSupabaseUpdate } from '../../hooks/useSupabase';
 import { useBankAccounts, type BankAccountDetails } from '../../hooks/useBankAccounts';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { BookPage, BookTable, ToolbarButton, useBarActions, useBookLayout, type BookColumn } from './BookKit';
@@ -140,6 +141,7 @@ function AccountForm({
 /** A table row: a bank account, or null for Cash, which is always there. */
 type Row = { id: string; acc: BankAccount | null };
 
+
 const dash = <Text className="text-[12.5px] text-gray-400">—</Text>;
 const cellText = (value: string | null | undefined) =>
   value ? (
@@ -153,6 +155,35 @@ const cellText = (value: string | null | undefined) =>
 export function BankAccountsScreen() {
   const userId = useAuthStore((state) => state.session?.user.id);
   const { accounts, create, update, remove } = useBankAccounts(userId);
+  const profileRow = useAuthStore((state) => state.profile);
+  const setProfile = useAuthStore((state) => state.setProfile);
+  const updateProfile = useSupabaseUpdate('profiles');
+  // Cash is not a bank_accounts row (an entry with no account IS cash), so its label and details live on the
+  // profile; it can be renamed and given details like any account, and "Remove" puts them back to the default.
+  const cashSaved = (profileRow?.cash_account ?? null) as Record<string, string | null> | null;
+  const cashDetails: BankAccountDetails = {
+    name: cashSaved?.name || 'Cash',
+    bank_name: cashSaved?.bank_name ?? null,
+    account_number: cashSaved?.account_number ?? null,
+    account_holder_name: cashSaved?.account_holder_name ?? null,
+    address: cashSaved?.address ?? null,
+  };
+  const [editingCash, setEditingCash] = useState(false);
+  const saveCash = async (details: BankAccountDetails | null) => {
+    if (!profileRow) return;
+    await updateProfile.mutateAsync({ id: profileRow.id, values: { cash_account: details } as never });
+    setProfile({ ...profileRow, cash_account: details as never });
+    setEditingCash(false);
+  };
+  const cashForm = (
+    <AccountForm
+      key="cash"
+      initial={cashDetails}
+      onSave={(d) => saveCash(d)}
+      onCancel={() => setEditingCash(false)}
+      onDelete={() => saveCash(null)}
+    />
+  );
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -173,7 +204,7 @@ export function BankAccountsScreen() {
           { label: 'Branch / Address' },
         ],
         rows: [
-          ['1', 'Cash', '', '', '', ''],
+          ['1', cashDetails.name, cashDetails.bank_name ?? '', cashDetails.account_number ?? '', cashDetails.account_holder_name ?? '', cashDetails.address ?? ''],
           ...accounts.map((acc, i) => [
             String(i + 2),
             acc.name,
@@ -244,32 +275,22 @@ export function BankAccountsScreen() {
 
   const footnote = (
     <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
-      Tap an account to edit or remove it. Every account here shows up beside Cash when you record a payment or an
-      expense, and its balance counts toward Available Balance.
+      Tap an account to edit it. Cash is the account used when no bank is chosen, so it can be renamed and given details, and Remove puts its details back to the default - it is always there.
     </Text>
   );
 
   // Web: the same cash-book look as the Day Book and the Ledger - one bordered
   // table, the form as a compact card above it. Phones keep the card list below.
   if (Platform.OS === 'web') {
-    const rows: Row[] = [{ id: 'cash', acc: null }, ...accounts.map((acc) => ({ id: acc.id, acc }))];
+    const cashAcc = { id: 'cash', owner_id: userId ?? '', created_at: '', updated_at: '', ...cashDetails } as BankAccount;
+    const rows: Row[] = [{ id: 'cash', acc: cashAcc }, ...accounts.map((acc) => ({ id: acc.id, acc }))];
 
     const account = (row: Row, withDetails: boolean) => {
-      if (!row.acc) {
-        return (
-          <View className="flex-row items-center" style={{ gap: 10 }}>
-            <Ionicons name="cash-outline" size={16} color="#6B7280" />
-            <View>
-              <Text className="text-[13px] font-semibold text-gray-900">Cash</Text>
-              <Text className="text-[11px] text-gray-400">Always available</Text>
-            </View>
-          </View>
-        );
-      }
+      if (!row.acc) return null;
       const sub = withDetails ? [row.acc.bank_name, row.acc.account_number ? `A/C ${row.acc.account_number}` : null].filter(Boolean).join(' · ') : '';
       return (
         <View className="flex-row items-center" style={{ gap: 10 }}>
-          <Ionicons name="business-outline" size={16} color="#2563EB" />
+          <Ionicons name={row.id === 'cash' ? 'cash-outline' : 'business-outline'} size={16} color="#2563EB" />
           <View style={{ minWidth: 0, flexShrink: 1 }}>
             <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
               {row.acc.name}
@@ -311,10 +332,18 @@ export function BankAccountsScreen() {
           columns={columns}
           rows={rows}
           rowKey={(row) => row.id}
-          onRowPress={(row) => row.acc && openEdit(row.acc.id)}
-          highlight={(row) => row.id === editingId}
+          onRowPress={(row) => {
+            if (row.id === 'cash') {
+              setShowAdd(false);
+              setEditingId(null);
+              setEditingCash(true);
+            } else if (row.acc) openEdit(row.acc.id);
+          }}
+          highlight={(row) => row.id === editingId || (row.id === 'cash' && editingCash)}
           expanded={(row) =>
-            row.acc && row.id === editingId ? (
+            row.id === 'cash' && editingCash ? (
+              <View className="border-b border-gray-200 bg-gray-50 p-3">{cashForm}</View>
+            ) : row.acc && row.id === editingId ? (
               <View className="border-b border-gray-200 bg-gray-50 p-3">{editForm(row.acc)}</View>
             ) : null
           }
@@ -334,13 +363,23 @@ export function BankAccountsScreen() {
       {addForm}
 
       <View>
-        <View className="mb-2.5 flex-row items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4">
-          <View className="h-9 w-9 items-center justify-center rounded-full bg-gray-100">
-            <Ionicons name="cash-outline" size={16} color="#6B7280" />
-          </View>
-          <Text className="flex-1 text-sm font-semibold text-gray-900">Cash</Text>
-          <Text className="text-xs text-gray-400">Always available</Text>
-        </View>
+        {editingCash ? (
+          <View className="mb-2.5">{cashForm}</View>
+        ) : (
+          <Pressable
+            onPress={() => setEditingCash(true)}
+            className="mb-2.5 flex-row items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4"
+          >
+            <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
+              <Ionicons name="cash-outline" size={16} color="#2563EB" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-gray-900">{cashDetails.name}</Text>
+              {!!cashDetails.account_number && <Text className="text-xs text-gray-400">A/C {cashDetails.account_number}</Text>}
+            </View>
+            <Ionicons name="pencil-outline" size={17} color="#9CA3AF" />
+          </Pressable>
+        )}
 
         {accounts.length === 0 && !showAdd ? (
           <View className="items-center rounded-2xl border border-dashed border-gray-200 bg-white py-10">

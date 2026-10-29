@@ -62,6 +62,128 @@ import { round2, formatMoney } from '../../utils/money';
 const todayIso = localTodayIso;
 
 
+interface ServiceRowState {
+  name: string;
+  amount: string;
+}
+
+/** The Services table of a Sale, a second table under the Items one and as wide as it: one line per
+ * service (every installation and repair service you offer can be picked, or any name typed), each
+ * with its own amount. Optional, and direct income - no item or stock behind it. Lines left empty
+ * are not saved. */
+function ServiceChargesTable({
+  rows,
+  onChange,
+  accent,
+  serviceNames,
+  bought,
+}: {
+  rows: ServiceRowState[];
+  /** A Purchase bill: services bought in (work done by outsource staff), not sold. */
+  bought?: boolean;
+  onChange: (rows: ServiceRowState[]) => void;
+  accent: string;
+  /** Every service that can be picked ("CCTV & Surveillance - Installation", "... - Repair" ...). */
+  serviceNames: string[];
+}) {
+  const [focusedRow, setFocusedRow] = useState<number | null>(null);
+  const total = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  const filled = rows.filter((r) => Number(r.amount) > 0).length;
+  const update = (index: number, patch: Partial<ServiceRowState>) =>
+    onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  const head = 'px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500';
+  const optionsFor = (text: string): SuggestOption[] => {
+    const q = text.trim().toLowerCase();
+    return serviceNames
+      .filter((n) => !q || n.toLowerCase().includes(q))
+      .map((n) => ({ key: n, label: n }));
+  };
+  return (
+    <View className="bg-white" style={{ zIndex: focusedRow != null ? 30 : 0 }}>
+      <View className="flex-row items-center border-y border-gray-200 bg-gray-50 px-2 py-2">
+        <Text className="text-center text-[11px] font-bold tracking-wider text-gray-500" style={{ width: 36 }}>
+          #
+        </Text>
+        <Text className={head} style={{ flex: 1 }}>
+          {bought ? 'Services bought (outsourced work)' : 'Service'}{filled > 0 ? ` · ${filled} ${filled === 1 ? 'line' : 'lines'}` : ' (optional)'}
+        </Text>
+        {/* The Qty and Rate columns of the Items table above are left empty so Amount lines up with it. */}
+        <View style={{ width: 210 }} />
+        <Text className={`${head} text-right`} style={{ width: 130 }}>
+          {total > 0 ? total.toLocaleString() : 'Amount'}
+        </Text>
+        <View style={{ width: 36 }} />
+      </View>
+      {rows.map((row, index) => (
+        <View
+          key={index}
+          className="flex-row items-center border-b border-gray-100 px-2 py-0.5"
+          style={{ zIndex: focusedRow === index ? 5 : 0 }}
+        >
+          <Text className="text-center text-[13px] font-semibold text-gray-400" style={{ width: 36 }}>
+            {index + 1}
+          </Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <SuggestInput
+              value={row.name}
+              onChangeText={(v) => update(index, { name: v })}
+              options={focusedRow === index ? optionsFor(row.name) : []}
+              onSelectOption={(opt) => update(index, { name: opt.label })}
+              onFocus={() => setFocusedRow(index)}
+              onBlur={() => setFocusedRow((cur) => (cur === index ? null : cur))}
+              showWhenEmpty
+              placeholder="Pick or type a service - installation, repair, wiring ..."
+              accessibilityLabel={`Service name, row ${index + 1}`}
+              accent={accent}
+              inputClassName="rounded-lg px-2.5 py-2.5 text-sm text-gray-900"
+              inputStyle={{ borderWidth: 1.5, borderColor: '#F1F2F4', outlineStyle: 'none' } as object}
+            />
+          </View>
+          <View style={{ width: 210 }} />
+          <View style={{ width: 130 }}>
+            <TextInput
+              value={row.amount}
+              onChangeText={(v) => update(index, { amount: v.replace(/[^0-9.]/g, '') })}
+              placeholder="0"
+              placeholderTextColor="#B2B8C1"
+              keyboardType="numeric"
+              selectTextOnFocus
+              accessibilityLabel={`Service amount, row ${index + 1}`}
+              className="rounded-lg px-2.5 py-2.5 text-right text-sm font-semibold text-gray-900"
+              style={{ borderWidth: 1.5, borderColor: '#F1F2F4', outlineStyle: 'none' } as object}
+            />
+          </View>
+          <View style={{ width: 36, alignItems: 'center' }}>
+            {(rows.length > 1 || !!row.name.trim() || !!row.amount.trim()) && (
+              <Pressable
+                onPress={() => {
+                  const next = rows.filter((_, i) => i !== index);
+                  onChange(next.length > 0 ? next : [{ name: '', amount: '' }]);
+                }}
+                hitSlop={6}
+                accessibilityLabel={`Remove service row ${index + 1}`}
+                style={{ opacity: 0.6 }}
+              >
+                <Ionicons name="close-circle" size={18} color="#DC2626" />
+              </Pressable>
+            )}
+          </View>
+        </View>
+      ))}
+      <Pressable
+        onPress={() => onChange([...rows, { name: '', amount: '' }])}
+        className="flex-row items-center px-4 py-2"
+        style={{ gap: 6 }}
+      >
+        <Ionicons name="add-circle" size={16} color={accent} />
+        <Text className="text-xs font-semibold" style={{ color: accent }}>
+          Add service
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 interface ItemRowState {
   hs_code?: string;
   /** Model number - entered on a vehicle account's Purchase bill. */
@@ -467,7 +589,7 @@ function CategoryPickerModal({
   const [newName, setNewName] = useState('');
   // The Add popup: the name and whether it is a Direct or an Indirect expense, then Save or Cancel.
   const [adding, setAdding] = useState(false);
-  const [newGroup, setNewGroup] = useState<'direct' | 'indirect'>('indirect');
+  const [newGroup, setNewGroup] = useState<'direct' | 'indirect'>('direct');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -478,7 +600,7 @@ function CategoryPickerModal({
     try {
       await onCreate(newName.trim(), newGroup);
       setNewName('');
-      setNewGroup('indirect');
+      setNewGroup('direct');
       setAdding(false);
     } catch (err) {
       showAlert('Could not add category', getErrorMessage(err));
@@ -539,7 +661,7 @@ function CategoryPickerModal({
                 <View>
                   <Text className="mb-1 text-xs font-semibold text-gray-600">Category</Text>
                   <View className="flex-row" style={{ gap: 8 }}>
-                    {([['indirect', 'Indirect expense'], ['direct', 'Direct expense']] as const).map(([k, label]) => (
+                    {([['direct', 'Direct expense'], ['indirect', 'Indirect expense']] as const).map(([k, label]) => (
                       <Pressable
                         key={k}
                         onPress={() => setNewGroup(k)}
@@ -551,7 +673,7 @@ function CategoryPickerModal({
                     ))}
                   </View>
                   <Text className="mt-1 text-[11.5px] text-gray-500">
-                    Direct costs (freight, repairs, labour) are taken off sales before gross profit; indirect ones (salary, rent, phone) after it.
+                    Everything is a Direct expense unless you mark it Indirect. Direct expenses are taken off before gross profit, indirect ones after it.
                   </Text>
                 </View>
                 <View className="flex-row justify-end" style={{ gap: 10 }}>
@@ -559,7 +681,7 @@ function CategoryPickerModal({
                     onPress={() => {
                       setAdding(false);
                       setNewName('');
-                      setNewGroup('indirect');
+                      setNewGroup('direct');
                     }}
                     className="rounded-lg border border-gray-300 px-4 py-2"
                   >
@@ -744,7 +866,7 @@ function TransactionForm({
   // 13%) since it's normally a fixed rate applied to whatever the subtotal
   // is. They're independent, separately collapsible rows - adding one
   // doesn't imply the other.
-  const initialSubtotal = initial ? initial.items.reduce((sum, i) => sum + i.amount, 0) : 0;
+  const initialSubtotal = initial ? initial.items.reduce((sum, i) => sum + i.amount, 0) + (initial.installation_charge ?? 0) : 0;
   const [discountAmountInput, setDiscountAmountInput] = useState(initial ? String(initial.discount_amount) : '0');
   // Web: the discount can be typed as a percent of the subtotal or as an NPR
   // amount - whichever was typed last drives the other, so a percent keeps
@@ -766,6 +888,17 @@ function TransactionForm({
       ? String(Math.round(((initial.vat_amount / (initialSubtotal - initial.discount_amount)) * 100) * 100) / 100)
       : '0'
   );
+  // Services: lines sold on a Sale (installation, repair, labour) or bought in on a Purchase (outsourced work) -
+  // no item or stock behind them. Any name can be typed; these are only suggestions.
+  const serviceNames = useMemo(
+    () => ['Installation', 'Repair', 'Servicing', 'Labour', 'Washing', 'Delivery', 'Registration', 'Documentation'],
+    []
+  );
+  const [serviceRows, setServiceRows] = useState<ServiceRowState[]>(() => {
+    if (initial?.service_charges?.length) return initial.service_charges.map((s) => ({ name: s.name, amount: String(s.amount) }));
+    if (initial?.installation_charge) return [{ name: 'Installation', amount: String(initial.installation_charge) }];
+    return [{ name: '', amount: '' }];
+  });
   const [showDiscount, setShowDiscount] = useState(!!initial && initial.discount_amount > 0);
   const [showVat, setShowVat] = useState(!!initial && initial.vat_amount > 0);
 
@@ -782,7 +915,11 @@ function TransactionForm({
   const [saving, setSaving] = useState(false);
 
   const isBill = type !== 'expense';
-  const subtotal = round2(items.filter(isSavableItem).reduce((sum, row) => sum + lineTotal(row), 0));
+  const itemsSubtotal = round2(items.filter(isSavableItem).reduce((sum, row) => sum + lineTotal(row), 0));
+  // Services are part of the bill: the discount and the VAT apply to the items and the services together.
+  const installationAmount =
+    type !== 'expense' ? round2(serviceRows.reduce((sum, r) => sum + Math.max(0, Number(r.amount) || 0), 0)) : 0;
+  const subtotal = round2(itemsSubtotal + installationAmount);
   const discountAmount =
     discountMode === 'percent'
       ? round2((subtotal * Math.min(Number(discountPercentInput) || 0, 100)) / 100)
@@ -887,8 +1024,8 @@ function TransactionForm({
     }
   }
 
-  async function handleCreateCategory(name: string, group: 'direct' | 'indirect' = 'indirect') {
-    const created = await createCategory.mutateAsync({ owner_id: userId, name, ...(group === 'direct' ? { expense_group: 'direct' } : {}) } as never);
+  async function handleCreateCategory(name: string, group: 'direct' | 'indirect' = 'direct') {
+    const created = await createCategory.mutateAsync({ owner_id: userId, name, ...(group === 'indirect' ? { expense_group: 'indirect' } : {}) } as never);
     setCategoryId(created.id);
   }
   async function handleRenameCategory(id: string, name: string) {
@@ -1051,6 +1188,7 @@ function TransactionForm({
           ...(billNo.trim() ? [{ label: 'Bill no.', value: billNo.trim() }] : []),
           ...(discountAmount > 0 ? [{ label: 'Discount', value: `− NPR ${formatMoney(discountAmount)}` }] : []),
           ...(vatAmount > 0 ? [{ label: 'VAT', value: `+ NPR ${formatMoney(vatAmount)}` }] : []),
+          ...(installationAmount > 0 ? [{ label: 'Services (VAT and discount apply)', value: `NPR ${formatMoney(installationAmount)}` }] : []),
         ],
         total: { label: 'Grand total', value: `NPR ${formatMoney(grandTotal)}`, color: TYPE_META[type].color },
       });
@@ -1152,6 +1290,16 @@ function TransactionForm({
           })),
           discount_amount: round2(discountAmount),
           vat_amount: vatAmount,
+          // Only sent when there is a service (or one is being cleared on an edit), so a bill without
+          // services saves the same as it always did, whether or not migration 0024 has been run yet.
+          ...(installationAmount > 0 || (initial && (initial.installation_charge ?? 0) > 0)
+            ? {
+                installation_charge: installationAmount,
+                service_charges: serviceRows
+                  .filter((r) => Number(r.amount) > 0)
+                  .map((r) => ({ name: r.name.trim() || 'Service', amount: round2(Number(r.amount)) })),
+              }
+            : null),
           // A new bill is saved as cash. Editing one keeps the method it already has - that is changed
           // from the bill's card (tap Payment Method) - instead of putting it back to cash on every save.
           payment_mode: initial?.payment_mode ?? ('cash' as const),
@@ -1904,6 +2052,9 @@ function TransactionForm({
               onExit={() => discountRef.current?.focus()}
               footer={
                 <>
+                {(
+                  <ServiceChargesTable rows={serviceRows} onChange={setServiceRows} accent={accent} serviceNames={serviceNames} bought={type === 'purchase'} />
+                )}
                 <View
                   className="flex-row flex-wrap border-t border-gray-200 bg-gray-50 px-5 py-4"
                   style={{ columnGap: 28, rowGap: 14, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
@@ -1924,8 +2075,20 @@ function TransactionForm({
                   </View>
 
                   <View style={{ width: 320 }}>
+                    {installationAmount > 0 && (
+                      <>
+                        <View className="flex-row items-center justify-between py-1">
+                          <Text className="text-xs text-gray-500">Items</Text>
+                          <Text className="text-xs text-gray-700">NPR {formatMoney(itemsSubtotal)}</Text>
+                        </View>
+                        <View className="flex-row items-center justify-between py-1">
+                          <Text className="text-xs text-gray-500">Services</Text>
+                          <Text className="text-xs text-gray-700">+ NPR {formatMoney(installationAmount)}</Text>
+                        </View>
+                      </>
+                    )}
                     <View className="flex-row items-center justify-between py-1.5">
-                      <Text className="text-xs text-gray-500">Subtotal</Text>
+                      <Text className="text-xs text-gray-500">{installationAmount > 0 ? 'Subtotal (items + services)' : 'Subtotal'}</Text>
                       <Text className="text-xs font-semibold text-gray-700">NPR {formatMoney(subtotal)}</Text>
                     </View>
                     <View className="flex-row items-center justify-between py-1">
@@ -2230,8 +2393,14 @@ function TransactionForm({
 
           <FormSection icon="calculator-outline" title="Totals">
             <View className="mb-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-1">
+              {installationAmount > 0 && (
+                <View className="flex-row items-center justify-between py-1">
+                  <Text className="text-xs text-gray-500">Services included</Text>
+                  <Text className="text-xs text-gray-700">NPR {formatMoney(installationAmount)}</Text>
+                </View>
+              )}
               <View className="flex-row items-center justify-between py-1.5">
-                <Text className="text-xs text-gray-500">Subtotal</Text>
+                <Text className="text-xs text-gray-500">{installationAmount > 0 ? 'Subtotal (items + services)' : 'Subtotal'}</Text>
                 <Text className="text-xs font-semibold text-gray-700">NPR {formatMoney(subtotal)}</Text>
               </View>
               {/* The +/close toggle always sits in the same leading spot, whether the row
@@ -2301,6 +2470,11 @@ function TransactionForm({
               <Text className="text-sm font-bold text-gray-900">G. Total</Text>
               <Text className="text-base font-extrabold text-gray-900">NPR {formatMoney(grandTotal)}</Text>
             </View>
+            {(
+              <View className="mt-3">
+                <ServiceChargesTable rows={serviceRows} onChange={setServiceRows} accent="#EA580C" serviceNames={serviceNames} bought={type === 'purchase'} />
+              </View>
+            )}
             <TextInput
               value={note}
               onChangeText={setNote}
@@ -2801,8 +2975,9 @@ function BillItemsReadOnly({ tx }: { tx: BusinessTransaction }) {
           </BillCell>
         </View>
       ))}
+      {billServices(tx) > 0 && <BillTotal label="Services" value={`+ ${formatMoney(billServices(tx))}`} />}
       {(tx.discount_amount > 0 || tx.vat_amount > 0) && (
-        <BillTotal label="Sub-total" value={formatMoney(tx.items.reduce((sum, item) => sum + item.amount, 0))} />
+        <BillTotal label="Sub-total" value={formatMoney(tx.items.reduce((sum, item) => sum + item.amount, 0) + billServices(tx))} />
       )}
       {tx.discount_amount > 0 && <BillTotal label="Discount" value={`− ${formatMoney(tx.discount_amount)}`} />}
       {tx.vat_amount > 0 && <BillTotal label="VAT" value={`+ ${formatMoney(tx.vat_amount)}`} />}
@@ -2815,6 +2990,12 @@ function BillItemsReadOnly({ tx }: { tx: BusinessTransaction }) {
       />
     </View>
   );
+}
+
+/** A bill's service lines (installation, repair ...) added up: the VAT and the discount apply to these and the items together. */
+function billServices(tx: BusinessTransaction): number {
+  const lines = (tx.service_charges ?? []).reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
+  return lines > 0 ? lines : Number(tx.installation_charge ?? 0);
 }
 
 /** One read-only box of a bill's card - what a typed box of BillEditPopup shows, as plain text. */
@@ -3044,7 +3225,8 @@ export function TransactionDetailModal({
                 </>
               )}
 
-              {showSubtotal && <BillTotal label="Sub-total" value={formatMoney(subtotal)} />}
+              {billServices(tx) > 0 && <BillTotal label="Services" value={`+ ${formatMoney(billServices(tx))}`} />}
+              {showSubtotal && <BillTotal label="Sub-total" value={formatMoney(subtotal + billServices(tx))} />}
               {tx.discount_amount > 0 && <BillTotal label="Discount" value={`− ${formatMoney(tx.discount_amount)}`} />}
               {tx.vat_amount > 0 && <BillTotal label="VAT" value={`+ ${formatMoney(tx.vat_amount)}`} />}
               <BillTotal label="Total (NPR)" value={formatMoney(tx.amount)} tint={meta.bg} color={meta.color} strong />
