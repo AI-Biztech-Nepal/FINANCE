@@ -179,7 +179,7 @@ export function WebSidebarShell({
           accessibilityLabel="Go to the dashboard"
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, marginBottom: 20 }}
         >
-          <AppLogo size={34} />
+          <AppLogo size={28} />
           <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>
             {sellsVehicles(profile?.business_name?.trim() || profile?.full_name) ? 'DEEVA' : 'Finance Nepal'}
           </Text>
