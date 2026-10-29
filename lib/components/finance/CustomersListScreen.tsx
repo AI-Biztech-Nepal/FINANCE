@@ -11,6 +11,7 @@ import { useSupabaseInsert, useSupabaseQuery } from '../../hooks/useSupabase';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { usePartyDestination } from '../../hooks/usePartyDestination';
 import { useFreshLedgerArea } from '../../hooks/useFreshLedgerArea';
+import { withFrom } from '../../hooks/useCameFrom';
 import { supabase } from '../../supabase';
 import { BookPage, BookStats, BookTable, Pill, ToolbarButton, ToolbarSearch, money as bookMoney, useBookLayout, useBookToolbar, type BookColumn } from './BookKit';
 import { PartyBalance } from './PartyBalance';
@@ -528,7 +529,7 @@ type MergedRow =
   | { kind: 'app'; id: string; name: string; phone: string | null; entry: AppCustomer };
 
 /** What the summary cards narrow the list to: 'open' is everyone with a balance either way (the Net balance card). */
-type StatusFilter = 'all' | 'receivable' | 'payable' | 'open' | 'paid' | 'received';
+type StatusFilter = 'all' | 'receivable' | 'payable' | 'open';
 
 /** "No ledger type" in the bulk menu - the key can't clash with a real type's id. */
 const NO_TYPE = '__none__';
@@ -1102,11 +1103,7 @@ function LedgerList({ basePath }: { basePath: string }) {
         ? active
         : filter === 'open'
           ? active.filter((d) => d.status !== 'settled')
-          : filter === 'paid'
-            ? active.filter((d) => d.totalPaid > 0)
-            : filter === 'received'
-              ? active.filter((d) => d.totalReceived > 0)
-              : active.filter((d) => d.status === filter);
+          : active.filter((d) => d.status === filter);
     const q = search.trim().toLowerCase();
     // The type picked in the dropdown.
     const byType = typeFilter ? byStatus.filter((d) => typeIdOf(d) === typeFilter) : byStatus;
@@ -1440,8 +1437,8 @@ function LedgerList({ basePath }: { basePath: string }) {
   // --- pieces both layouts share ---
   // The four money cards, in the table's own colours - Total paid (red), Total received (green), Payable (red),
   // Receivable (green) - and how many ledgers there are. Paid and received count the period picked; payable and
-  // receivable are what is owed at its end. Each money card narrows the list to its parties (Total paid: those paid in
-  // the period, so the list adds up to the card), and a second tap shows everyone again.
+  // receivable are what is owed at its end. Total paid / Total received open the Total Paid / Total Received pages;
+  // Payable / Receivable narrow the list to those parties.
   const cashTotals = useMemo(() => {
     let paid = 0;
     let received = 0;
@@ -1458,16 +1455,14 @@ function LedgerList({ basePath }: { basePath: string }) {
         value={`NPR ${bookMoney(cashTotals.paid)}`}
         color={LEDGER_TONE.payable.text}
         accent={LEDGER_TONE.payable.base}
-        active={filter === 'paid'}
-        onPress={() => setFilter(filter === 'paid' ? 'all' : 'paid')}
+        onPress={() => router.push(withFrom(`${basePath}/paid`, 'ledger') as never)}
       />
       <SummaryCard
         label="Total received"
         value={`NPR ${bookMoney(cashTotals.received)}`}
         color={LEDGER_TONE.receivable.text}
         accent={LEDGER_TONE.receivable.base}
-        active={filter === 'received'}
-        onPress={() => setFilter(filter === 'received' ? 'all' : 'received')}
+        onPress={() => router.push(withFrom(`${basePath}/received`, 'ledger') as never)}
       />
       <SummaryCard
         label="Payable"

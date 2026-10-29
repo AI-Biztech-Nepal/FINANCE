@@ -1,12 +1,13 @@
 // lib/hooks/useCameFrom.ts
 import { router, useLocalSearchParams } from 'expo-router';
 
-/** The pages that open others and want to be returned to: a line on the Balance Sheet or the Profit & Loss opens its
- * report with `?from=...`, and that report shows a back button to it - on a wide screen too, where report pages
+/** The pages that open others and want to be returned to: a line on the Balance Sheet or the Profit & Loss (or a card
+ * on the Ledger) opens its report with `?from=...`, and that report shows a back button to it - on a wide screen too, where report pages
  * otherwise have none (the sidebar is the way around). */
 const PLACES = {
   'balance-sheet': { label: 'Balance Sheet', path: '/finance' },
   'profit-loss': { label: 'Profit & Loss', path: '/report' },
+  ledger: { label: 'Ledger', path: '/customers' },
 } as const;
 export type CameFromPlace = keyof typeof PLACES;
 
