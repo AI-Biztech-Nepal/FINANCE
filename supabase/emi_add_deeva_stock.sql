@@ -15,8 +15,9 @@
 --        price        what the vehicle's Sale bills come to
 --        customer     from the vehicle's latest Sale bill; the model from its Purchase bill
 --        first due    a month after that sale
---   Both: 12 monthly instalments, no down payment, 10% a month flat - instalment = price / 12 + 10% of the price, so
---   the total is 2.2 x the price. What has already been paid is not taken off here: the EMI page reads it from the
+--   Both: 12 monthly instalments, no down payment, 10% interest a year on what is still unpaid (reducing balance, the
+--   way banks work it out) - instalment = price x r x (1 + r)^12 / ((1 + r)^12 - 1) with r = 10% / 12, so the total
+--   is about 1.055 x the price. What has already been paid is not taken off here: the EMI page reads it from the
 --   Paid entries (vendor side) and the Received entries (customer side) that name the vehicle, so Remaining shows
 --   what is left. A vehicle that already has a plan on a side is skipped there, so running this again adds nothing
 --   twice.
@@ -99,7 +100,7 @@ begin
     (owner_id, direction, car, model, customer_id, customer_name, sale_price, down_payment,
      installment, months, interest_rate, first_due, product_id)
   select p.owner_id, 'purchase', p.name, p.model, p.customer_id, p.party_name, p.price, 0,
-         round(p.price / v_months + p.price * v_rate / 100, 2), v_months, v_rate,
+         round(p.price * (v_rate / 1200) * power(1 + v_rate / 1200, v_months) / (power(1 + v_rate / 1200, v_months) - 1), 2), v_months, v_rate,
          (coalesce(p.bill_day, current_date) + interval '1 month')::date, p.product_id
   from (
     select distinct on (s.k)
@@ -127,7 +128,7 @@ begin
     (owner_id, direction, car, model, customer_id, customer_name, sale_price, down_payment,
      installment, months, interest_rate, first_due, product_id)
   select p.owner_id, 'sale', p.name, p.model, p.customer_id, p.party_name, p.price, 0,
-         round(p.price / v_months + p.price * v_rate / 100, 2), v_months, v_rate,
+         round(p.price * (v_rate / 1200) * power(1 + v_rate / 1200, v_months) / (power(1 + v_rate / 1200, v_months) - 1), 2), v_months, v_rate,
          (p.bill_day + interval '1 month')::date, p.product_id
   from (
     select distinct on (s.k)
@@ -175,7 +176,7 @@ notify pgrst, 'reload schema';
 -- What is there now: every vehicle on EMI, both ways.
 select case e.direction when 'purchase' then 'We pay vendor' else 'Customer pays us' end as side,
        e.car as vehicle, e.model, e.customer_name as party, e.sale_price as price, e.installment as per_month,
-       e.months, e.interest_rate as percent_per_month, e.first_due
+       e.months, e.interest_rate as percent_a_year, e.first_due
 from public.emi_plans e
 join public.profiles pf on pf.id = e.owner_id
 where pf.business_name ~* 'dee?va[[:space:]]+auto' or pf.full_name ~* 'dee?va[[:space:]]+auto'

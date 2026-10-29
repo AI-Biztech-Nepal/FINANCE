@@ -3,7 +3,7 @@ import { round2 } from './money';
 import { itemListOf } from './accountFeatures';
 import type { BillItem, BusinessTransaction, EmiPlan, Product } from '../../types/database.types';
 
-/** What a stock item bought on EMI is set up with: 12 monthly instalments, 10% a month (flat). */
+/** What a stock item bought on EMI is set up with: 12 monthly instalments, 10% interest a year (reducing balance). */
 export const EMI_STOCK_MONTHS = 12;
 export const EMI_STOCK_RATE = 10;
 
@@ -12,11 +12,16 @@ const norm = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, 
 /** Which way a plan runs: 'sale' (the customer pays us) unless it says 'purchase' (we pay the vendor). */
 export const emiDirection = (plan: Pick<EmiPlan, 'direction'>): 'sale' | 'purchase' => (plan.direction === 'purchase' ? 'purchase' : 'sale');
 
-/** The monthly instalment with flat interest: the financed amount spread over the months, plus `ratePct` percent of
- * the financed amount every month. 100,000 over 12 months at 10% -> 8,333.33 + 10,000 = 18,333.33 a month. */
-export function flatInstallment(financed: number, months: number, ratePct: number): number {
+/** The monthly instalment (EMI) the way banks work it out: `ratePct` is the interest a year, charged each month (a
+ * twelfth of it) on what is still unpaid - reducing balance - so every instalment is the same and the interest in it
+ * shrinks as the loan is paid down. 100,000 over 12 months at 10% a year -> 8,791.59 a month, 5,499.08 interest in all.
+ * With no interest, the amount over the months. */
+export function emiInstallment(financed: number, months: number, ratePct: number): number {
   if (!(financed > 0) || !(months > 0)) return 0;
-  return round2(financed / months + (financed * (Number(ratePct) || 0)) / 100);
+  const r = (Number(ratePct) || 0) / 12 / 100;
+  if (!(r > 0)) return round2(financed / months);
+  const grow = Math.pow(1 + r, months);
+  return round2((financed * r * grow) / (grow - 1));
 }
 
 /** 'YYYY-MM-DD' `n` months after `iso`, on the same day (the month's last day when it has fewer). */
@@ -63,7 +68,7 @@ function billedBy(bills: BusinessTransaction[], type: 'purchase' | 'sale'): Map<
 /**
  * The EMI plans for every vehicle bought - in stock or since sold, none of them is paid up - one per item, on
  * instalments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to - the same figure
- * as the car's bill on Stock and Inventory; with no bill, the cost price), `months` instalments with `rate`% a month flat, the first one a month after the bill. What was
+ * as the car's bill on Stock and Inventory; with no bill, the cost price), `months` instalments with `rate`% interest a year (reducing balance), the first one a month after the bill. What was
  * already paid is not taken off here - the plan reads it from the Paid entries, so Remaining shows what is left. An
  * item that already has a purchase plan is left out, so adding twice makes no duplicates; one with no price anywhere
  * is reported in `noPrice` instead.
@@ -100,7 +105,7 @@ export function emiStockPlans(input: {
       customer_name: f?.bill.party_name ?? null,
       sale_price: price,
       down_payment: 0,
-      installment: flatInstallment(price, input.months, input.rate),
+      installment: emiInstallment(price, input.months, input.rate),
       months: input.months,
       interest_rate: input.rate,
       first_due: addMonths(f?.date ?? input.today, 1),
@@ -114,8 +119,8 @@ export function emiStockPlans(input: {
 
 /**
  * The other side of the same vehicles: each one already sold (it is on a Sale bill) is a plan for the customer to pay
- * us - the price its Sale bills come to, `months` instalments with `rate`% a month flat, the first one a month after
- * the sale, the model from the vehicle's Purchase bill. What the customer already paid is not taken off here: the plan
+ * us - the price its Sale bills come to, `months` instalments with `rate`% interest a year (reducing balance), the first one a
+ * month after the sale, the model from the vehicle's Purchase bill. What the customer already paid is not taken off here: the plan
  * reads it from their Received entries naming the vehicle. A vehicle that already has a sale plan is left out.
  */
 export function emiSoldPlans(input: {
@@ -144,7 +149,7 @@ export function emiSoldPlans(input: {
       customer_name: sale.bill.party_name ?? null,
       sale_price: price,
       down_payment: 0,
-      installment: flatInstallment(price, input.months, input.rate),
+      installment: emiInstallment(price, input.months, input.rate),
       months: input.months,
       interest_rate: input.rate,
       first_due: addMonths(sale.date, 1),

@@ -56,7 +56,7 @@ const WORDS: Record<Direction, { tab: string; party: string; price: string; paid
 /** The EMI tab of Rent & EMI, both ways. Customers pay us: every vehicle sold on instalments - what it comes to, what the
  * customer has paid (their Received entries naming the vehicle), what is overdue, what is left and when the next
  * instalment falls. We pay vendors: the stock bought on instalments, the same figures from the Paid entries on the
- * vendor's ledger - with a button that puts every vehicle bought in, 12 months at 10% a month (flat). */
+ * vendor's ledger - with a button that puts every vehicle bought in, 12 months at 10% a year (reducing balance). */
 export function EmiPanel({ userId, basePath, full }: { userId: string | undefined; basePath: string; full: boolean }) {
   const today = localTodayIso();
   const [boxWidth, setBoxWidth] = useState(0);
@@ -113,7 +113,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
       rows: [
         { label: 'Vehicles', value: String(n) },
         { label: words.price, value: `NPR ${money(price)}` },
-        { label: 'Plan', value: `${EMI_STOCK_MONTHS} months · ${EMI_STOCK_RATE}% a month, flat` },
+        { label: 'Plan', value: `${EMI_STOCK_MONTHS} months · ${EMI_STOCK_RATE}% a year, reducing balance` },
         ...(batch.noPrice.length ? [{ label: 'Left out (no purchase price)', value: String(batch.noPrice.length) }] : []),
       ],
       total: { label: dir === 'purchase' ? 'To pay with interest' : 'To collect with interest', value: `NPR ${money(total)}`, color: dir === 'purchase' ? '#B91C1C' : '#047857' },
@@ -176,7 +176,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
           render: (r) => (
             <View className="items-end">
               <Text className="text-[12.5px] font-medium text-gray-900">{money(Number(r.p.installment))}</Text>
-              <Text className="text-[11px] text-gray-400">{`${r.p.months} mo${Number(r.p.interest_rate) > 0 ? ` · ${Number(r.p.interest_rate)}%/mo` : ''} · ${r.dueCount} due`}</Text>
+              <Text className="text-[11px] text-gray-400">{`${r.p.months} mo${Number(r.p.interest_rate) > 0 ? ` · ${Number(r.p.interest_rate)}%/yr` : ''} · ${r.dueCount} due`}</Text>
             </View>
           ),
         },
@@ -256,8 +256,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
             </Text>
             <Text className="text-[12px] text-gray-500">
               {dir === 'purchase'
-                ? `Every vehicle you bought, in stock or sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a month on the price (flat), from the vendor on its purchase bill. What you already paid is taken off in Remaining.`
-                : `Every vehicle you have sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a month on the sale price (flat), from the customer on its sale bill. What they already paid is taken off in Remaining.`}
+                ? `Every vehicle you bought, in stock or sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the vendor on its purchase bill. What you already paid is taken off in Remaining.`
+                : `Every vehicle you have sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the customer on its sale bill. What they already paid is taken off in Remaining.`}
               {batch.noPrice.length > 0 ? ` ${batch.noPrice.length} with no purchase price yet ${batch.noPrice.length === 1 ? 'is' : 'are'} left out.` : ''}
             </Text>
           </View>

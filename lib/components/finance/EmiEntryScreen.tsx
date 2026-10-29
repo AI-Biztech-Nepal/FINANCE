@@ -15,7 +15,7 @@ import { useConfirmSave } from './ConfirmSave';
 import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { money } from './BookKit';
-import { EMI_STOCK_RATE, addMonths, emiDirection, emiFigures, flatInstallment } from '../../utils/emi';
+import { EMI_STOCK_RATE, addMonths, emiDirection, emiFigures, emiInstallment } from '../../utils/emi';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
@@ -108,10 +108,10 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const [focused, setFocused] = useState<'car' | 'customer' | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Financed: the price less the down payment. The instalment it comes to: the financed amount over the months, plus the
-  // interest - the rate % of the financed amount every month (flat).
+  // Financed: the price less the down payment. The instalment it comes to, the way banks work it out: the yearly rate,
+  // charged each month on what is still unpaid (reducing balance), every month the same.
   const financed = Math.max(0, (Number(price) || 0) - (Number(down) || 0));
-  const suggestedInstallment = flatInstallment(financed, Number(months), Number(rate) || 0);
+  const suggestedInstallment = emiInstallment(financed, Number(months), Number(rate) || 0);
 
   const carOptions = useMemo<SuggestOption[]>(() => {
     const q = car.trim().toLowerCase();
@@ -188,7 +188,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         { label: buying ? 'Purchase price' : 'Sale price', value: `NPR ${formatMoney(Number(price) || 0)}` },
         { label: 'Down payment', value: `NPR ${formatMoney(Number(down) || 0)}` },
         { label: 'Instalment', value: `NPR ${formatMoney(Number(installment) || 0)} × ${months} months` },
-        ...(Number(rate) > 0 ? [{ label: 'Interest', value: `${Number(rate)}% a month, flat` }] : []),
+        ...(Number(rate) > 0 ? [{ label: 'Interest', value: `${Number(rate)}% a year, reducing balance` }] : []),
         { label: 'First due', value: toBsHistoryLabel(firstDue) },
       ],
       total: { label: buying ? 'To pay' : 'To collect', value: `NPR ${formatMoney(figures.total)}`, color: buying ? '#B91C1C' : '#047857' },
@@ -357,7 +357,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
           {field(buying ? 'Purchase price (NPR)' : 'Sale price (NPR)', price, setPrice, { numeric: true, at: 'price', next: 'down' })}
           {field('Down payment (NPR)', down, setDown, { numeric: true, at: 'down', next: 'months' })}
           {field('Months', months, setMonths, { numeric: true, basis: 110, at: 'months', next: 'rate' })}
-          {field('Interest (% / month)', rate, setRate, { numeric: true, basis: 130, at: 'rate', next: 'inst' })}
+          {field('Interest (% / year)', rate, setRate, { numeric: true, basis: 130, at: 'rate', next: 'inst' })}
           <Box
             label="Instalment / month (NPR)"
             basis={190}
@@ -425,7 +425,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         <Text className="mt-2 text-[11px] text-gray-400">
           {figures.next ? `Next instalment: ${toBsHistoryLabel(figures.next)}. ` : ''}
           {buying ? "Payments are the Paid entries on the vendor's ledger naming this item." : "Payments are the customer's Received entries naming this vehicle."}
-          {' '}The instalment is the financed amount ÷ months, plus the interest rate % of it every month (flat).
+          {' '}The instalment is worked out the way banks do: the yearly interest, charged each month on what is still unpaid (reducing balance), so every month pays the same.
         </Text>
       </View>
 
