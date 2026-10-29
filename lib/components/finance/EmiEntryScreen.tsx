@@ -1,6 +1,6 @@
 // lib/components/finance/EmiEntryScreen.tsx
-import { useMemo, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { View, Text, Pressable, ScrollView, type TextInput } from 'react-native';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
@@ -10,6 +10,7 @@ import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { KeyInput } from './KeyInput';
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
+import { readKey } from '../../utils/webKeys';
 import { useConfirmSave } from './ConfirmSave';
 import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
@@ -68,6 +69,31 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const [rate, setRate] = useState(plan ? String(plan.interest_rate ?? 0) : String(EMI_STOCK_RATE));
   const buying = direction === 'purchase';
   const partyWord = buying ? 'Vendor' : 'Customer';
+  // Enter walks the form box by box: Vehicle > Model > customer / vendor > price > down payment > months > interest >
+  // instalment > first due > remarks, and Enter on the last box (or Ctrl+Enter anywhere) saves.
+  const box = {
+    car: useRef<TextInput | null>(null),
+    model: useRef<TextInput | null>(null),
+    customer: useRef<TextInput | null>(null),
+    price: useRef<TextInput | null>(null),
+    down: useRef<TextInput | null>(null),
+    months: useRef<TextInput | null>(null),
+    rate: useRef<TextInput | null>(null),
+    inst: useRef<TextInput | null>(null),
+    firstDue: useRef<TextInput | null>(null),
+    note: useRef<TextInput | null>(null),
+    closedOn: useRef<TextInput | null>(null),
+  };
+  // A moment later, so a list or popup that was just closed has let go of the keyboard first.
+  const focusBox = (k: keyof typeof box) => setTimeout(() => box[k].current?.focus(), 30);
+  // Enter in a name box with nothing to pick from moves on; Ctrl+Enter saves.
+  const enterMovesTo = (next: keyof typeof box) => (e: unknown) => {
+    const k = readKey(e);
+    if (k.key !== 'Enter') return;
+    k.prevent();
+    if (k.ctrl) void handleSave();
+    else focusBox(next);
+  };
   const [car, setCar] = useState(plan?.car ?? '');
   const [model, setModel] = useState(plan?.model ?? '');
   const [customerId, setCustomerId] = useState<string | null>(plan?.customer_id ?? null);
@@ -127,22 +153,25 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
     else router.replace(`${basePath}/rent?tab=emi` as never);
   };
 
-  async function pickCustomer(opt: SuggestOption) {
+  /** Resolves to whether someone is now picked (false when the new-name popup was cancelled or the save failed). */
+  async function pickCustomer(opt: SuggestOption): Promise<boolean> {
     if (opt.key === ADD_PARTY_KEY) {
-      if (!userId) return;
+      if (!userId) return false;
       const asked = await askNewParty({ name: customerName.trim(), kind: buying ? 'vendor' : 'customer' });
-      if (!asked) return;
+      if (!asked) return false;
       try {
         const created = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, ...withType(asked) });
         setCustomerId(created.id);
         setCustomerName(created.name);
+        return true;
       } catch (err) {
         showAlert('Could not add customer', getErrorMessage(err));
+        return false;
       }
-      return;
     }
     setCustomerId(opt.key);
     setCustomerName(opt.label);
+    return true;
   }
 
   async function handleSave() {
@@ -216,9 +245,25 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
 
   const inputStyle = (on: boolean) =>
     ({ borderWidth: 1, borderColor: on ? accent : '#D1D5DB', backgroundColor: '#FFFFFF', outlineStyle: 'none', ...(on ? { boxShadow: `0 0 0 3px ${accent}29` } : null) }) as object;
-  const field = (label: string, value: string, set: (v: string) => void, opts: { numeric?: boolean; placeholder?: string; basis?: number } = {}) => (
+  const field = (
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    opts: { numeric?: boolean; placeholder?: string; basis?: number; at?: keyof typeof box; next?: keyof typeof box | 'save' } = {}
+  ) => (
     <Box label={label} basis={opts.basis ?? 170}>
-      <KeyInput value={value} onChangeText={set} onRequestSave={handleSave} accent={accent} placeholder={opts.placeholder ?? '0'} numeric={opts.numeric} align={opts.numeric ? 'right' : undefined} accessibilityLabel={label} />
+      <KeyInput
+        value={value}
+        onChangeText={set}
+        inputRef={opts.at ? box[opts.at] : undefined}
+        onEnter={opts.next === 'save' ? () => void handleSave() : opts.next ? () => focusBox(opts.next as keyof typeof box) : undefined}
+        onRequestSave={handleSave}
+        accent={accent}
+        placeholder={opts.placeholder ?? '0'}
+        numeric={opts.numeric}
+        align={opts.numeric ? 'right' : undefined}
+        accessibilityLabel={label}
+      />
     </Box>
   );
 
@@ -257,7 +302,15 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               value={car}
               onChangeText={setCar}
               options={focused === 'car' ? carOptions : []}
-              onSelectOption={(opt) => setCar(opt.label)}
+              onSelectOption={(opt, via) => {
+                setCar(opt.label);
+                if (via !== 'tab') focusBox('model');
+              }}
+              onKeyPress={enterMovesTo('model')}
+              inputRef={(el) => {
+                box.car.current = el;
+              }}
+              autoFocus={!plan}
               onFocus={() => setFocused('car')}
               onBlur={() => setFocused((f) => (f === 'car' ? null : f))}
               placeholder="Vehicle number…"
@@ -268,7 +321,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               compact
             />
           </Box>
-          {field('Model', model, setModel, { placeholder: 'Model' })}
+          {field('Model', model, setModel, { placeholder: 'Model', at: 'model', next: 'customer' })}
           <Box label={partyWord} basis={260} raised={focused === 'customer'}>
             <SuggestInput
               value={customerName}
@@ -277,7 +330,16 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
                 setCustomerId(null);
               }}
               options={focused === 'customer' ? customerOptions : []}
-              onSelectOption={(opt) => void pickCustomer(opt)}
+              onSelectOption={(opt, via) => {
+                void pickCustomer(opt).then((picked) => {
+                  if (picked && via !== 'tab') focusBox('price');
+                });
+              }}
+              onKeyPress={enterMovesTo('price')}
+              inputRef={(el) => {
+                box.customer.current = el;
+              }}
+              enterAddsNew
               onFocus={() => setFocused('customer')}
               onBlur={() => setFocused((f) => (f === 'customer' ? null : f))}
               placeholder={buying ? 'Who did you buy it from?' : 'Who bought it?'}
@@ -292,10 +354,10 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
           </Box>
         </View>
         <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
-          {field(buying ? 'Purchase price (NPR)' : 'Sale price (NPR)', price, setPrice, { numeric: true })}
-          {field('Down payment (NPR)', down, setDown, { numeric: true })}
-          {field('Months', months, setMonths, { numeric: true, basis: 110 })}
-          {field('Interest (% / month)', rate, setRate, { numeric: true, basis: 130 })}
+          {field(buying ? 'Purchase price (NPR)' : 'Sale price (NPR)', price, setPrice, { numeric: true, at: 'price', next: 'down' })}
+          {field('Down payment (NPR)', down, setDown, { numeric: true, at: 'down', next: 'months' })}
+          {field('Months', months, setMonths, { numeric: true, basis: 110, at: 'months', next: 'rate' })}
+          {field('Interest (% / month)', rate, setRate, { numeric: true, basis: 130, at: 'rate', next: 'inst' })}
           <Box
             label="Instalment / month (NPR)"
             basis={190}
@@ -309,14 +371,28 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               ) : null
             }
           >
-            <KeyInput value={installment} onChangeText={setInstallment} onRequestSave={handleSave} accent={accent} placeholder="0" numeric align="right" accessibilityLabel="Instalment" />
+            <KeyInput
+              value={installment}
+              onChangeText={setInstallment}
+              inputRef={box.inst}
+              onEnter={() => {
+                if (!installment.trim() && suggestedInstallment > 0) setInstallment(String(suggestedInstallment));
+                focusBox('firstDue');
+              }}
+              onRequestSave={handleSave}
+              accent={accent}
+              placeholder="0"
+              numeric
+              align="right"
+              accessibilityLabel="Instalment"
+            />
           </Box>
           <Box label="First instalment due" basis={180}>
-            <KeyboardDateInput value={firstDue} onChange={setFirstDue} onRequestSave={handleSave} accent={accent} />
+            <KeyboardDateInput value={firstDue} onChange={setFirstDue} inputRef={box.firstDue} onEnter={() => focusBox('note')} onRequestSave={handleSave} accent={accent} />
           </Box>
         </View>
         <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
-          {field('Remarks', note, setNote, { placeholder: 'Optional', basis: 300 })}
+          {field('Remarks', note, setNote, { placeholder: 'Optional', basis: 300, at: 'note', next: 'save' })}
           <Box
             label="Completed on"
             basis={180}
@@ -328,7 +404,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               </Pressable>
             }
           >
-            <KeyboardDateInput value={closedOn} onChange={setClosedOn} onRequestSave={handleSave} accent={accent} />
+            <KeyboardDateInput value={closedOn} onChange={setClosedOn} inputRef={box.closedOn} onEnter={() => void handleSave()} onRequestSave={handleSave} accent={accent} />
           </Box>
         </View>
       </View>
