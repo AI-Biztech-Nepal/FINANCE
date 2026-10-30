@@ -15,7 +15,7 @@ import { useConfirmSave } from './ConfirmSave';
 import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { money } from './BookKit';
-import { EMI_STOCK_RATE, addMonths, billedVehicle, emiDirection, emiFigures, emiInstallment } from '../../utils/emi';
+import { EMI_STOCK_RATE, addMonths, billedVehicle, emiDirection, emiInstallment } from '../../utils/emi';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
@@ -56,8 +56,6 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const { data: products } = useSupabaseQuery('products', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
   const { data: customers } = useSupabaseQuery('customers', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
   const { data: bills } = useSupabaseQuery('business_transactions', { filters: owner, all: true, enabled: !!userId });
-  const { data: received } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId && !!plan });
-  const { data: paidOut } = useSupabaseQuery('vendor_ledger_entries', { filters: owner, all: true, enabled: !!userId && !!plan });
   const createPlan = useSupabaseInsert('emi_plans');
   const updatePlan = useSupabaseUpdate('emi_plans');
   const deletePlan = useSupabaseDelete('emi_plans');
@@ -140,22 +138,6 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
     return list;
   }, [customers, customerName]);
 
-  const paid = useMemo(() => {
-    if (!plan || (!buying && !customerId)) return 0;
-    const k = car.trim().replace(/\s+/g, ' ').toLowerCase();
-    const names = (note: string | null) => (note ?? '').split(' · ')[0].trim().replace(/\s+/g, ' ').toLowerCase() === k;
-    // What the customer paid (their Received entries), or what we paid on the car (every Paid entry naming it - the way
-    // Stock and Inventory count it, whichever vendor it was recorded under).
-    return buying
-      ? (paidOut ?? []).filter((e) => e.entry_type === 'credit' && names(e.note)).reduce((s, e) => s + Number(e.amount), 0)
-      : (received ?? []).filter((e) => e.customer_id === customerId && e.entry_type === 'credit' && names(e.note)).reduce((s, e) => s + Number(e.amount), 0);
-  }, [received, paidOut, buying, plan, customerId, car]);
-  const figures = emiFigures(
-    { down_payment: down, installment, months: Number(months) || 1, first_due: firstDue || addMonths(today, 1), closed_on: closedOn || null },
-    paid,
-    today
-  );
-
   const goBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace(`${basePath}/rent?tab=emi` as never);
@@ -201,7 +183,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         { label: 'EMI', value: `NPR ${formatMoney(installment)} a month` },
         { label: 'First due', value: toBsHistoryLabel(firstDue) },
       ],
-      total: { label: buying ? 'To pay' : 'To collect', value: `NPR ${formatMoney(figures.total)}`, color: buying ? '#B91C1C' : '#047857' },
+      total: { label: buying ? 'To pay' : 'To collect', value: `NPR ${formatMoney(round2(down + totalPayable))}`, color: buying ? '#B91C1C' : '#047857' },
     });
     if (!ok) return;
     const values = {
@@ -418,28 +400,6 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
           {field('Remarks', note, setNote, { placeholder: 'Optional', basis: 300, at: 'note', next: 'save' })}
         </View>
-      </View>
-
-      <View className="rounded-2xl border border-gray-200 bg-white p-4" style={{ boxShadow: CARD_SHADOW }}>
-        {[
-          { label: `${buying ? 'To pay' : 'To collect'}${down > 0 ? ' (down + instalments)' : ''}`, value: figures.total, color: '#111827' },
-          { label: buying ? 'Paid so far' : 'Received so far', value: figures.paid, color: '#047857' },
-          { label: `Due by today (${figures.dueCount} of ${months || 0} instalments)`, value: figures.dueByNow, color: '#111827' },
-          { label: 'Overdue', value: figures.overdue, color: '#B91C1C' },
-          { label: 'Remaining', value: figures.remaining, color: '#111827' },
-        ].map((f) => (
-          <View key={f.label} className="flex-row items-center justify-between border-b border-gray-50 py-2">
-            <Text className="text-xs text-gray-500">{f.label}</Text>
-            <Text className="text-[13px] font-bold" style={{ color: f.color }}>{`NPR ${money(f.value)}`}</Text>
-          </View>
-        ))}
-        <Text className="mt-2 text-[11px] text-gray-400">
-          {figures.next ? `Next instalment: ${toBsHistoryLabel(figures.next)}. ` : ''}
-          {down > 0 ? `The down payment counts as ${buying ? 'paid' : 'received'}. ` : ''}
-          {buying
-            ? "Instalments paid are the Paid entries on the vendor's ledger naming this item."
-            : "Instalments received are the customer's Received entries naming this vehicle."}
-        </Text>
       </View>
 
       <View className="flex-row items-center justify-end" style={{ gap: 10 }}>
