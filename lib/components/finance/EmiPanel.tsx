@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { useSupabaseInsert, useSupabaseQuery } from '../../hooks/useSupabase';
 import { BookStat, BookStats, BookTable, money, type BookColumn } from './BookKit';
 import { useConfirmSave } from './ConfirmSave';
-import { EMI_STOCK_MONTHS, EMI_STOCK_RATE, addMonths, emiDirection, emiFigures, emiSoldPlans, emiStockPlans, vendorsByVehicle } from '../../utils/emi';
+import { EMI_STOCK_MONTHS, EMI_STOCK_RATE, addMonths, billedVehicle, emiDirection, emiFigures, emiSoldPlans, emiStockPlans, vendorsByVehicle } from '../../utils/emi';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import { journalOf } from '../../utils/journalVoucher';
@@ -27,6 +27,7 @@ const COLS = {
   sn: [30, 0],
   vehicle: [92, 3],
   party: [96, 3],
+  price: [84, 1],
   inst: [70, 1],
   plan: [70, 1],
   started: [88, 1],
@@ -94,8 +95,6 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
       byVehicle.get(k)![dir].push(figures(p, dir));
     }
     const vendors = vendorsByVehicle(bills ?? []);
-    // A vehicle still in stock is not on EMI, whatever vendor plan it has: it comes in once it is sold.
-    const inStock = new Set((products ?? []).filter((p) => Number(p.stock_level) > 0).map((p) => key(p.name)));
     // One line a vehicle. Should it have two plans on a side, each pair takes a line, so none is hidden.
     return [...byVehicle.entries()]
       .flatMap(([k, side]) =>
@@ -109,12 +108,14 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
             purchase,
             // With no plan to the vendor, still who sold it.
             vendor: purchase?.p.customer_name || vendors.get(k) || '',
+            // What its bills come to; with no bill, the plan's own price.
+            salePrice: billedVehicle(bills ?? [], 'sale', sale?.p.car ?? purchase!.p.car)?.price ?? (Number(sale?.p.sale_price) || 0),
+            purchasePrice: billedVehicle(bills ?? [], 'purchase', sale?.p.car ?? purchase!.p.car)?.price ?? (Number(purchase?.p.sale_price) || 0),
           };
         })
       )
-      .filter((r) => r.sale || !inStock.has(key(r.car)))
       .sort((a, b) => Number(!a.sale) - Number(!b.sale) || a.car.localeCompare(b.car));
-  }, [plans, received, paidOut, bills, products, today]);
+  }, [plans, received, paidOut, bills, today]);
   type Row = (typeof allRows)[number];
   const rows = useMemo(() => allRows.filter((r) => show === 'all' || r[show]), [allRows, show]);
   const sum = (f: (r: Row) => number, list: Row[] = rows) => round2(list.reduce((s, r) => s + f(r), 0));
@@ -184,13 +185,15 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
       {text}
     </Text>
   );
+  // The amount on installments: the plan's price less its down payment.
+  const emiAmount = (p?: EmiPlan) => (p ? round2(Math.max(0, Number(p.sale_price) - Number(p.down_payment))) : 0);
   const planText = (p?: EmiPlan) => (p ? `${p.months} mo${Number(p.interest_rate) > 0 ? ` · ${Number(p.interest_rate)}%` : ''}` : '—');
   // The date entered on the EMI form; the first installment falls a month after it. The customer's plan if it has one.
   const startedOn = (r: Row) => toBsHistoryLabel(addMonths((r.sale ?? r.purchase)!.p.first_due, -1));
   // A tap on the line opens the customer's plan; the vendor's name opens the vendor's.
   const vendorCell = (r: Row) =>
     r.sale && r.purchase ? (
-      <Pressable onPress={() => open(r.purchase!.p.id)}>{line(r.vendor || '—', 'font-medium text-blue-700')}</Pressable>
+      <Pressable onPress={() => open(r.purchase!.p.id)}>{line(r.vendor || '—')}</Pressable>
     ) : (
       line(r.vendor || '—')
     );
@@ -205,10 +208,14 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
         { key: 'sn', label: 'SN', ...w('sn'), render: (_r, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'vehicle', label: 'Vehicle', ...w('vehicle'), render: (r) => line(r.car, 'font-semibold text-gray-900') },
         { key: 'customer', label: 'Customer', ...w('party'), render: (r) => line(r.sale?.p.customer_name || '—') },
-        { key: 'instIn', label: 'Customer EMI', ...w('inst'), align: 'right', render: (r) => fig(Number(r.sale?.p.installment)) },
+        { key: 'saleIn', label: 'Sale price', ...w('price'), align: 'right', render: (r) => fig(r.salePrice) },
+        { key: 'amountIn', label: 'EMI amount', ...w('price'), align: 'right', render: (r) => fig(emiAmount(r.sale?.p)) },
+        { key: 'instIn', label: 'Customer EMI', ...w('inst'), align: 'right', render: (r) => fig(Number(r.sale?.p.installment), IN, true) },
         { key: 'planIn', label: 'Plan', ...w('plan'), render: (r) => line(planText(r.sale?.p), 'text-gray-500') },
         { key: 'vendor', label: 'Vendor', ...w('party'), render: vendorCell },
-        { key: 'instOut', label: 'Vendor EMI', ...w('inst'), align: 'right', render: (r) => fig(Number(r.purchase?.p.installment)) },
+        { key: 'purchaseOut', label: 'Purchase price', ...w('price'), align: 'right', render: (r) => fig(r.purchasePrice) },
+        { key: 'amountOut', label: 'EMI amount', ...w('price'), align: 'right', render: (r) => fig(emiAmount(r.purchase?.p)) },
+        { key: 'instOut', label: 'Vendor EMI', ...w('inst'), align: 'right', render: (r) => fig(Number(r.purchase?.p.installment), OUT, true) },
         { key: 'planOut', label: 'Plan', ...w('plan'), render: (r) => line(planText(r.purchase?.p), 'text-gray-500') },
         { key: 'started', label: 'EMI started', ...w('started'), render: (r) => line(startedOn(r), 'text-gray-700') },
       ]
@@ -239,7 +246,11 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
         label: count,
         cells: full
           ? {
+              saleIn: fig(sum((r) => r.salePrice)),
+              amountIn: fig(sum((r) => emiAmount(r.sale?.p))),
               instIn: fig(sum((r) => monthly(r, 'sale')), IN, true),
+              purchaseOut: fig(sum((r) => r.purchasePrice)),
+              amountOut: fig(sum((r) => emiAmount(r.purchase?.p))),
               instOut: fig(sum((r) => monthly(r, 'purchase')), OUT, true),
             }
           : { money: inAndOut(sum((r) => monthly(r, 'sale')), sum((r) => monthly(r, 'purchase'))) },
