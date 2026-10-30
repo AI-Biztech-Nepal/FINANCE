@@ -251,6 +251,9 @@ export interface BookColumn<T> {
   label: string;
   /** Fixed width; leave out for the one column that takes the rest. */
   width?: number;
+  /** With `width` as its narrowest: this column's share of the room left over, so a table's columns fill its width
+   * (and give way together when it is short) with the header, rows and footer staying in line. */
+  grow?: number;
   align?: 'left' | 'right';
   render: (row: T, index: number) => ReactNode;
 }
@@ -312,9 +315,17 @@ export function BookTable<T>({
   const shown = limited ? Array.from({ length: maxRows! }, (_, i) => heights.rows[i]) : [];
   const scrollHeight = limited && shown.every((h) => h != null) ? shown.reduce((a, b) => a + b, 0) + heights.head + heights.foot : undefined;
   const padX = dense ? 'px-1.5' : 'px-2.5';
-  const cellStyle = (c: BookColumn<T>) => (c.width ? { width: c.width } : { flex: 1, minWidth: 0 });
+  const growStyle = (grow: number, basis: number) => ({ flexGrow: grow, flexShrink: 1, flexBasis: basis, minWidth: 0 });
+  const cellStyle = (c: BookColumn<T>) =>
+    c.grow != null ? growStyle(c.grow, c.width ?? 0) : c.width ? { width: c.width } : { flex: 1, minWidth: 0 };
   const lastIndex = columns.length - 1;
   const footerStart = footer ? columns.findIndex((c) => c.key in footer.cells) : -1;
+  // A footer label spans the columns before the first total, so with growing columns it grows as they do together.
+  const growing = columns.some((c) => c.grow != null);
+  const spanned = columns.slice(0, Math.max(0, footerStart));
+  const footerLabelStyle = growing
+    ? growStyle(spanned.reduce((s, c) => s + (c.grow ?? 0), 0), spanned.reduce((s, c) => s + (c.width ?? 0), 0))
+    : undefined;
 
   const content = (
     <>
@@ -371,12 +382,12 @@ export function BookTable<T>({
           style={limited ? ({ position: 'sticky', bottom: 0, zIndex: 10 } as any) : undefined}
           onLayout={limited ? (e) => measure('foot', e.nativeEvent.layout.height) : undefined}
         >
-          <Text className={`${CELL} flex-1 text-right text-[12.5px] font-bold text-gray-700`}>{footer.label}</Text>
+          <Text className={`${CELL} ${growing ? '' : 'flex-1'} text-right text-[12.5px] font-bold text-gray-700`} style={footerLabelStyle}>{footer.label}</Text>
           {columns.slice(footerStart).map((c, i, arr) => (
             <View
               key={c.key}
               className={`${padX} py-2 ${i < arr.length - 1 ? 'border-r border-gray-200' : ''}`}
-              style={{ width: c.width, alignItems: 'flex-end', justifyContent: 'center' }}
+              style={[c.grow != null ? cellStyle(c) : { width: c.width }, { alignItems: 'flex-end', justifyContent: 'center' }]}
             >
               {footer.cells[c.key]}
             </View>
