@@ -65,6 +65,13 @@ function billedBy(bills: BusinessTransaction[], type: 'purchase' | 'sale'): Map<
   return found;
 }
 
+/** What one vehicle's `type` bills (Sale or Purchase) come to - read as Stock and Inventory reads them (see billedBy) -
+ * and the model on its latest bill line; null when it is on no such bill. */
+export function billedVehicle(bills: BusinessTransaction[], type: 'purchase' | 'sale', name: string): { price: number; model: string } | null {
+  const found = billedBy(bills, type).get(norm(name));
+  return found && found.total > 0 ? { price: round2(found.total), model: found.line.model?.trim() ?? '' } : null;
+}
+
 /**
  * The EMI plans for every vehicle bought - in stock or since sold, none of them is paid up - one per item, on
  * instalments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to - the same figure

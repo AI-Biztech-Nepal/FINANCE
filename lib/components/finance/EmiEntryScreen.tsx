@@ -15,7 +15,7 @@ import { useConfirmSave } from './ConfirmSave';
 import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { money } from './BookKit';
-import { EMI_STOCK_RATE, addMonths, emiDirection, emiFigures, emiInstallment } from '../../utils/emi';
+import { EMI_STOCK_RATE, addMonths, billedVehicle, emiDirection, emiFigures, emiInstallment } from '../../utils/emi';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
@@ -55,6 +55,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const owner: Record<string, string> = userId ? { owner_id: userId } : {};
   const { data: products } = useSupabaseQuery('products', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
   const { data: customers } = useSupabaseQuery('customers', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
+  const { data: bills } = useSupabaseQuery('business_transactions', { filters: owner, all: true, enabled: !!userId });
   const { data: received } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId && !!plan });
   const { data: paidOut } = useSupabaseQuery('vendor_ledger_entries', { filters: owner, all: true, enabled: !!userId && !!plan });
   const createPlan = useSupabaseInsert('emi_plans');
@@ -69,20 +70,16 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const [rate, setRate] = useState(plan ? String(plan.interest_rate ?? 0) : String(EMI_STOCK_RATE));
   const buying = direction === 'purchase';
   const partyWord = buying ? 'Vendor' : 'Customer';
-  // Enter walks the form box by box: Vehicle > Model > customer / vendor > price > down payment > months > interest >
-  // instalment > first due > remarks, and Enter on the last box (or Ctrl+Enter anywhere) saves.
+  // Enter walks the form box by box: Vehicle > customer / vendor > months > interest > instalment > first due > remarks,
+  // and Enter on the last box (or Ctrl+Enter anywhere) saves.
   const box = {
     car: useRef<TextInput | null>(null),
-    model: useRef<TextInput | null>(null),
     customer: useRef<TextInput | null>(null),
-    price: useRef<TextInput | null>(null),
-    down: useRef<TextInput | null>(null),
     months: useRef<TextInput | null>(null),
     rate: useRef<TextInput | null>(null),
     inst: useRef<TextInput | null>(null),
     firstDue: useRef<TextInput | null>(null),
     note: useRef<TextInput | null>(null),
-    closedOn: useRef<TextInput | null>(null),
   };
   // A moment later, so a list or popup that was just closed has let go of the keyboard first.
   const focusBox = (k: keyof typeof box) => setTimeout(() => box[k].current?.focus(), 30);
@@ -95,22 +92,26 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
     else focusBox(next);
   };
   const [car, setCar] = useState(plan?.car ?? '');
-  const [model, setModel] = useState(plan?.model ?? '');
   const [customerId, setCustomerId] = useState<string | null>(plan?.customer_id ?? null);
   const [customerName, setCustomerName] = useState(plan?.customer_name ?? '');
-  const [price, setPrice] = useState(plan ? String(plan.sale_price) : '');
-  const [down, setDown] = useState(plan ? String(plan.down_payment) : '');
   const [installment, setInstallment] = useState(plan ? String(plan.installment) : '');
   const [months, setMonths] = useState(plan ? String(plan.months) : '12');
   const [firstDue, setFirstDue] = useState(plan?.first_due ?? addMonths(today, 1));
-  const [closedOn, setClosedOn] = useState(plan?.closed_on ?? '');
   const [note, setNote] = useState(plan?.note ?? '');
   const [focused, setFocused] = useState<'car' | 'customer' | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // The price is the vehicle's own bill - its Sale bill, or its Purchase bill when we pay the vendor - and the model its
+  // Purchase bill's, as "Add all" reads them; with no such bill, what the plan was saved with. The down payment and
+  // Completed on are not asked: a plan keeps what it was saved with (a new one has none).
+  const billed = useMemo(() => billedVehicle(bills ?? [], buying ? 'purchase' : 'sale', car), [bills, buying, car]);
+  const price = billed?.price ?? (plan ? Number(plan.sale_price) || 0 : 0);
+  const model = useMemo(() => billedVehicle(bills ?? [], 'purchase', car)?.model || plan?.model || '', [bills, car, plan]);
+  const down = plan ? Number(plan.down_payment) || 0 : 0;
+  const closedOn = plan?.closed_on ?? '';
   // Financed: the price less the down payment. The instalment it comes to, the way banks work it out: the yearly rate,
   // charged each month on what is still unpaid (reducing balance), every month the same.
-  const financed = Math.max(0, (Number(price) || 0) - (Number(down) || 0));
+  const financed = Math.max(0, price - down);
   const suggestedInstallment = emiInstallment(financed, Number(months), Number(rate) || 0);
 
   const carOptions = useMemo<SuggestOption[]>(() => {
@@ -143,7 +144,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
       : (received ?? []).filter((e) => e.customer_id === customerId && e.entry_type === 'credit' && names(e.note)).reduce((s, e) => s + Number(e.amount), 0);
   }, [received, paidOut, buying, plan, customerId, car]);
   const figures = emiFigures(
-    { down_payment: Number(down) || 0, installment: Number(installment) || 0, months: Number(months) || 1, first_due: firstDue, closed_on: closedOn || null },
+    { down_payment: down, installment: Number(installment) || 0, months: Number(months) || 1, first_due: firstDue, closed_on: closedOn || null },
     paid,
     today
   );
@@ -183,10 +184,8 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
     const ok = await confirmSave({
       title: `Save ${plan ? 'changes to this' : 'this'} EMI?`,
       rows: [
-        { label: 'Vehicle', value: [car.trim(), model.trim()].filter(Boolean).join(' · ') },
+        { label: 'Vehicle', value: [car.trim(), model].filter(Boolean).join(' · ') },
         { label: partyWord, value: customerName.trim() },
-        { label: buying ? 'Purchase price' : 'Sale price', value: `NPR ${formatMoney(Number(price) || 0)}` },
-        { label: 'Down payment', value: `NPR ${formatMoney(Number(down) || 0)}` },
         { label: 'Instalment', value: `NPR ${formatMoney(Number(installment) || 0)} × ${months} months` },
         ...(Number(rate) > 0 ? [{ label: 'Interest', value: `${Number(rate)}% a year, reducing balance` }] : []),
         { label: 'First due', value: toBsHistoryLabel(firstDue) },
@@ -196,11 +195,11 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
     if (!ok) return;
     const values = {
       car: car.trim(),
-      model: model.trim() || null,
+      model: model || null,
       customer_id: customerId,
       customer_name: customerName.trim() || null,
-      sale_price: round2(Number(price) || 0),
-      down_payment: round2(Number(down) || 0),
+      sale_price: round2(price),
+      down_payment: round2(down),
       installment: round2(Number(installment) || 0),
       months: Math.round(Number(months)),
       first_due: firstDue,
@@ -304,9 +303,9 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               options={focused === 'car' ? carOptions : []}
               onSelectOption={(opt, via) => {
                 setCar(opt.label);
-                if (via !== 'tab') focusBox('model');
+                if (via !== 'tab') focusBox('customer');
               }}
-              onKeyPress={enterMovesTo('model')}
+              onKeyPress={enterMovesTo('customer')}
               inputRef={(el) => {
                 box.car.current = el;
               }}
@@ -321,7 +320,6 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               compact
             />
           </Box>
-          {field('Model', model, setModel, { placeholder: 'Model', at: 'model', next: 'customer' })}
           <Box label={partyWord} basis={260} raised={focused === 'customer'}>
             <SuggestInput
               value={customerName}
@@ -332,10 +330,10 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               options={focused === 'customer' ? customerOptions : []}
               onSelectOption={(opt, via) => {
                 void pickCustomer(opt).then((picked) => {
-                  if (picked && via !== 'tab') focusBox('price');
+                  if (picked && via !== 'tab') focusBox('months');
                 });
               }}
-              onKeyPress={enterMovesTo('price')}
+              onKeyPress={enterMovesTo('months')}
               inputRef={(el) => {
                 box.customer.current = el;
               }}
@@ -354,8 +352,6 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
           </Box>
         </View>
         <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
-          {field(buying ? 'Purchase price (NPR)' : 'Sale price (NPR)', price, setPrice, { numeric: true, at: 'price', next: 'down' })}
-          {field('Down payment (NPR)', down, setDown, { numeric: true, at: 'down', next: 'months' })}
           {field('Months', months, setMonths, { numeric: true, basis: 110, at: 'months', next: 'rate' })}
           {field('Interest (% / year)', rate, setRate, { numeric: true, basis: 130, at: 'rate', next: 'inst' })}
           <Box
@@ -393,25 +389,13 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         </View>
         <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
           {field('Remarks', note, setNote, { placeholder: 'Optional', basis: 300, at: 'note', next: 'save' })}
-          <Box
-            label="Completed on"
-            basis={180}
-            action={
-              <Pressable onPress={() => setClosedOn(closedOn ? '' : today)} hitSlop={6}>
-                <Text className="text-[11px] font-semibold" style={{ color: accent }}>
-                  {closedOn ? 'Clear' : 'Today'}
-                </Text>
-              </Pressable>
-            }
-          >
-            <KeyboardDateInput value={closedOn} onChange={setClosedOn} inputRef={box.closedOn} onEnter={() => void handleSave()} onRequestSave={handleSave} accent={accent} />
-          </Box>
         </View>
       </View>
 
       <View className="rounded-2xl border border-gray-200 bg-white p-4" style={{ boxShadow: CARD_SHADOW }}>
         {[
-          { label: buying ? 'To pay (down + instalments)' : 'To collect (down + instalments)', value: figures.total, color: '#111827' },
+          { label: buying ? 'Purchase price (its Purchase bill)' : 'Sale price (its Sale bill)', value: price, color: '#111827' },
+          { label: `${buying ? 'To pay' : 'To collect'}${down > 0 ? ' (down + instalments)' : ''}`, value: figures.total, color: '#111827' },
           { label: buying ? 'Paid so far' : 'Received so far', value: figures.paid, color: '#047857' },
           { label: `Due by today (${figures.dueCount} of ${months || 0} instalments)`, value: figures.dueByNow, color: '#111827' },
           { label: 'Overdue', value: figures.overdue, color: '#B91C1C' },
@@ -424,9 +408,11 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         ))}
         <Text className="mt-2 text-[11px] text-gray-400">
           {figures.next ? `Next instalment: ${toBsHistoryLabel(figures.next)}. ` : ''}
+          {car.trim() && !billed && !plan ? `No ${buying ? 'Purchase' : 'Sale'} bill for this vehicle yet, so the instalment is not worked out - type it in. ` : ''}
+          {down > 0 ? `The down payment counts as ${buying ? 'paid' : 'received'}. ` : ''}
           {buying
-            ? "The down payment counts as paid. Instalments paid are the Paid entries on the vendor's ledger naming this item."
-            : "The down payment counts as received. Instalments received are the customer's Received entries naming this vehicle."}
+            ? "Instalments paid are the Paid entries on the vendor's ledger naming this item."
+            : "Instalments received are the customer's Received entries naming this vehicle."}
           {' '}The instalment is worked out the way banks do: the yearly interest, charged each month on what is still unpaid (reducing balance), so every month pays the same.
         </Text>
       </View>
