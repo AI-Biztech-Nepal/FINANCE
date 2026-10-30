@@ -19,6 +19,7 @@ import { shortDateLabel, toBsHistoryLabel } from '../../utils/nepaliDate';
 import { formatMoney, round2 } from '../../utils/money';
 import { DateFilterButton, DayStepButton } from './DateRangeFilter';
 import { BookTable, useBookToolbar, type BookColumn } from './BookKit';
+import { vehicleCosts, vehicleKey } from '../../utils/vehicleCost';
 import { MONEY } from './moneyColors';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { ENTRY_KINDS } from './entryKinds';
@@ -347,6 +348,7 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
       rowPressable={(r) => !!(r.edit || r.bill || r.journal)}
       highlight={(r) => r.kind === 'opening'}
       // A date band above each day's entries, when the view spans more than one day (the opening line has none).
+      stickyHeader
       groupOf={dayLabel ? (((r: BookRow) => (r.kind === 'opening' ? undefined : dayLabel(r.date))) as unknown as (row: BookRow) => string) : undefined}
       footer={footer}
     />
@@ -861,15 +863,8 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
     const via = (bankId: string | null) => (bankId ? (accountName.get(bankId) ?? 'Other account') : 'Cash');
     const keyOf = (bankId: string | null): AccountKey => bankId ?? CASH;
     const blank = { invoiceNo: null, discount: null, amount: null, cashIn: null, cashOut: null, balance: null, purchasePrice: null, account: null, moves: [] as Move[] };
-    // A vehicle account: each vehicle's purchase price - its purchase bill's rate (the latest bill), else its stock
-    // item's cost price - looked up by the vehicle an entry names (a bill's item, a payment's remark).
-    const vehicleKey = (name: string | null | undefined) => (name ?? '').split(' · ')[0].trim().replace(/\s+/g, ' ').toLowerCase();
-    const costByVehicle = new Map<string, number>();
-    if (showItems) {
-      for (const p of products ?? []) if (p.purchase_price != null) costByVehicle.set(vehicleKey(p.name), Number(p.purchase_price));
-      const purchases = (transactions ?? []).filter((t) => t.type === 'purchase').sort((a, b) => (a.bill_date ?? a.created_at).localeCompare(b.bill_date ?? b.created_at));
-      for (const t of purchases) for (const i of t.items ?? []) if (Number(i.rate) > 0) costByVehicle.set(vehicleKey(i.description), Number(i.rate));
-    }
+    // A vehicle account: each vehicle's purchase price, looked up by the vehicle an entry names.
+    const costByVehicle = showItems ? vehicleCosts(products ?? [], transactions ?? []) : new Map<string, number>();
     const costOf = (name: string | null | undefined) => (showItems ? costByVehicle.get(vehicleKey(name)) ?? null : null);
 
     // Every account's balance at the start of the day. Transfers count here -

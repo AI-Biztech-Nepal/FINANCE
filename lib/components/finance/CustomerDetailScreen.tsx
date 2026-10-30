@@ -945,10 +945,11 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const rows = useMemo(() => [...statementAsc].reverse(), [statementAsc]);
 
   // Every ledger reads as one line per vehicle (item), in the Ledger table's own columns: what it was
-  // bought or sold for (Balance), what has been paid or received on it, and what is left (Payable / Receivable).
+  // bought or sold for (Transaction), what has been paid or received on it, and what is left (Balance).
   // A bill names its vehicles as items (a bill of one vehicle counts in full, else each vehicle's own line); a
-  // payment names its vehicle first in its remark (the Paid and Received pages write it so). Anything that names
-  // no vehicle on a bill here is a line of its own, so the totals still match the name card. A line opens its
+  // payment names its vehicle first in its remark (the Paid and Received pages write it so). A payment naming
+  // none goes on the vehicle when there is only the one it can be for. Anything else that names no vehicle on a
+  // bill here is a line of its own, so the totals still match the name card. A line opens its
   // entries in a popup; an entry there opens as it does everywhere (a bill's detail, a payment's edit form).
   const vehicleGroups = useMemo<VehicleGroup[] | null>(() => {
     const key = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -1000,7 +1001,9 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       if (!e) continue;
       const side = r.vendor ? 'v' : 'c';
       const named = e.note ? groups.get(`${side}|${key(e.note.split(' · ')[0])}`) : undefined;
-      const g = named ?? groupFor(`row|${r.key}`, [r.label, r.detail].filter(Boolean).join(' · '));
+      const onSide = list.filter((x) => x.key.startsWith(`${side}|`));
+      const onlyVehicle = e.entry_type === 'credit' && !journalOf(e.note) && onSide.length === 1 ? onSide[0] : undefined;
+      const g = named ?? onlyVehicle ?? groupFor(`row|${r.key}`, [r.label, r.detail].filter(Boolean).join(' · '));
       const amount = Number(e.amount);
       // Owed to a vendor without a bill (a daily wage ...); money paid back to a customer.
       const part: Partial<VehiclePart> = r.vendor
@@ -1479,18 +1482,22 @@ interface VehiclePart {
   received: number;
 }
 
+/** What is left on a vehicle: red for a vendor, green for a customer, with a minus when it has run the other way. */
+function LeftFigure({ value, vendor }: { value: number; vendor: boolean }) {
+  if (!value) return <Text className="text-[12.5px] text-gray-300">—</Text>;
+  return (
+    <Text className="text-[12.5px] font-bold" style={{ color: vendor ? MONEY.out.text : MONEY.in.text }} numberOfLines={1}>
+      {`${value < 0 ? '-' : ''}${formatMoney(Math.abs(value))}`}
+    </Text>
+  );
+}
+
 /** A vehicle account's ledger page: one line per vehicle, in the Ledger table's columns. */
 function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: boolean; onOpen: (g: VehicleGroup) => void }) {
   // What is left on the line, as the Ledger reads it: to pay a vendor, to receive from a customer.
   const net = (g: VehicleGroup) => (g.side === 'vendor' ? round2(g.billed - g.paid + g.received) : round2(g.billed + g.paid - g.received));
-  const payable = (g: VehicleGroup) => {
-    const n = net(g);
-    return g.side === 'vendor' ? Math.max(0, n) : Math.max(0, -n);
-  };
-  const receivable = (g: VehicleGroup) => {
-    const n = net(g);
-    return g.side === 'vendor' ? Math.max(0, -n) : Math.max(0, n);
-  };
+  // The line's balance: red on a vendor's line, green on a customer's, with a minus when it has run the other way.
+  const left = (g: VehicleGroup) => <LeftFigure value={net(g)} vendor={g.side === 'vendor'} />;
   const fig = (v: number, color: string, bold = true) =>
     v ? (
       <Text className={`text-[12.5px] ${bold ? 'font-bold' : 'font-medium'}`} style={{ color }} numberOfLines={1}>
@@ -1520,11 +1527,10 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
             </View>
           ),
         },
-        { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (g) => fig(g.billed, '#111827') },
+        { key: 'transaction', label: 'Transaction', width: 120, align: 'right', render: (g) => fig(g.billed, '#111827') },
         { key: 'paid', label: 'Total Paid', width: 110, align: 'right', render: (g) => fig(g.paid, MONEY.out.text) },
         { key: 'received', label: 'Total Received', width: 120, align: 'right', render: (g) => fig(g.received, MONEY.in.text) },
-        { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (g) => fig(payable(g), MONEY.out.text) },
-        { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (g) => fig(receivable(g), MONEY.in.text) },
+        { key: 'left', label: 'Balance', width: 120, align: 'right', render: left },
       ]
     : [
         {
@@ -1534,7 +1540,7 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
             <View style={{ minWidth: 0, gap: 2 }}>
               <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>{g.name}</Text>
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-                {[g.billed ? `Balance ${formatMoney(g.billed)}` : null, g.paid ? `Paid ${formatMoney(g.paid)}` : null, g.received ? `Received ${formatMoney(g.received)}` : null]
+                {[g.billed ? `Transaction ${formatMoney(g.billed)}` : null, g.paid ? `Paid ${formatMoney(g.paid)}` : null, g.received ? `Received ${formatMoney(g.received)}` : null]
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
@@ -1543,12 +1549,15 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
         },
         {
           key: 'left',
-          label: 'Left',
+          label: 'Balance',
           width: 120,
           align: 'right',
-          render: (g) => (payable(g) ? fig(payable(g), MONEY.out.text) : fig(receivable(g), MONEY.in.text)),
+          render: left,
         },
       ];
+  // To receive less to pay, across the lines.
+  const owed = sum((g) => (g.side === 'vendor' ? -net(g) : net(g)));
+  const leftTotal = fig(Math.abs(owed), owed < 0 ? MONEY.out.text : MONEY.in.text);
   return (
     <BookTable
       columns={columns}
@@ -1560,16 +1569,12 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
         label: `${groups.length} ${groups.length === 1 ? 'line' : 'lines'} · Total`,
         cells: full
           ? {
-              balance: fig(sum((g) => g.billed), '#111827'),
+              transaction: fig(sum((g) => g.billed), '#111827'),
               paid: fig(sum((g) => g.paid), MONEY.out.text),
               received: fig(sum((g) => g.received), MONEY.in.text),
-              payable: fig(sum(payable), MONEY.out.text),
-              receivable: fig(sum(receivable), MONEY.in.text),
+              left: leftTotal,
             }
-          : (() => {
-              const left = round2(sum(payable) - sum(receivable));
-              return { left: fig(Math.abs(left), left >= 0 ? MONEY.out.text : MONEY.in.text) };
-            })(),
+          : { left: leftTotal },
       }}
     />
   );
@@ -1600,8 +1605,7 @@ function VehicleEntries({
     return {
       row: r,
       part,
-      payable: vendor ? Math.max(0, running) : Math.max(0, -running),
-      receivable: vendor ? Math.max(0, -running) : Math.max(0, running),
+      left: running,
     };
   });
   type Line = (typeof lines)[number];
@@ -1654,11 +1658,10 @@ function VehicleEntries({
             </View>
           ),
         },
-        { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (l) => fig(l.part.billed, '#111827') },
+        { key: 'transaction', label: 'Transaction', width: 120, align: 'right', render: (l) => fig(l.part.billed, '#111827') },
         { key: 'paid', label: 'Total Paid', width: 110, align: 'right', render: (l) => fig(l.part.paid, MONEY.out.text) },
         { key: 'received', label: 'Total Received', width: 120, align: 'right', render: (l) => fig(l.part.received, MONEY.in.text) },
-        { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (l) => fig(l.payable, MONEY.out.text) },
-        { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (l) => fig(l.receivable, MONEY.in.text) },
+        { key: 'left', label: 'Balance', width: 120, align: 'right', render: (l) => <LeftFigure value={l.left} vendor={vendor} /> },
         actions,
       ]
     : [
@@ -1681,7 +1684,7 @@ function VehicleEntries({
           align: 'right',
           render: (l) => fig(l.part.billed || l.part.paid || l.part.received, l.part.billed ? '#111827' : l.part.paid ? MONEY.out.text : MONEY.in.text),
         },
-        { key: 'left', label: 'Left', width: 110, align: 'right', render: (l) => (l.payable ? fig(l.payable, MONEY.out.text) : fig(l.receivable, MONEY.in.text)) },
+        { key: 'left', label: 'Balance', width: 110, align: 'right', render: (l) => <LeftFigure value={l.left} vendor={vendor} /> },
         actions,
       ];
   return (
@@ -1696,13 +1699,12 @@ function VehicleEntries({
         label: `${lines.length} ${lines.length === 1 ? 'entry' : 'entries'} · Total`,
         cells: full
           ? {
-              balance: fig(sum((l) => l.part.billed), '#111827'),
+              transaction: fig(sum((l) => l.part.billed), '#111827'),
               paid: fig(sum((l) => l.part.paid), MONEY.out.text),
               received: fig(sum((l) => l.part.received), MONEY.in.text),
-              payable: fig(last?.payable ?? 0, MONEY.out.text),
-              receivable: fig(last?.receivable ?? 0, MONEY.in.text),
+              left: <LeftFigure value={last?.left ?? 0} vendor={vendor} />,
             }
-          : { left: last?.payable ? fig(last.payable, MONEY.out.text) : fig(last?.receivable ?? 0, MONEY.in.text) },
+          : { left: <LeftFigure value={last?.left ?? 0} vendor={vendor} /> },
       }}
     />
   );

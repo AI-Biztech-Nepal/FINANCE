@@ -686,18 +686,16 @@ function PartyLedgerPopup({
   };
 
   const buildVehicleReport = (): PrintReport => {
-    const left = (b: number) => (round2(b) > 0 ? bookMoney(b) : '');
-    const owe = (b: number) => (round2(b) < 0 ? bookMoney(-b) : '');
     return {
       title: `Ledger - ${name}`,
       businessName,
       subtitle: [data.typeName, data.row.phone].filter(Boolean).join(' · ') || undefined,
       printedOn: toBsHistoryLabel(localTodayIso()),
       summary: [
-        { label: 'Balance (original price)', value: `NPR ${bookMoney(priceTotal)}` },
+        { label: 'Transaction (original price)', value: `NPR ${bookMoney(priceTotal)}` },
         { label: 'Total paid', value: `NPR ${bookMoney(paidTotal)}` },
         { label: 'Total received', value: `NPR ${bookMoney(receivedTotal)}` },
-        { label: round2(closing) < 0 ? 'Payable' : 'Receivable', value: `NPR ${bookMoney(Math.abs(closing))}` },
+        { label: 'Balance', value: `NPR ${balanceText(closing)}` },
         { label: 'Entries', value: String(lines.length) },
       ],
       sections: [
@@ -706,11 +704,10 @@ function PartyLedgerPopup({
             { label: 'SN' },
             { label: 'Date' },
             { label: 'Details' },
-            { label: 'Balance', align: 'right' },
+            { label: 'Transaction', align: 'right' },
             { label: 'Total paid', align: 'right' },
             { label: 'Total received', align: 'right' },
-            { label: 'Receivable', align: 'right' },
-            { label: 'Payable', align: 'right' },
+            { label: 'Balance', align: 'right' },
           ],
           rows: lines.map((l, i) => [
             String(i + 1),
@@ -719,14 +716,13 @@ function PartyLedgerPopup({
             moneyOf(l.item) === 'billed' ? bookMoney(l.item.amount) : '',
             moneyOf(l.item) === 'paid' ? bookMoney(l.item.amount) : '',
             moneyOf(l.item) === 'received' ? bookMoney(l.item.amount) : '',
-            left(l.balance),
-            owe(l.balance),
+            balanceText(l.balance),
           ]),
-          footer: ['', '', 'Total', bookMoney(priceTotal), bookMoney(paidTotal), bookMoney(receivedTotal), left(closing), owe(closing)],
+          footer: ['', '', 'Total', bookMoney(priceTotal), bookMoney(paidTotal), bookMoney(receivedTotal), balanceText(closing)],
           emptyText: 'No entries yet.',
         },
       ],
-      note: 'Balance is the original price: what was billed. Receivable and Payable are what is left to receive or pay after each line.',
+      note: 'Transaction is the original price: what was billed. Balance is what is left after each line: Dr = they owe you, Cr = you owe them.',
     };
   };
 
@@ -795,8 +791,8 @@ function PartyLedgerPopup({
     </Text>
   );
 
-  // A vehicle account's popup, in the Ledger table's own columns and colours: Balance (the price billed, black),
-  // Total paid (red), Total received (green), and what is left to receive (green) or pay (red) after the line.
+  // A vehicle account's popup, in the Ledger table's own columns and colours: Transaction (the price billed, black),
+  // Total paid (red), Total received (green), and the Balance left to receive (green) or pay (red) after the line.
   const kindFigure = (l: Line, kind: 'billed' | 'paid' | 'received', color: string) => figure(moneyOf(l.item) === kind ? l.item.amount : 0, color);
   const leftToReceive = (l: Line) => figure(round2(l.balance) > 0 ? l.balance : 0, LEDGER_TONE.receivable.text);
   const leftToPay = (l: Line) => figure(round2(l.balance) < 0 ? -l.balance : 0, LEDGER_TONE.payable.text);
@@ -805,11 +801,10 @@ function PartyLedgerPopup({
         { key: 'sn', label: 'SN', width: 52, render: (_l, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'date', label: 'Date', width: 120, render: (l) => <Text className="text-[12.5px] text-gray-600">{toBsHistoryLabel(l.item.day)}</Text> },
         { key: 'details', label: 'Details', render: (l) => detailsCell(l, false) },
-        { key: 'price', label: 'Balance', width: 118, align: 'right', render: (l) => kindFigure(l, 'billed', PRICE_COLOR) },
+        { key: 'price', label: 'Transaction', width: 118, align: 'right', render: (l) => kindFigure(l, 'billed', PRICE_COLOR) },
         { key: 'paid', label: 'Total paid', width: 112, align: 'right', render: (l) => kindFigure(l, 'paid', LEDGER_TONE.payable.text) },
         { key: 'received', label: 'Total received', width: 124, align: 'right', render: (l) => kindFigure(l, 'received', LEDGER_TONE.receivable.text) },
-        { key: 'receivable', label: 'Receivable', width: 108, align: 'right', render: leftToReceive },
-        { key: 'payable', label: 'Payable', width: 104, align: 'right', render: leftToPay },
+        { key: 'left', label: 'Balance', width: 118, align: 'right', render: (l) => (round2(l.balance) < 0 ? leftToPay(l) : leftToReceive(l)) },
       ]
     : [
         { key: 'details', label: 'Details', render: (l) => detailsCell(l, true) },
@@ -827,35 +822,26 @@ function PartyLedgerPopup({
         },
         {
           key: 'left',
-          label: 'Left',
+          label: 'Balance',
           width: 100,
           align: 'right',
           render: (l) => (round2(l.balance) < 0 ? leftToPay(l) : leftToReceive(l)),
         },
       ];
-  const vehicleFooter = roomy
-    ? {
+  const vehicleFooter = {
+    ...(roomy
+      ? {
         price: <Text className="text-[13px] font-extrabold" style={{ color: PRICE_COLOR }}>{bookMoney(priceTotal)}</Text>,
         paid: <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.payable.text }}>{bookMoney(paidTotal)}</Text>,
         received: <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.receivable.text }}>{bookMoney(receivedTotal)}</Text>,
-        receivable: (
-          <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.receivable.text }}>
-            {round2(closing) > 0 ? bookMoney(closing) : '—'}
-          </Text>
-        ),
-        payable: (
-          <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.payable.text }}>
-            {round2(closing) < 0 ? bookMoney(-closing) : '—'}
-          </Text>
-        ),
-      }
-    : {
-        left: (
-          <Text className="text-[13px] font-extrabold" style={{ color: round2(closing) < 0 ? LEDGER_TONE.payable.text : LEDGER_TONE.receivable.text }}>
-            {bookMoney(Math.abs(closing))}
-          </Text>
-        ),
-      };
+        }
+      : null),
+    left: (
+      <Text className="text-[13px] font-extrabold" style={{ color: round2(closing) < 0 ? LEDGER_TONE.payable.text : LEDGER_TONE.receivable.text }}>
+        {bookMoney(Math.abs(closing))}
+      </Text>
+    ),
+  };
 
   const columns: BookColumn<Line>[] = roomy
     ? [
@@ -1731,9 +1717,9 @@ function LedgerList({ basePath }: { basePath: string }) {
       vehicles
         ? {
             // The original price: all that was billed with them, before any payment - what is still to be
-            // received or paid is in Receivable and Payable.
+            // received or paid is in Balance.
             key: 'balance',
-            label: 'Balance',
+            label: 'Transaction',
             width: 120,
             align: 'right',
             render: (d) => priceText(priceOf(d)),
@@ -1769,36 +1755,56 @@ function LedgerList({ basePath }: { basePath: string }) {
             <Text className="text-[12.5px] text-gray-300">—</Text>
           ),
       },
-      {
-        // The part of the balance that is money going out (red), blank when it runs the other way.
-        key: 'payable',
-        label: 'Payable',
-        width: 105,
-        align: 'right',
-        render: (d) =>
-          d.status === 'payable' ? (
-            <Text className="text-[12.5px] font-bold" style={{ color: LEDGER_TONE.payable.text }}>
-              {bookMoney(-d.balance)}
-            </Text>
-          ) : (
-            <Text className="text-[12.5px] text-gray-300">—</Text>
-          ),
-      },
-      {
-        // The part of the balance that is money coming in (green), blank when it runs the other way.
-        key: 'receivable',
-        label: 'Receivable',
-        width: 105,
-        align: 'right',
-        render: (d) =>
-          d.status === 'receivable' ? (
-            <Text className="text-[12.5px] font-bold" style={{ color: LEDGER_TONE.receivable.text }}>
-              {bookMoney(d.balance)}
-            </Text>
-          ) : (
-            <Text className="text-[12.5px] text-gray-300">—</Text>
-          ),
-      },
+      ...((vehicles
+        ? [
+            {
+              // What is left with them: to receive (green) or to pay (red).
+              key: 'left',
+              label: 'Balance',
+              width: 120,
+              align: 'right',
+              render: (d: PartyRowData) =>
+                d.status === 'payable' || d.status === 'receivable' ? (
+                  <Text className="text-[12.5px] font-bold" style={{ color: d.status === 'payable' ? LEDGER_TONE.payable.text : LEDGER_TONE.receivable.text }}>
+                    {bookMoney(Math.abs(d.balance))}
+                  </Text>
+                ) : (
+                  <Text className="text-[12.5px] text-gray-300">—</Text>
+                ),
+            },
+          ]
+        : [
+            {
+              // The part of the balance that is money going out (red), blank when it runs the other way.
+              key: 'payable',
+              label: 'Payable',
+              width: 105,
+              align: 'right',
+              render: (d) =>
+                d.status === 'payable' ? (
+                  <Text className="text-[12.5px] font-bold" style={{ color: LEDGER_TONE.payable.text }}>
+                    {bookMoney(-d.balance)}
+                  </Text>
+                ) : (
+                  <Text className="text-[12.5px] text-gray-300">—</Text>
+                ),
+            },
+            {
+              // The part of the balance that is money coming in (green), blank when it runs the other way.
+              key: 'receivable',
+              label: 'Receivable',
+              width: 105,
+              align: 'right',
+              render: (d) =>
+                d.status === 'receivable' ? (
+                  <Text className="text-[12.5px] font-bold" style={{ color: LEDGER_TONE.receivable.text }}>
+                    {bookMoney(d.balance)}
+                  </Text>
+                ) : (
+                  <Text className="text-[12.5px] text-gray-300">—</Text>
+                ),
+            },
+          ]) as BookColumn<PartyRowData>[]),
     ];
 
     // The listed parties added up, column by column, in the line under the table - which stays in view while
@@ -1812,11 +1818,13 @@ function LedgerList({ basePath }: { basePath: string }) {
       ) : (
         <Text className="text-[12.5px] text-gray-300">—</Text>
       );
+    const owedTotal = sum((d) => (d.status === 'receivable' || d.status === 'payable' ? d.balance : 0));
     const tableFooter = {
       label: `${sortedRows.length} ${sortedRows.length === 1 ? 'party' : 'parties'} · Total`,
       cells: {
         totalPaid: total(sum((d) => d.totalPaid), LEDGER_TONE.payable.text),
         totalReceived: total(sum((d) => d.totalReceived), LEDGER_TONE.receivable.text),
+        left: total(Math.abs(owedTotal), owedTotal < 0 ? LEDGER_TONE.payable.text : LEDGER_TONE.receivable.text),
         receivable: total(sum((d) => (d.status === 'receivable' ? d.balance : 0)), LEDGER_TONE.receivable.text),
         payable: total(sum((d) => (d.status === 'payable' ? -d.balance : 0)), LEDGER_TONE.payable.text),
         balance: vehicles ? priceText(sum(priceOf), true) : <PartyBalance position={footerPosition} compact />,
@@ -1847,8 +1855,8 @@ function LedgerList({ basePath }: { basePath: string }) {
             />
             {vehicles && (
               <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
-                Balance is the original price: everything billed with them, before any payment. Receivable is what is still to be received and
-                Payable what is still to be paid, after what has been received or paid.
+                Transaction is the original price: everything billed with them, before any payment. Balance is what is still to be received
+                (green) or paid (red), after what has been received or paid.
               </Text>
             )}
           </View>

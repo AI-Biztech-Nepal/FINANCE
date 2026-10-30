@@ -15,7 +15,9 @@ import type { PrintReport } from '../../utils/printReport';
 import { useReportActions } from './PrintButton';
 import type { FeedItem } from './TransactionsScreen';
 import { tidyName } from '../../utils/nameCaps';
+import { useSupabaseQuery } from '../../hooks/useSupabase';
 import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
+import { vehicleCosts, vehicleKey } from '../../utils/vehicleCost';
 import type { AccountTransfer, BusinessTransaction, BusinessTransactionType } from '../../../types/database.types';
 
 type FilterKey = 'all' | BusinessTransactionType;
@@ -34,7 +36,7 @@ const PILL = {
   purchase: { label: 'Purchase bill', color: MONEY.out.text, bg: MONEY.out.bg },
   creditSale: { label: 'Credit sale', color: MONEY.in.text, bg: MONEY.in.bg },
   creditPurchase: { label: 'Credit purchase', color: MONEY.out.text, bg: MONEY.out.bg },
-  transfer: { label: 'Transfer', color: '#4338CA', bg: '#EEF2FF' },
+  transfer: { label: 'Contra', color: '#4338CA', bg: '#EEF2FF' },
   journal: { label: 'Journal', color: '#B45309', bg: '#FFFBEB' },
 } satisfies Record<string, PillStyle>;
 
@@ -51,6 +53,8 @@ interface Row {
   invoiceNo: string | null;
   discount: number | null;
   amount: number | null;
+  /** A vehicle account: what the vehicle the entry is about was bought for. */
+  purchasePrice: number | null;
   cashIn: number | null;
   cashOut: number | null;
   /** A journal voucher's entry: shown with its amount, but no cash moved and it is left out of the totals. */
@@ -189,7 +193,12 @@ export function TransactionsBook({
 
   // A vehicle account's sale and purchase bills read with the item (car) on them in place of the remark.
   const showItems = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);
+  const owner: Record<string, string> = profile?.id ? { owner_id: profile.id } : {};
+  const { data: products } = useSupabaseQuery('products', { filters: owner, enabled: !!profile?.id && showItems });
+  const { data: allBills } = useSupabaseQuery('business_transactions', { filters: owner, all: true, enabled: !!profile?.id && showItems });
   const rows = useMemo<Row[]>(() => {
+    const costByVehicle = showItems ? vehicleCosts(products ?? [], allBills ?? []) : new Map<string, number>();
+    const costOf = (name: string | null | undefined) => (showItems ? costByVehicle.get(vehicleKey(name)) ?? null : null);
     const goParty = (id: string) => () => basePath && router.push(`${basePath}/customer/${id}` as never);
     return shownFeed.map((item): Row => {
       const group = groupLabel(item.date);
@@ -220,6 +229,7 @@ export function TransactionsBook({
           invoiceNo: isExpense ? null : t.bill_no?.trim() || null,
           discount: isExpense ? null : discount,
           amount: isExpense ? null : t.amount,
+          purchasePrice: isExpense ? costOf(t.party_name) : costOf((t.items ?? [])[0]?.description),
           cashIn: null,
           cashOut: isExpense ? t.amount : null,
           onPress: () => onOpenTx(t),
@@ -251,6 +261,7 @@ export function TransactionsBook({
           invoiceNo: null,
           discount: null,
           amount: voucher ? e.amount : !isIn && !manual ? e.amount : null,
+          purchasePrice: costOf(e.note),
           cashIn: voucher ? null : isIn ? e.amount : null,
           cashOut: voucher ? null : !isIn && manual ? e.amount : null,
           journal: !!voucher,
@@ -275,6 +286,7 @@ export function TransactionsBook({
           invoiceNo: null,
           discount: null,
           amount: voucher ? e.amount : isPayment ? null : e.amount,
+          purchasePrice: costOf(e.note),
           cashIn: null,
           cashOut: voucher ? null : isPayment ? e.amount : null,
           journal: !!voucher,
@@ -293,12 +305,13 @@ export function TransactionsBook({
         invoiceNo: null,
         discount: null,
         amount: tr.amount,
+        purchasePrice: null,
         cashIn: null,
         cashOut: null,
         onDelete: () => onDeleteTransfer(tr),
       };
     });
-  }, [shownFeed, basePath, categoryNameById, bankAccountNameById, accountName, onOpenTx, onDeleteTx, onDeleteTransfer, calendarMode, showItems]);
+  }, [shownFeed, basePath, categoryNameById, bankAccountNameById, accountName, onOpenTx, onDeleteTx, onDeleteTransfer, calendarMode, showItems, products, allBills]);
 
   const stats = useMemo(() => {
     const sums = { sale: 0, purchase: 0, expense: 0 };
@@ -387,6 +400,7 @@ export function TransactionsBook({
         { key: 'discount', label: 'Discount', width: 76, align: 'right', render: (r) => num(r.discount, '#4B5563') },
         // A sale or purchase bill's amount is plain black; only money paid (red) and received (green) is coloured.
         { key: 'amount', label: 'Bill amount', width: 100, align: 'right', render: (r) => num(r.amount, [PILL.sale, PILL.purchase, PILL.creditSale, PILL.creditPurchase].includes(r.pill) ? '#111827' : r.pill.color) },
+        ...(showItems ? [{ key: 'purchase', label: 'Purchase price', width: 112, align: 'right' as const, render: (r: Row) => num(r.purchasePrice, '#4B5563') }] : []),
         { key: 'cashIn', label: 'Cash in', width: 96, align: 'right', render: (r) => num(r.cashIn, '#047857', true) },
         { key: 'cashOut', label: 'Cash out', width: 96, align: 'right', render: (r) => num(r.cashOut, '#B91C1C', true) },
         { key: 'act', label: '', width: 40, align: 'right', render: trash },
@@ -472,6 +486,7 @@ export function TransactionsBook({
             { label: 'Type' },
             { label: 'Discount', align: 'right' },
             { label: 'Bill amount', align: 'right' },
+            ...(showItems ? [{ label: 'Purchase price', align: 'right' as const }] : []),
             { label: 'Cash in', align: 'right' },
             { label: 'Cash out', align: 'right' },
           ],
@@ -483,10 +498,11 @@ export function TransactionsBook({
             r.pill.label,
             cell(r.discount || null),
             cell(r.amount),
+            ...(showItems ? [cell(r.purchasePrice)] : []),
             cell(r.cashIn),
             cell(r.cashOut),
           ]),
-          footer: ['', '', '', `${rows.length} ${rows.length === 1 ? 'entry' : 'entries'} · Totals`, '', '', money(totals.amount), money(totals.cashIn), money(totals.cashOut)],
+          footer: ['', '', '', `${rows.length} ${rows.length === 1 ? 'entry' : 'entries'} · Totals`, '', '', money(totals.amount), ...(showItems ? [''] : []), money(totals.cashIn), money(totals.cashOut)],
           emptyText: from || to ? 'Nothing in this date range.' : 'Nothing in the statement yet.',
         },
       ],
@@ -527,6 +543,7 @@ export function TransactionsBook({
           rowKey={(r) => r.id}
           onRowPress={(r) => r.onPress?.()}
           groupOf={(r) => r.group}
+          stickyHeader
           footer={{ label: footerLabel, cells: footerCells }}
         />
       )}
