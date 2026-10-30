@@ -72,6 +72,13 @@ export function billedVehicle(bills: BusinessTransaction[], type: 'purchase' | '
   return found && found.total > 0 ? { price: round2(found.total), model: found.line.model?.trim() ?? '' } : null;
 }
 
+/** Who sold each vehicle: the party on its latest Purchase bill, by name. */
+export function vendorsByVehicle(bills: BusinessTransaction[]): Map<string, string> {
+  const vendors = new Map<string, string>();
+  for (const [k, found] of billedBy(bills, 'purchase')) if (found.bill.party_name) vendors.set(k, found.bill.party_name);
+  return vendors;
+}
+
 /**
  * The EMI plans for every vehicle bought - in stock or since sold, none of them is paid up - one per item, on
  * installments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to - the same figure
