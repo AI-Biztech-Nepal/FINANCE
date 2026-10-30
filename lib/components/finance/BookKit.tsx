@@ -210,6 +210,7 @@ export function BookStat({
   label,
   value,
   color,
+  tint,
   onPress,
   active,
 }: {
@@ -217,6 +218,8 @@ export function BookStat({
   /** Already formatted, e.g. "NPR 12,000" or "14". */
   value: string;
   color: string;
+  /** A soft wash of `color` for the tile's background, with a border to match. */
+  tint?: string;
   onPress?: () => void;
   /** The tile whose filter is on: drawn with a border in its own colour. */
   active?: boolean;
@@ -226,9 +229,17 @@ export function BookStat({
       onPress={onPress}
       disabled={!onPress}
       className="rounded-xl border bg-white px-3.5 py-2.5"
-      style={{ flexGrow: 1, flexBasis: 140, borderColor: active ? color : '#E5E7EB', borderWidth: active ? 2 : 1 }}
+      style={{
+        flexGrow: 1,
+        flexBasis: 140,
+        borderColor: active ? color : tint ? `${color}33` : '#E5E7EB',
+        borderWidth: active ? 2 : 1,
+        ...(tint ? { backgroundColor: tint } : null),
+      }}
     >
-      <Text className="text-[11px] font-semibold capitalize tracking-wide text-gray-400">{label}</Text>
+      <Text className={`text-[11px] font-semibold capitalize tracking-wide ${tint ? '' : 'text-gray-400'}`} style={tint ? { color } : undefined}>
+        {label}
+      </Text>
       <Text className="mt-0.5 text-[16px] font-extrabold" style={{ color }}>
         {value}
       </Text>

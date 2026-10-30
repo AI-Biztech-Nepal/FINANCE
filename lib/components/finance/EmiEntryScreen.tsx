@@ -38,7 +38,7 @@ function Box({ label, basis = 200, raised, action, children }: { label: string; 
   );
 }
 
-/** One EMI sale - the vehicle, the customer and the instalment plan. The same page adds and edits (`?id=`). */
+/** One EMI sale - the vehicle, the customer and the installment plan. The same page adds and edits (`?id=`). */
 export function EmiEntryScreen({ basePath }: { basePath: string }) {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { data: plan, isLoading } = useSupabaseRow('emi_plans', id);
@@ -93,7 +93,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const [customerId, setCustomerId] = useState<string | null>(plan?.customer_id ?? null);
   const [customerName, setCustomerName] = useState(plan?.customer_name ?? '');
   const [months, setMonths] = useState(plan ? String(plan.months) : '12');
-  // The EMI's date - the day it was agreed; the first instalment falls a month after it.
+  // The EMI's date - the day it was agreed; the first installment falls a month after it.
   const [date, setDate] = useState(plan ? addMonths(plan.first_due, -1) : today);
   const firstDue = date ? addMonths(date, 1) : '';
   const [note, setNote] = useState(plan?.note ?? '');
@@ -105,9 +105,9 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const model = useMemo(() => billedVehicle(bills ?? [], 'purchase', car)?.model || plan?.model || '', [bills, car, plan]);
   const down = plan ? Number(plan.down_payment) || 0 : 0;
   const closedOn = plan?.closed_on ?? '';
-  // The EMI calculator: the amount on instalments, the interest a year and the tenure in months. Picking the vehicle fills
+  // The EMI calculator: the amount on installments, the interest a year and the tenure in months. Picking the vehicle fills
   // the amount from its own bill - its Sale bill, or its Purchase bill when we pay the vendor - less any down payment;
-  // it can be changed. The instalment is worked out the way banks do: the yearly rate charged each month on what is
+  // it can be changed. The installment is worked out the way banks do: the yearly rate charged each month on what is
   // still unpaid (reducing balance), every month the same.
   const [amount, setAmount] = useState(plan ? String(round2(Math.max(0, Number(plan.sale_price) - down))) : '');
   const billedOf = (name: string) => billedVehicle(bills ?? [], buying ? 'purchase' : 'sale', name);
@@ -166,11 +166,11 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
 
   async function handleSave() {
     if (!userId || saving) return;
-    if (!date) return showAlert('Add the date', 'The day the EMI was agreed - the first instalment falls a month after it.');
+    if (!date) return showAlert('Add the date', 'The day the EMI was agreed - the first installment falls a month after it.');
     if (!customerId) return showAlert(`Pick the ${partyWord.toLowerCase()}`, `Choose the ${partyWord.toLowerCase()} from the list (or add them), so their payments are matched.`);
     if (!car.trim()) return showAlert('Add the vehicle', 'Type the vehicle, or pick one from your stock.');
-    if (!(Number(amount) > 0)) return showAlert('Add the amount', 'The amount on instalments.');
-    if (!(Number(months) > 0)) return showAlert('Add the tenure', 'How many monthly instalments?');
+    if (!(Number(amount) > 0)) return showAlert('Add the amount', 'The amount on installments.');
+    if (!(Number(months) > 0)) return showAlert('Add the tenure', 'How many monthly installments?');
     const ok = await confirmSave({
       title: `Save ${plan ? 'changes to this' : 'this'} EMI?`,
       rows: [
@@ -216,7 +216,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
 
   function handleRemove() {
     if (!plan) return;
-    showAlert('Remove this EMI?', 'The sale bill and the payments stay; only the instalment plan goes.', [
+    showAlert('Remove this EMI?', 'The sale bill and the payments stay; only the installment plan goes.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -361,7 +361,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         </View>
       </View>
 
-      {/* The EMI calculator: amount, interest a year and tenure give the monthly instalment. */}
+      {/* The EMI calculator: amount, interest a year and tenure give the monthly installment. */}
       <View className="rounded-2xl border border-gray-200 bg-white p-5" style={{ boxShadow: CARD_SHADOW }}>
         <View className="mb-4 flex-row items-center gap-2">
           <Ionicons name="calculator-outline" size={14} color="#6B7280" />
@@ -394,7 +394,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
           ))}
         </View>
         <Text className="mt-2 text-[11px] text-gray-400">
-          {firstDue ? `First instalment ${toBsHistoryLabel(firstDue)}, a month after the date. ` : ''}
+          {firstDue ? `First installment ${toBsHistoryLabel(firstDue)}, a month after the date. ` : ''}
           Worked out the way banks do: the yearly interest, charged each month on what is still unpaid (reducing balance), so every month pays the same.
         </Text>
         <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>

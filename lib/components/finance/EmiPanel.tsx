@@ -32,26 +32,28 @@ const COLS = {
 } as const;
 
 /** The words of each side: customers paying us for vehicles we sold, or us paying vendors for stock we bought. */
-const WORDS: Record<Direction, { group: string; price: string; color: string; none: string; note: string }> = {
+const WORDS: Record<Direction, { group: string; price: string; color: string; tint: string; none: string; note: string }> = {
   sale: {
     group: 'Receive from customers',
     price: 'Sale price',
     color: '#047857',
+    tint: '#ECFDF5',
     none: 'No EMI sales yet. Add one with New EMI, or add all your sold vehicles above.',
-    note: 'From customers: paid is what the customer paid for the vehicle on the Received page (pick the vehicle in Item). It includes the down payment, which is entered once it is paid; each instalment is due on its day. The sale itself is its Sale bill.',
+    note: 'From customers: paid is what the customer paid for the vehicle on the Received page (pick the vehicle in Item). It includes the down payment, which is entered once it is paid; each installment is due on its day. The sale itself is its Sale bill.',
   },
   purchase: {
     group: 'Pay to vendors',
     price: 'Purchase price',
     color: '#C2410C',
+    tint: '#FFF7ED',
     none: 'No vehicles bought on EMI yet. Add one with New EMI, or add all your vehicles above.',
-    note: 'To vendors: paid is what you paid the vendor for the item on the Paid page (pick the item in Item). It includes the down payment, which is entered once it is paid; each instalment is due on its day. The purchase itself is its Purchase bill.',
+    note: 'To vendors: paid is what you paid the vendor for the item on the Paid page (pick the item in Item). It includes the down payment, which is entered once it is paid; each installment is due on its day. The purchase itself is its Purchase bill.',
   },
 };
 
 /** The EMI tab of Rent & EMI: one table of both ways, one line a plan. Receive from customers: every vehicle sold on
- * instalments - what the customer has paid (their Received entries naming the vehicle), what is overdue, what is left and
- * when the next instalment falls. Pay to vendors: the stock bought on instalments, the same figures from the Paid entries
+ * installments - what the customer has paid (their Received entries naming the vehicle), what is overdue, what is left and
+ * when the next installment falls. Pay to vendors: the stock bought on installments, the same figures from the Paid entries
  * on the vendor's ledger - with a button that puts every vehicle bought in, 12 months at 10% a year (reducing balance).
  * The tiles above it say what comes in and what goes out, and picking one narrows the table to that side. */
 export function EmiPanel({ userId, basePath, full }: { userId: string | undefined; basePath: string; full: boolean }) {
@@ -102,6 +104,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   const toReceive = sum((r) => r.remaining, sideOf('sale'));
   const toPay = sum((r) => r.remaining, sideOf('purchase'));
   const net = round2(toReceive - toPay);
+  // What falls due each month: the installment of every plan still running on a side.
+  const recurring = (d: Direction) => sum((r) => (r.status.label === 'Completed' ? 0 : Number(r.p.installment)), sideOf(d));
   // The sides on screen: both, or the one picked.
   const sides: Direction[] = show === 'all' ? ['sale', 'purchase'] : [show];
 
@@ -167,7 +171,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
         { key: 'sn', label: 'SN', ...w('sn'), render: (_r, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'vehicle', label: 'Vehicle', ...w('vehicle'), render: (r) => line(r.p.car, 'font-semibold text-gray-900') },
         { key: 'party', label: 'Customer / Vendor', ...w('party'), render: (r) => line(r.p.customer_name || '—') },
-        { key: 'inst', label: 'Instalment', ...w('inst'), align: 'right', render: (r) => fig(Number(r.p.installment)) },
+        { key: 'inst', label: 'Installment', ...w('inst'), align: 'right', render: (r) => fig(Number(r.p.installment)) },
         { key: 'plan', label: 'Plan', ...w('plan'), render: (r) => line(`${r.p.months} mo${Number(r.p.interest_rate) > 0 ? ` · ${Number(r.p.interest_rate)}%` : ''}`, 'text-gray-500') },
         { key: 'paid', label: 'Paid', ...w('paid'), align: 'right', render: (r) => fig(r.paid, '#374151') },
         { key: 'overdue', label: 'Overdue', ...w('overdue'), align: 'right', render: (r) => fig(r.overdue, '#B91C1C', true) },
@@ -203,7 +207,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   // Each section says what it comes to; the two only add up as what is left once the vendors are paid.
   const groupOf = (r: Row) => {
     const side = sideOf(r.dir);
-    return `${WORDS[r.dir].group} · ${side.length} ${side.length === 1 ? 'plan' : 'plans'} · NPR ${money(sum((x) => x.remaining, side))}`;
+    const overdue = sum((x) => x.overdue, side);
+    return `${WORDS[r.dir].group} · ${side.length} ${side.length === 1 ? 'plan' : 'plans'} · NPR ${money(sum((x) => x.remaining, side))}${overdue ? ` · Overdue NPR ${money(overdue)}` : ''}`;
   };
   const plansLabel = `${rows.length} ${rows.length === 1 ? 'plan' : 'plans'}`;
   const table = (
@@ -248,8 +253,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
               </Text>
               <Text className="text-[12px] text-gray-500">
                 {d === 'purchase'
-                  ? `Every vehicle you bought, in stock or sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the vendor on its purchase bill. What you already paid is taken off in Remaining.`
-                  : `Every vehicle you have sold: ${EMI_STOCK_MONTHS} monthly instalments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the customer on its sale bill. What they already paid is taken off in Remaining.`}
+                  ? `Every vehicle you bought, in stock or sold: ${EMI_STOCK_MONTHS} monthly installments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the vendor on its purchase bill. What you already paid is taken off in Remaining.`
+                  : `Every vehicle you have sold: ${EMI_STOCK_MONTHS} monthly installments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the customer on its sale bill. What they already paid is taken off in Remaining.`}
                 {batch.noPrice.length > 0 ? ` ${batch.noPrice.length} with no purchase price yet ${batch.noPrice.length === 1 ? 'is' : 'are'} left out.` : ''}
               </Text>
             </View>
@@ -263,11 +268,11 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
       })}
 
       <BookStats>
-        <BookStat label="To receive" value={`NPR ${money(toReceive)}`} color={WORDS.sale.color} onPress={() => setShow(show === 'sale' ? 'all' : 'sale')} active={show === 'sale'} />
-        <BookStat label="To pay" value={`NPR ${money(toPay)}`} color={WORDS.purchase.color} onPress={() => setShow(show === 'purchase' ? 'all' : 'purchase')} active={show === 'purchase'} />
-        <BookStat label={net < 0 ? 'Net to pay' : 'Net to receive'} value={`NPR ${money(Math.abs(net))}`} color="#1D4ED8" onPress={() => setShow('all')} active={show === 'all'} />
-        <BookStat label="Overdue to receive" value={`NPR ${money(sum((r) => r.overdue, sideOf('sale')))}`} color="#B91C1C" />
-        <BookStat label="Overdue to pay" value={`NPR ${money(sum((r) => r.overdue, sideOf('purchase')))}`} color="#B91C1C" />
+        <BookStat label="To receive" value={`NPR ${money(toReceive)}`} color={WORDS.sale.color} tint={WORDS.sale.tint} onPress={() => setShow(show === 'sale' ? 'all' : 'sale')} active={show === 'sale'} />
+        <BookStat label="Customer recurring EMI" value={`NPR ${money(recurring('sale'))}`} color={WORDS.sale.color} tint={WORDS.sale.tint} onPress={() => setShow(show === 'sale' ? 'all' : 'sale')} active={show === 'sale'} />
+        <BookStat label="To pay" value={`NPR ${money(toPay)}`} color={WORDS.purchase.color} tint={WORDS.purchase.tint} onPress={() => setShow(show === 'purchase' ? 'all' : 'purchase')} active={show === 'purchase'} />
+        <BookStat label="Vendor recurring EMI" value={`NPR ${money(recurring('purchase'))}`} color={WORDS.purchase.color} tint={WORDS.purchase.tint} onPress={() => setShow(show === 'purchase' ? 'all' : 'purchase')} active={show === 'purchase'} />
+        <BookStat label={net < 0 ? 'Net to pay' : 'Net to receive'} value={`NPR ${money(Math.abs(net))}`} color="#1D4ED8" tint="#EFF6FF" onPress={() => setShow('all')} />
       </BookStats>
       {error ? (
         <View className="rounded-xl border border-red-200 bg-red-50 p-4">

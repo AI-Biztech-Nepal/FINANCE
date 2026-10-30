@@ -3,7 +3,7 @@ import { round2 } from './money';
 import { itemListOf } from './accountFeatures';
 import type { BillItem, BusinessTransaction, EmiPlan, Product } from '../../types/database.types';
 
-/** What a stock item bought on EMI is set up with: 12 monthly instalments, 10% interest a year (reducing balance). */
+/** What a stock item bought on EMI is set up with: 12 monthly installments, 10% interest a year (reducing balance). */
 export const EMI_STOCK_MONTHS = 12;
 export const EMI_STOCK_RATE = 10;
 
@@ -12,8 +12,8 @@ const norm = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, 
 /** Which way a plan runs: 'sale' (the customer pays us) unless it says 'purchase' (we pay the vendor). */
 export const emiDirection = (plan: Pick<EmiPlan, 'direction'>): 'sale' | 'purchase' => (plan.direction === 'purchase' ? 'purchase' : 'sale');
 
-/** The monthly instalment (EMI) the way banks work it out: `ratePct` is the interest a year, charged each month (a
- * twelfth of it) on what is still unpaid - reducing balance - so every instalment is the same and the interest in it
+/** The monthly installment (EMI) the way banks work it out: `ratePct` is the interest a year, charged each month (a
+ * twelfth of it) on what is still unpaid - reducing balance - so every installment is the same and the interest in it
  * shrinks as the loan is paid down. 100,000 over 12 months at 10% a year -> 8,791.59 a month, 5,499.08 interest in all.
  * With no interest, the amount over the months. */
 export function emiInstallment(financed: number, months: number, ratePct: number): number {
@@ -74,8 +74,8 @@ export function billedVehicle(bills: BusinessTransaction[], type: 'purchase' | '
 
 /**
  * The EMI plans for every vehicle bought - in stock or since sold, none of them is paid up - one per item, on
- * instalments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to - the same figure
- * as the car's bill on Stock and Inventory; with no bill, the cost price), `months` instalments with `rate`% interest a year (reducing balance), the first one a month after the bill. What was
+ * installments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to - the same figure
+ * as the car's bill on Stock and Inventory; with no bill, the cost price), `months` installments with `rate`% interest a year (reducing balance), the first one a month after the bill. What was
  * already paid is not taken off here - the plan reads it from the Paid entries, so Remaining shows what is left. An
  * item that already has a purchase plan is left out, so adding twice makes no duplicates; one with no price anywhere
  * is reported in `noPrice` instead.
@@ -126,7 +126,7 @@ export function emiStockPlans(input: {
 
 /**
  * The other side of the same vehicles: each one already sold (it is on a Sale bill) is a plan for the customer to pay
- * us - the price its Sale bills come to, `months` instalments with `rate`% interest a year (reducing balance), the first one a
+ * us - the price its Sale bills come to, `months` installments with `rate`% interest a year (reducing balance), the first one a
  * month after the sale, the model from the vehicle's Purchase bill. What the customer already paid is not taken off here: the plan
  * reads it from their Received entries naming the vehicle. A vehicle that already has a sale plan is left out.
  */
@@ -171,7 +171,7 @@ export function emiSoldPlans(input: {
 /**
  * Where a plan stands today. The down payment is entered only once it is paid, so it counts as paid; `received` is
  * what came in for the vehicle besides it (the customer's Received entries naming it - the vendor's Paid entries for a
- * purchase), which pays the instalments, each due on its day.
+ * purchase), which pays the installments, each due on its day.
  */
 export function emiFigures(plan: Pick<EmiPlan, 'down_payment' | 'installment' | 'months' | 'first_due' | 'closed_on'>, received: number, today: string) {
   const down = Number(plan.down_payment) || 0;
@@ -184,7 +184,7 @@ export function emiFigures(plan: Pick<EmiPlan, 'down_payment' | 'installment' | 
   const dueByNow = round2(down + inst * dueCount);
   const overdue = round2(Math.max(0, dueByNow - paid));
   const remaining = round2(Math.max(0, total - paid));
-  // The next instalment not yet covered by what was paid.
+  // The next installment not yet covered by what was paid.
   let next: string | null = null;
   for (let k = 0; k < months; k++) {
     if (round2(down + inst * (k + 1)) > paid) {
