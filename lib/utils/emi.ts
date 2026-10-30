@@ -179,13 +179,13 @@ export function emiSoldPlans(input: {
 }
 
 /**
- * Where a plan stands today. The down payment is entered only once it is paid, so it counts as paid; `received` is
- * what came in for the vehicle besides it (the customer's Received entries naming it - the vendor's Paid entries for a
- * purchase), which pays the installments, each due on its day.
+ * Where a plan stands today. The down payment is what was already paid when the plan was made, so the EMI runs on the
+ * balance left; `received` is everything in for the vehicle (the customer's Received entries naming it - the vendor's
+ * Paid entries for a purchase), and what is beyond the plan's `ledger_paid` pays the installments, each due on its day.
  */
-export function emiFigures(plan: Pick<EmiPlan, 'down_payment' | 'installment' | 'months' | 'first_due' | 'closed_on'>, received: number, today: string) {
+export function emiFigures(plan: Pick<EmiPlan, 'down_payment' | 'ledger_paid' | 'installment' | 'months' | 'first_due' | 'closed_on'>, received: number, today: string) {
   const down = Number(plan.down_payment) || 0;
-  const paid = down + (Number(received) || 0);
+  const paid = round2(down + Math.max(0, (Number(received) || 0) - (Number(plan.ledger_paid) || 0)));
   const inst = Number(plan.installment) || 0;
   const months = Math.max(1, Number(plan.months) || 1);
   const total = round2(down + inst * months);

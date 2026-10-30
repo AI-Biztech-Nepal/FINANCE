@@ -6,7 +6,7 @@ import { useSupabaseInsert, useSupabaseQuery } from '../../hooks/useSupabase';
 import { BookStat, BookStats, BookTable, money, type BookColumn } from './BookKit';
 import { useConfirmSave } from './ConfirmSave';
 import { usePartyDestination } from '../../hooks/usePartyDestination';
-import { EMI_STOCK_MONTHS, EMI_STOCK_RATE, addMonths, billedVehicle, emiDirection, emiFigures, emiSoldPlans, emiStockPlans, vendorsByVehicle } from '../../utils/emi';
+import { EMI_STOCK_MONTHS, EMI_STOCK_RATE, addMonths, billedVehicle, emiDirection, emiFigures, emiInstallment, emiSoldPlans, emiStockPlans, vendorsByVehicle } from '../../utils/emi';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import { journalOf } from '../../utils/journalVoucher';
@@ -70,7 +70,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   const [adding, setAdding] = useState(false);
   const hrefFor = usePartyDestination(userId, basePath);
 
-  const allRows = useMemo(() => {
+  const paidBy = useMemo(() => {
     // What was paid for each vehicle: the Received entries (customers) / Paid entries (vendors) whose remark starts with it.
     const paidBy = new Map<string, number>();
     for (const e of received ?? []) {
@@ -85,10 +85,13 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
       const k = `purchase|${key(e.note.split(' · ')[0])}`;
       paidBy.set(k, (paidBy.get(k) ?? 0) + Number(e.amount));
     }
-    const figures = (p: EmiPlan, dir: Direction) => ({
-      p,
-      ...emiFigures(p, paidBy.get(dir === 'purchase' ? `purchase|${key(p.car)}` : `sale|${p.customer_id}|${key(p.car)}`) ?? 0, today),
-    });
+    return paidBy;
+  }, [received, paidOut]);
+  const paidOn = (dir: Direction, customerId: string | null | undefined, car: string) =>
+    paidBy.get(dir === 'purchase' ? `purchase|${key(car)}` : `sale|${customerId}|${key(car)}`) ?? 0;
+
+  const allRows = useMemo(() => {
+    const figures = (p: EmiPlan, dir: Direction) => ({ p, ...emiFigures(p, paidOn(dir, p.customer_id, p.car), today) });
     const byVehicle = new Map<string, Record<Direction, ReturnType<typeof figures>[]>>();
     for (const p of plans ?? []) {
       const dir = emiDirection(p);
@@ -118,7 +121,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
         })
       )
       .sort((a, b) => Number(!a.sale) - Number(!b.sale) || a.car.localeCompare(b.car));
-  }, [plans, received, paidOut, bills, today]);
+  }, [plans, paidBy, bills, today]);
   type Row = (typeof allRows)[number];
   const rows = useMemo(() => allRows.filter((r) => show === 'all' || r[show]), [allRows, show]);
   const sum = (f: (r: Row) => number, list: Row[] = rows) => round2(list.reduce((s, r) => s + f(r), 0));
@@ -135,15 +138,24 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   // (the customer pays us).
   const batches = useMemo(() => {
     const input = { products: products ?? [], bills: bills ?? [], plans: plans ?? [], months: EMI_STOCK_MONTHS, rate: EMI_STOCK_RATE };
-    return { purchase: emiStockPlans(input), sale: { ...emiSoldPlans(input), noPrice: [] as string[] } };
-  }, [products, bills, plans]);
+    // Each runs on the balance: what was already paid on the vehicle is its down payment.
+    const onBalance = <T extends { rows: ReturnType<typeof emiSoldPlans>['rows'] }>(batch: T, dir: Direction): T => ({
+      ...batch,
+      rows: batch.rows.map((r) => {
+        const paid = round2(paidOn(dir, r.customer_id, r.car));
+        const down = Math.min(Number(r.sale_price), paid);
+        return { ...r, down_payment: down, ledger_paid: paid, installment: emiInstallment(round2(Number(r.sale_price) - down), r.months, EMI_STOCK_RATE) };
+      }),
+    });
+    return { purchase: onBalance(emiStockPlans(input), 'purchase'), sale: onBalance({ ...emiSoldPlans(input), noPrice: [] as string[] }, 'sale') };
+  }, [products, bills, plans, paidBy]);
 
   async function addAll(dir: Direction) {
     const batch = batches[dir];
     if (!userId || adding || batch.rows.length === 0) return;
     const n = batch.rows.length;
     const price = round2(batch.rows.reduce((s, r) => s + Number(r.sale_price), 0));
-    const total = round2(batch.rows.reduce((s, r) => s + Number(r.down_payment) + Number(r.installment) * Number(r.months), 0));
+    const total = round2(batch.rows.reduce((s, r) => s + Number(r.installment) * Number(r.months), 0));
     const ok = await confirm({
       title: `Add ${n} ${dir === 'purchase' ? (n === 1 ? 'vehicle' : 'vehicles') : n === 1 ? 'sold vehicle' : 'sold vehicles'} to EMI?`,
       rows: [

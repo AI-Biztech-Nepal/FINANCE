@@ -17,6 +17,7 @@ import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { money } from './BookKit';
 import { EMI_STOCK_RATE, addMonths, billedVehicle, emiDirection, emiInstallment } from '../../utils/emi';
 import { showAlert, getErrorMessage } from '../../utils/alert';
+import { journalOf } from '../../utils/journalVoucher';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
 import { formatMoney, round2 } from '../../utils/money';
@@ -56,6 +57,8 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const { data: products } = useSupabaseQuery('products', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
   const { data: customers } = useSupabaseQuery('customers', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });
   const { data: bills } = useSupabaseQuery('business_transactions', { filters: owner, all: true, enabled: !!userId });
+  const { data: received } = useSupabaseQuery('customer_ledger_entries', { filters: owner, all: true, enabled: !!userId && !plan });
+  const { data: paidOut } = useSupabaseQuery('vendor_ledger_entries', { filters: owner, all: true, enabled: !!userId && !plan });
   const createPlan = useSupabaseInsert('emi_plans');
   const updatePlan = useSupabaseUpdate('emi_plans');
   const deletePlan = useSupabaseDelete('emi_plans');
@@ -103,7 +106,15 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   // The model is the vehicle's Purchase bill's, as "Add all" reads it. The down payment and Completed on are not asked: a
   // plan keeps what it was saved with (a new one has none).
   const model = useMemo(() => billedVehicle(bills ?? [], 'purchase', car)?.model || plan?.model || '', [bills, car, plan]);
-  const down = plan ? Number(plan.down_payment) || 0 : 0;
+  // A new plan runs on the balance: what was already paid naming the vehicle (by this customer; to any vendor) comes off.
+  const paidOn = (name: string) => {
+    const first = (note: string | null) => (note ?? '').split(' · ')[0].trim().replace(/\s+/g, ' ').toLowerCase();
+    const car = name.trim().replace(/\s+/g, ' ').toLowerCase();
+    const paid = (entries: { entry_type: string; note: string | null; amount: number }[]) =>
+      entries.filter((e) => e.entry_type === 'credit' && !journalOf(e.note) && first(e.note) === car).reduce((s, e) => s + Number(e.amount), 0);
+    return round2(buying ? paid(paidOut ?? []) : paid((received ?? []).filter((e) => e.customer_id === customerId)));
+  };
+  const down = plan ? Number(plan.down_payment) || 0 : paidOn(car);
   const closedOn = plan?.closed_on ?? '';
   // The EMI calculator: the amount on installments, the interest a year and the tenure in months. Picking the vehicle fills
   // the amount from its own bill - its Sale bill, or its Purchase bill when we pay the vendor - less any down payment;
@@ -113,7 +124,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const billedOf = (name: string) => billedVehicle(bills ?? [], buying ? 'purchase' : 'sale', name);
   const fillAmount = (name: string) => {
     const b = billedOf(name);
-    if (b) setAmount(String(round2(Math.max(0, b.price - down))));
+    if (b) setAmount(String(round2(Math.max(0, b.price - (plan ? down : paidOn(name))))));
   };
   const installment = emiInstallment(Number(amount) || 0, Number(months) || 0, Number(rate) || 0);
   const totalPayable = round2(installment * (Number(months) || 0));
@@ -183,7 +194,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         { label: 'EMI', value: `NPR ${formatMoney(installment)} a month` },
         { label: 'First due', value: toBsHistoryLabel(firstDue) },
       ],
-      total: { label: buying ? 'To pay' : 'To collect', value: `NPR ${formatMoney(round2(down + totalPayable))}`, color: buying ? '#B91C1C' : '#047857' },
+      total: { label: buying ? 'To pay' : 'To collect', value: `NPR ${formatMoney(totalPayable)}`, color: buying ? '#B91C1C' : '#047857' },
     });
     if (!ok) return;
     const values = {
@@ -200,6 +211,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
       note: note.trim() || null,
       // Only what differs from a plain sale is sent, so a sale without interest saves as it always did.
       ...(buying ? { direction } : {}),
+      ...(!plan && down > 0 ? { ledger_paid: down } : {}),
       ...(Number(rate) > 0 || plan?.interest_rate ? { interest_rate: Number(rate) || 0 } : {}),
     };
     setSaving(true);

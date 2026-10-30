@@ -265,6 +265,8 @@ export interface EmiPlan {
   note: string | null;
   /** Settled or ended early; null while it runs. */
   closed_on: string | null;
+  /** What had been paid naming the vehicle when the plan was made: it is in down_payment, so only what comes in beyond it pays installments. */
+  ledger_paid?: number;
   /** 'sale': the customer pays us; 'purchase': we pay the vendor (held in customer_id / customer_name). Absent on a
    * plan made before 0021 - that is a sale. */
   direction?: 'sale' | 'purchase';
