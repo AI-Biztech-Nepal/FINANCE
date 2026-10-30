@@ -75,9 +75,11 @@ export function billedVehicle(bills: BusinessTransaction[], type: 'purchase' | '
 }
 
 /** Who sold each vehicle: the party on its latest Purchase bill, by name. */
-export function vendorsByVehicle(bills: BusinessTransaction[]): Map<string, string> {
-  const vendors = new Map<string, string>();
-  for (const [k, found] of billedBy(bills, 'purchase')) if (found.bill.party_name) vendors.set(k, found.bill.party_name);
+export function vendorsByVehicle(bills: BusinessTransaction[]): Map<string, { id: string | null; name: string }> {
+  const vendors = new Map<string, { id: string | null; name: string }>();
+  for (const [k, found] of billedBy(bills, 'purchase')) {
+    if (found.bill.party_name) vendors.set(k, { id: found.bill.customer_id, name: found.bill.party_name });
+  }
   return vendors;
 }
 

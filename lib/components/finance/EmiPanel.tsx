@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useSupabaseInsert, useSupabaseQuery } from '../../hooks/useSupabase';
 import { BookStat, BookStats, BookTable, money, type BookColumn } from './BookKit';
 import { useConfirmSave } from './ConfirmSave';
+import { usePartyDestination } from '../../hooks/usePartyDestination';
 import { EMI_STOCK_MONTHS, EMI_STOCK_RATE, addMonths, billedVehicle, emiDirection, emiFigures, emiSoldPlans, emiStockPlans, vendorsByVehicle } from '../../utils/emi';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { localTodayIso } from '../../utils/localDate';
@@ -51,8 +52,8 @@ const WORDS: Record<Direction, { price: string; color: string; tint: string; non
   },
 };
 
-/** The EMI tab of Rent & EMI: one line a vehicle, its customer's plan and then its vendor's, so what comes in and what
- * goes out on it each month read side by side. There is a button that puts every vehicle bought in, 12 months at 10% a
+/** The EMI tab of Rent & EMI: one line a vehicle, its vendor's plan and then its customer's, so what goes out and what
+ * comes in on it each month read side by side. There is a button that puts every vehicle bought in, 12 months at 10% a
  * year (reducing balance). The tiles above say what comes in and what goes out; picking one keeps the vehicles on that side. */
 export function EmiPanel({ userId, basePath, full }: { userId: string | undefined; basePath: string; full: boolean }) {
   const today = localTodayIso();
@@ -67,6 +68,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   const createPlan = useSupabaseInsert('emi_plans');
   const { confirm, dialog: confirmDialog } = useConfirmSave();
   const [adding, setAdding] = useState(false);
+  const hrefFor = usePartyDestination(userId, basePath);
 
   const allRows = useMemo(() => {
     // What was paid for each vehicle: the Received entries (customers) / Paid entries (vendors) whose remark starts with it.
@@ -107,7 +109,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
             sale,
             purchase,
             // With no plan to the vendor, still who sold it.
-            vendor: purchase?.p.customer_name || vendors.get(k) || '',
+            vendor: purchase?.p.customer_name || vendors.get(k)?.name || '',
+            vendorId: purchase?.p.customer_id ?? vendors.get(k)?.id ?? null,
             // What its bills come to; with no bill, the plan's own price.
             salePrice: billedVehicle(bills ?? [], 'sale', sale?.p.car ?? purchase!.p.car)?.price ?? (Number(sale?.p.sale_price) || 0),
             purchasePrice: billedVehicle(bills ?? [], 'purchase', sale?.p.car ?? purchase!.p.car)?.price ?? (Number(purchase?.p.sale_price) || 0),
@@ -190,33 +193,31 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   const planText = (p?: EmiPlan) => (p ? `${p.months} mo${Number(p.interest_rate) > 0 ? ` · ${Number(p.interest_rate)}%` : ''}` : '—');
   // The date entered on the EMI form; the first installment falls a month after it. The customer's plan if it has one.
   const startedOn = (r: Row) => toBsHistoryLabel(addMonths((r.sale ?? r.purchase)!.p.first_due, -1));
-  // A tap on the line opens the customer's plan; the vendor's name opens the vendor's.
-  const vendorCell = (r: Row) =>
-    r.sale && r.purchase ? (
-      <Pressable onPress={() => open(r.purchase!.p.id)}>{line(r.vendor || '—')}</Pressable>
-    ) : (
-      line(r.vendor || '—')
-    );
+  // A name opens that party's ledger, a Plan opens that plan; a tap anywhere else on the line opens the customer's plan.
+  const nameCell = (id: string | null | undefined, name: string | null | undefined) =>
+    id ? <Pressable onPress={() => router.push(hrefFor(id) as never)}>{line(name || '—')}</Pressable> : line(name || '—');
+  const planCell = (p?: EmiPlan) =>
+    p ? <Pressable onPress={() => open(p.id)}>{line(planText(p), 'text-gray-500')}</Pressable> : line('—', 'text-gray-500');
   const inAndOut = (inn: number, out: number) => (
     <View className="items-end">
-      <Text className="text-[11.5px] font-semibold" style={{ color: IN }} numberOfLines={1}>{`Customer ${money(inn)}`}</Text>
       <Text className="text-[11.5px] font-semibold" style={{ color: OUT }} numberOfLines={1}>{`Vendor ${money(out)}`}</Text>
+      <Text className="text-[11.5px] font-semibold" style={{ color: IN }} numberOfLines={1}>{`Customer ${money(inn)}`}</Text>
     </View>
   );
   const columns: BookColumn<Row>[] = full
     ? [
         { key: 'sn', label: 'SN', ...w('sn'), render: (_r, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'vehicle', label: 'Vehicle', ...w('vehicle'), render: (r) => line(r.car, 'font-semibold text-gray-900') },
-        { key: 'customer', label: 'Customer', ...w('party'), render: (r) => line(r.sale?.p.customer_name || '—') },
-        { key: 'saleIn', label: 'Sale price', ...w('price'), align: 'right', render: (r) => fig(r.salePrice) },
-        { key: 'amountIn', label: 'EMI amount', ...w('price'), align: 'right', render: (r) => fig(emiAmount(r.sale?.p)) },
-        { key: 'instIn', label: 'Customer EMI', ...w('inst'), align: 'right', render: (r) => fig(Number(r.sale?.p.installment), IN, true) },
-        { key: 'planIn', label: 'Plan', ...w('plan'), render: (r) => line(planText(r.sale?.p), 'text-gray-500') },
-        { key: 'vendor', label: 'Vendor', ...w('party'), render: vendorCell },
+        { key: 'vendor', label: 'Vendor', ...w('party'), render: (r) => nameCell(r.vendorId, r.vendor) },
         { key: 'purchaseOut', label: 'Purchase price', ...w('price'), align: 'right', render: (r) => fig(r.purchasePrice) },
         { key: 'amountOut', label: 'EMI amount', ...w('price'), align: 'right', render: (r) => fig(emiAmount(r.purchase?.p)) },
         { key: 'instOut', label: 'Vendor EMI', ...w('inst'), align: 'right', render: (r) => fig(Number(r.purchase?.p.installment), OUT, true) },
-        { key: 'planOut', label: 'Plan', ...w('plan'), render: (r) => line(planText(r.purchase?.p), 'text-gray-500') },
+        { key: 'planOut', label: 'Plan', ...w('plan'), render: (r) => planCell(r.purchase?.p) },
+        { key: 'customer', label: 'Customer', ...w('party'), render: (r) => nameCell(r.sale?.p.customer_id, r.sale?.p.customer_name) },
+        { key: 'saleIn', label: 'Sale price', ...w('price'), align: 'right', render: (r) => fig(r.salePrice) },
+        { key: 'amountIn', label: 'EMI amount', ...w('price'), align: 'right', render: (r) => fig(emiAmount(r.sale?.p)) },
+        { key: 'instIn', label: 'Customer EMI', ...w('inst'), align: 'right', render: (r) => fig(Number(r.sale?.p.installment), IN, true) },
+        { key: 'planIn', label: 'Plan', ...w('plan'), render: (r) => planCell(r.sale?.p) },
         { key: 'started', label: 'EMI started', ...w('started'), render: (r) => line(startedOn(r), 'text-gray-700') },
       ]
     : [
@@ -226,7 +227,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
           render: (r) => (
             <View style={{ minWidth: 0, gap: 2 }}>
               {line(r.car, 'font-semibold text-gray-900')}
-              <Text className="text-[11px] text-gray-400" numberOfLines={1}>{[r.sale?.p.customer_name, r.vendor].filter(Boolean).join(' · ') || '—'}</Text>
+              <Text className="text-[11px] text-gray-400" numberOfLines={1}>{[r.vendor, r.sale?.p.customer_name].filter(Boolean).join(' · ') || '—'}</Text>
             </View>
           ),
         },
