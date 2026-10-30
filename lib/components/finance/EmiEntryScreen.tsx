@@ -70,15 +70,15 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const [rate, setRate] = useState(plan ? String(plan.interest_rate ?? 0) : String(EMI_STOCK_RATE));
   const buying = direction === 'purchase';
   const partyWord = buying ? 'Vendor' : 'Customer';
-  // Enter walks the form box by box: Vehicle > customer / vendor > months > interest > instalment > first due > remarks,
-  // and Enter on the last box (or Ctrl+Enter anywhere) saves.
+  // Enter walks the form box by box: Date > customer / vendor > Vehicle > Amount > Interest > Tenure > Remarks, and Enter
+  // on the last box (or Ctrl+Enter anywhere) saves.
   const box = {
-    car: useRef<TextInput | null>(null),
+    date: useRef<TextInput | null>(null),
     customer: useRef<TextInput | null>(null),
-    months: useRef<TextInput | null>(null),
+    car: useRef<TextInput | null>(null),
+    amount: useRef<TextInput | null>(null),
     rate: useRef<TextInput | null>(null),
-    inst: useRef<TextInput | null>(null),
-    firstDue: useRef<TextInput | null>(null),
+    months: useRef<TextInput | null>(null),
     note: useRef<TextInput | null>(null),
   };
   // A moment later, so a list or popup that was just closed has let go of the keyboard first.
@@ -94,25 +94,32 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
   const [car, setCar] = useState(plan?.car ?? '');
   const [customerId, setCustomerId] = useState<string | null>(plan?.customer_id ?? null);
   const [customerName, setCustomerName] = useState(plan?.customer_name ?? '');
-  const [installment, setInstallment] = useState(plan ? String(plan.installment) : '');
   const [months, setMonths] = useState(plan ? String(plan.months) : '12');
-  const [firstDue, setFirstDue] = useState(plan?.first_due ?? addMonths(today, 1));
+  // The EMI's date - the day it was agreed; the first instalment falls a month after it.
+  const [date, setDate] = useState(plan ? addMonths(plan.first_due, -1) : today);
+  const firstDue = date ? addMonths(date, 1) : '';
   const [note, setNote] = useState(plan?.note ?? '');
   const [focused, setFocused] = useState<'car' | 'customer' | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // The price is the vehicle's own bill - its Sale bill, or its Purchase bill when we pay the vendor - and the model its
-  // Purchase bill's, as "Add all" reads them; with no such bill, what the plan was saved with. The down payment and
-  // Completed on are not asked: a plan keeps what it was saved with (a new one has none).
-  const billed = useMemo(() => billedVehicle(bills ?? [], buying ? 'purchase' : 'sale', car), [bills, buying, car]);
-  const price = billed?.price ?? (plan ? Number(plan.sale_price) || 0 : 0);
+  // The model is the vehicle's Purchase bill's, as "Add all" reads it. The down payment and Completed on are not asked: a
+  // plan keeps what it was saved with (a new one has none).
   const model = useMemo(() => billedVehicle(bills ?? [], 'purchase', car)?.model || plan?.model || '', [bills, car, plan]);
   const down = plan ? Number(plan.down_payment) || 0 : 0;
   const closedOn = plan?.closed_on ?? '';
-  // Financed: the price less the down payment. The instalment it comes to, the way banks work it out: the yearly rate,
-  // charged each month on what is still unpaid (reducing balance), every month the same.
-  const financed = Math.max(0, price - down);
-  const suggestedInstallment = emiInstallment(financed, Number(months), Number(rate) || 0);
+  // The EMI calculator: the amount on instalments, the interest a year and the tenure in months. Picking the vehicle fills
+  // the amount from its own bill - its Sale bill, or its Purchase bill when we pay the vendor - less any down payment;
+  // it can be changed. The instalment is worked out the way banks do: the yearly rate charged each month on what is
+  // still unpaid (reducing balance), every month the same.
+  const [amount, setAmount] = useState(plan ? String(round2(Math.max(0, Number(plan.sale_price) - down))) : '');
+  const billedOf = (name: string) => billedVehicle(bills ?? [], buying ? 'purchase' : 'sale', name);
+  const fillAmount = (name: string) => {
+    const b = billedOf(name);
+    if (b) setAmount(String(round2(Math.max(0, b.price - down))));
+  };
+  const installment = emiInstallment(Number(amount) || 0, Number(months) || 0, Number(rate) || 0);
+  const totalPayable = round2(installment * (Number(months) || 0));
+  const totalInterest = round2(Math.max(0, totalPayable - (Number(amount) || 0)));
 
   const carOptions = useMemo<SuggestOption[]>(() => {
     const q = car.trim().toLowerCase();
@@ -144,7 +151,7 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
       : (received ?? []).filter((e) => e.customer_id === customerId && e.entry_type === 'credit' && names(e.note)).reduce((s, e) => s + Number(e.amount), 0);
   }, [received, paidOut, buying, plan, customerId, car]);
   const figures = emiFigures(
-    { down_payment: down, installment: Number(installment) || 0, months: Number(months) || 1, first_due: firstDue, closed_on: closedOn || null },
+    { down_payment: down, installment, months: Number(months) || 1, first_due: firstDue || addMonths(today, 1), closed_on: closedOn || null },
     paid,
     today
   );
@@ -177,17 +184,21 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
 
   async function handleSave() {
     if (!userId || saving) return;
-    if (!car.trim()) return showAlert('Add the vehicle', 'Type the vehicle, or pick one from your stock.');
+    if (!date) return showAlert('Add the date', 'The day the EMI was agreed - the first instalment falls a month after it.');
     if (!customerId) return showAlert(`Pick the ${partyWord.toLowerCase()}`, `Choose the ${partyWord.toLowerCase()} from the list (or add them), so their payments are matched.`);
-    if (!(Number(months) > 0)) return showAlert('Add the months', 'How many monthly instalments?');
-    if (!(Number(installment) > 0)) return showAlert('Add the instalment', 'The amount due each month.');
+    if (!car.trim()) return showAlert('Add the vehicle', 'Type the vehicle, or pick one from your stock.');
+    if (!(Number(amount) > 0)) return showAlert('Add the amount', 'The amount on instalments.');
+    if (!(Number(months) > 0)) return showAlert('Add the tenure', 'How many monthly instalments?');
     const ok = await confirmSave({
       title: `Save ${plan ? 'changes to this' : 'this'} EMI?`,
       rows: [
-        { label: 'Vehicle', value: [car.trim(), model].filter(Boolean).join(' · ') },
+        { label: 'Date', value: toBsHistoryLabel(date) },
         { label: partyWord, value: customerName.trim() },
-        { label: 'Instalment', value: `NPR ${formatMoney(Number(installment) || 0)} × ${months} months` },
-        ...(Number(rate) > 0 ? [{ label: 'Interest', value: `${Number(rate)}% a year, reducing balance` }] : []),
+        { label: 'Vehicle', value: [car.trim(), model].filter(Boolean).join(' · ') },
+        { label: 'Amount', value: `NPR ${formatMoney(Number(amount) || 0)}` },
+        { label: 'Interest', value: Number(rate) > 0 ? `${Number(rate)}% a year, reducing balance` : 'None' },
+        { label: 'Tenure', value: `${months} months` },
+        { label: 'EMI', value: `NPR ${formatMoney(installment)} a month` },
         { label: 'First due', value: toBsHistoryLabel(firstDue) },
       ],
       total: { label: buying ? 'To pay' : 'To collect', value: `NPR ${formatMoney(figures.total)}`, color: buying ? '#B91C1C' : '#047857' },
@@ -198,9 +209,9 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
       model: model || null,
       customer_id: customerId,
       customer_name: customerName.trim() || null,
-      sale_price: round2(price),
+      sale_price: round2((Number(amount) || 0) + down),
       down_payment: round2(down),
-      installment: round2(Number(installment) || 0),
+      installment: round2(installment),
       months: Math.round(Number(months)),
       first_due: firstDue,
       closed_on: closedOn || null,
@@ -296,28 +307,15 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
           })}
         </View>
         <View className="flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14, zIndex: focused ? 30 : 0 }}>
-          <Box label="Vehicle" basis={260} raised={focused === 'car'}>
-            <SuggestInput
-              value={car}
-              onChangeText={setCar}
-              options={focused === 'car' ? carOptions : []}
-              onSelectOption={(opt, via) => {
-                setCar(opt.label);
-                if (via !== 'tab') focusBox('customer');
-              }}
-              onKeyPress={enterMovesTo('customer')}
-              inputRef={(el) => {
-                box.car.current = el;
-              }}
-              autoFocus={!plan}
-              onFocus={() => setFocused('car')}
-              onBlur={() => setFocused((f) => (f === 'car' ? null : f))}
-              placeholder="Vehicle number…"
-              accessibilityLabel="Vehicle"
+          <Box label="Date" basis={170}>
+            <KeyboardDateInput
+              value={date}
+              onChange={setDate}
+              inputRef={box.date}
+              onEnter={() => focusBox('customer')}
+              onRequestSave={handleSave}
               accent={accent}
-              inputClassName="rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-900"
-              inputStyle={inputStyle(focused === 'car')}
-              compact
+              autoFocus={!plan}
             />
           </Box>
           <Box label={partyWord} basis={260} raised={focused === 'customer'}>
@@ -330,10 +328,10 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               options={focused === 'customer' ? customerOptions : []}
               onSelectOption={(opt, via) => {
                 void pickCustomer(opt).then((picked) => {
-                  if (picked && via !== 'tab') focusBox('months');
+                  if (picked && via !== 'tab') focusBox('car');
                 });
               }}
-              onKeyPress={enterMovesTo('months')}
+              onKeyPress={enterMovesTo('car')}
               inputRef={(el) => {
                 box.customer.current = el;
               }}
@@ -350,43 +348,73 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
               compact
             />
           </Box>
-        </View>
-        <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
-          {field('Months', months, setMonths, { numeric: true, basis: 110, at: 'months', next: 'rate' })}
-          {field('Interest (% / year)', rate, setRate, { numeric: true, basis: 130, at: 'rate', next: 'inst' })}
-          <Box
-            label="Instalment / month (NPR)"
-            basis={190}
-            action={
-              suggestedInstallment > 0 ? (
-                <Pressable onPress={() => setInstallment(String(suggestedInstallment))} hitSlop={6}>
-                  <Text className="text-[11px] font-semibold" style={{ color: accent }}>
-                    {`Use ${formatMoney(suggestedInstallment)}`}
-                  </Text>
-                </Pressable>
-              ) : null
-            }
-          >
-            <KeyInput
-              value={installment}
-              onChangeText={setInstallment}
-              inputRef={box.inst}
-              onEnter={() => {
-                if (!installment.trim() && suggestedInstallment > 0) setInstallment(String(suggestedInstallment));
-                focusBox('firstDue');
+          <Box label="Vehicle" basis={260} raised={focused === 'car'}>
+            <SuggestInput
+              value={car}
+              onChangeText={setCar}
+              options={focused === 'car' ? carOptions : []}
+              onSelectOption={(opt, via) => {
+                setCar(opt.label);
+                fillAmount(opt.label);
+                if (via !== 'tab') focusBox('amount');
               }}
-              onRequestSave={handleSave}
+              onKeyPress={(e) => {
+                const k = readKey(e);
+                if (k.key === 'Enter' && !k.ctrl && !Number(amount)) fillAmount(car);
+                enterMovesTo('amount')(e);
+              }}
+              inputRef={(el) => {
+                box.car.current = el;
+              }}
+              onFocus={() => setFocused('car')}
+              onBlur={() => setFocused((f) => (f === 'car' ? null : f))}
+              placeholder="Vehicle number…"
+              accessibilityLabel="Vehicle"
               accent={accent}
-              placeholder="0"
-              numeric
-              align="right"
-              accessibilityLabel="Instalment"
+              inputClassName="rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-900"
+              inputStyle={inputStyle(focused === 'car')}
+              compact
             />
           </Box>
-          <Box label="First instalment due" basis={180}>
-            <KeyboardDateInput value={firstDue} onChange={setFirstDue} inputRef={box.firstDue} onEnter={() => focusBox('note')} onRequestSave={handleSave} accent={accent} />
-          </Box>
         </View>
+      </View>
+
+      {/* The EMI calculator: amount, interest a year and tenure give the monthly instalment. */}
+      <View className="rounded-2xl border border-gray-200 bg-white p-5" style={{ boxShadow: CARD_SHADOW }}>
+        <View className="mb-4 flex-row items-center gap-2">
+          <Ionicons name="calculator-outline" size={14} color="#6B7280" />
+          <Text className="text-[11px] font-bold tracking-wider text-gray-500">EMI CALCULATOR</Text>
+        </View>
+        <View className="flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
+          {field('Amount (NPR)', amount, setAmount, { numeric: true, basis: 200, at: 'amount', next: 'rate' })}
+          {field('Interest (% / year)', rate, setRate, { numeric: true, basis: 150, at: 'rate', next: 'months' })}
+          {field('Tenure (months)', months, setMonths, { numeric: true, basis: 150, at: 'months', next: 'note' })}
+        </View>
+        {car.trim() && !Number(amount) && !billedOf(car) ? (
+          <Text className="mt-2 text-[11.5px] text-amber-700">{`No ${buying ? 'Purchase' : 'Sale'} bill for this vehicle yet - type the amount.`}</Text>
+        ) : null}
+        <View className="mt-4 flex-row flex-wrap overflow-hidden rounded-xl border border-gray-200">
+          {[
+            { label: 'EMI / month', value: installment, big: true },
+            { label: 'Total interest', value: totalInterest, big: false },
+            { label: 'Total payable', value: totalPayable, big: false },
+          ].map((k, i) => (
+            <View
+              key={k.label}
+              className="px-4 py-3"
+              style={{ flexGrow: 1, flexBasis: 160, backgroundColor: k.big ? '#EFF6FF' : '#FFFFFF', borderLeftWidth: i === 0 ? 0 : 1, borderColor: '#E5E7EB' }}
+            >
+              <Text className="text-[11.5px] font-semibold text-gray-500">{k.label}</Text>
+              <Text className={k.big ? 'mt-0.5 text-[20px] font-extrabold' : 'mt-0.5 text-[15px] font-bold text-gray-900'} style={k.big ? { color: accent } : undefined}>
+                {`NPR ${money(k.value)}`}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <Text className="mt-2 text-[11px] text-gray-400">
+          {firstDue ? `First instalment ${toBsHistoryLabel(firstDue)}, a month after the date. ` : ''}
+          Worked out the way banks do: the yearly interest, charged each month on what is still unpaid (reducing balance), so every month pays the same.
+        </Text>
         <View className="mt-4 flex-row flex-wrap" style={{ columnGap: 14, rowGap: 14 }}>
           {field('Remarks', note, setNote, { placeholder: 'Optional', basis: 300, at: 'note', next: 'save' })}
         </View>
@@ -394,7 +422,6 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
 
       <View className="rounded-2xl border border-gray-200 bg-white p-4" style={{ boxShadow: CARD_SHADOW }}>
         {[
-          { label: buying ? 'Purchase price (its Purchase bill)' : 'Sale price (its Sale bill)', value: price, color: '#111827' },
           { label: `${buying ? 'To pay' : 'To collect'}${down > 0 ? ' (down + instalments)' : ''}`, value: figures.total, color: '#111827' },
           { label: buying ? 'Paid so far' : 'Received so far', value: figures.paid, color: '#047857' },
           { label: `Due by today (${figures.dueCount} of ${months || 0} instalments)`, value: figures.dueByNow, color: '#111827' },
@@ -408,12 +435,10 @@ function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null })
         ))}
         <Text className="mt-2 text-[11px] text-gray-400">
           {figures.next ? `Next instalment: ${toBsHistoryLabel(figures.next)}. ` : ''}
-          {car.trim() && !billed && !plan ? `No ${buying ? 'Purchase' : 'Sale'} bill for this vehicle yet, so the instalment is not worked out - type it in. ` : ''}
           {down > 0 ? `The down payment counts as ${buying ? 'paid' : 'received'}. ` : ''}
           {buying
             ? "Instalments paid are the Paid entries on the vendor's ledger naming this item."
             : "Instalments received are the customer's Received entries naming this vehicle."}
-          {' '}The instalment is worked out the way banks do: the yearly interest, charged each month on what is still unpaid (reducing balance), so every month pays the same.
         </Text>
       </View>
 
