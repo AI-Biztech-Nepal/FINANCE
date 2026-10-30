@@ -29,8 +29,6 @@ const COLS = {
   party: [96, 3],
   inst: [70, 1],
   plan: [70, 1],
-  money: [84, 1],
-  overdue: [72, 1],
   started: [88, 1],
 } as const;
 
@@ -41,21 +39,20 @@ const WORDS: Record<Direction, { price: string; color: string; tint: string; non
     color: '#047857',
     tint: '#ECFDF5',
     none: 'No EMI sales yet. Add one with New EMI, or add all your sold vehicles above.',
-    note: 'Received is what the customer paid for the vehicle on the Received page (pick the vehicle in Item). It includes the down payment, which is entered once it is paid; each installment is due on its day. The sale itself is its Sale bill.',
+    note: 'To receive takes off what the customer paid for the vehicle on the Received page (pick the vehicle in Item). It includes the down payment, which is entered once it is paid; each installment is due on its day. The sale itself is its Sale bill.',
   },
   purchase: {
     price: 'Purchase price',
     color: '#C2410C',
     tint: '#FFF7ED',
     none: 'No vehicles bought on EMI yet. Add one with New EMI, or add all your vehicles above.',
-    note: 'Paid is what you paid the vendor for the item on the Paid page (pick the item in Item). It includes the down payment, which is entered once it is paid; each installment is due on its day. The purchase itself is its Purchase bill.',
+    note: 'To pay takes off what you paid the vendor for the item on the Paid page (pick the item in Item). It includes the down payment, which is entered once it is paid; each installment is due on its day. The purchase itself is its Purchase bill.',
   },
 };
 
 /** The EMI tab of Rent & EMI: one line a vehicle, its customer's plan and then its vendor's, so what comes in and what
- * goes out on it read side by side. Received is the customer's Received entries naming the vehicle, Paid every Paid entry
- * naming it, each with what is overdue. There is a button that puts every vehicle bought in, 12 months at 10% a year
- * (reducing balance). The tiles above say what comes in and what goes out; picking one keeps the vehicles on that side. */
+ * goes out on it each month read side by side. There is a button that puts every vehicle bought in, 12 months at 10% a
+ * year (reducing balance). The tiles above say what comes in and what goes out; picking one keeps the vehicles on that side. */
 export function EmiPanel({ userId, basePath, full }: { userId: string | undefined; basePath: string; full: boolean }) {
   const today = localTodayIso();
   // The tile picked narrows the table to one side.
@@ -97,6 +94,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
       byVehicle.get(k)![dir].push(figures(p, dir));
     }
     const vendors = vendorsByVehicle(bills ?? []);
+    // A vehicle still in stock is not on EMI, whatever vendor plan it has: it comes in once it is sold.
+    const inStock = new Set((products ?? []).filter((p) => Number(p.stock_level) > 0).map((p) => key(p.name)));
     // One line a vehicle. Should it have two plans on a side, each pair takes a line, so none is hidden.
     return [...byVehicle.entries()]
       .flatMap(([k, side]) =>
@@ -108,16 +107,14 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
             car: (sale ?? purchase)!.p.car,
             sale,
             purchase,
-            // With no plan to the vendor, still who sold it and what they were paid.
+            // With no plan to the vendor, still who sold it.
             vendor: purchase?.p.customer_name || vendors.get(k) || '',
-            received: sale?.paid ?? 0,
-            paid: purchase?.paid ?? paidBy.get(`purchase|${k}`) ?? 0,
-            overdue: (sale?.overdue ?? 0) + (purchase?.overdue ?? 0),
           };
         })
       )
-      .sort((a, b) => Number(!a.sale) - Number(!b.sale) || b.overdue - a.overdue);
-  }, [plans, received, paidOut, bills, today]);
+      .filter((r) => r.sale || !inStock.has(key(r.car)))
+      .sort((a, b) => Number(!a.sale) - Number(!b.sale) || a.car.localeCompare(b.car));
+  }, [plans, received, paidOut, bills, products, today]);
   type Row = (typeof allRows)[number];
   const rows = useMemo(() => allRows.filter((r) => show === 'all' || r[show]), [allRows, show]);
   const sum = (f: (r: Row) => number, list: Row[] = rows) => round2(list.reduce((s, r) => s + f(r), 0));
@@ -125,7 +122,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   const toPay = sum((r) => r.purchase?.remaining ?? 0, allRows);
   const net = round2(toReceive - toPay);
   // What falls due each month: the installment of every plan still running on a side.
-  const recurring = (d: Direction) => sum((r) => (!r[d] || r[d].status.label === 'Completed' ? 0 : Number(r[d].p.installment)), allRows);
+  const monthly = (r: Row, d: Direction) => (!r[d] || r[d].status.label === 'Completed' ? 0 : Number(r[d].p.installment));
+  const recurring = (d: Direction) => sum((r) => monthly(r, d), allRows);
   // The sides on screen: both, or the one picked.
   const sides: Direction[] = show === 'all' ? ['sale', 'purchase'] : [show];
 
@@ -133,8 +131,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
   // (the customer pays us).
   const batches = useMemo(() => {
     const input = { products: products ?? [], bills: bills ?? [], plans: plans ?? [], months: EMI_STOCK_MONTHS, rate: EMI_STOCK_RATE };
-    return { purchase: emiStockPlans({ ...input, today }), sale: { ...emiSoldPlans(input), noPrice: [] as string[] } };
-  }, [products, bills, plans, today]);
+    return { purchase: emiStockPlans(input), sale: { ...emiSoldPlans(input), noPrice: [] as string[] } };
+  }, [products, bills, plans]);
 
   async function addAll(dir: Direction) {
     const batch = batches[dir];
@@ -198,8 +196,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
     );
   const inAndOut = (inn: number, out: number) => (
     <View className="items-end">
-      <Text className="text-[11.5px] font-semibold" style={{ color: IN }} numberOfLines={1}>{`Received ${money(inn)}`}</Text>
-      <Text className="text-[11.5px] font-semibold" style={{ color: OUT }} numberOfLines={1}>{`Paid ${money(out)}`}</Text>
+      <Text className="text-[11.5px] font-semibold" style={{ color: IN }} numberOfLines={1}>{`Customer ${money(inn)}`}</Text>
+      <Text className="text-[11.5px] font-semibold" style={{ color: OUT }} numberOfLines={1}>{`Vendor ${money(out)}`}</Text>
     </View>
   );
   const columns: BookColumn<Row>[] = full
@@ -212,10 +210,6 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
         { key: 'vendor', label: 'Vendor', ...w('party'), render: vendorCell },
         { key: 'instOut', label: 'Vendor EMI', ...w('inst'), align: 'right', render: (r) => fig(Number(r.purchase?.p.installment)) },
         { key: 'planOut', label: 'Plan', ...w('plan'), render: (r) => line(planText(r.purchase?.p), 'text-gray-500') },
-        { key: 'received', label: 'Received', ...w('money'), align: 'right', render: (r) => fig(r.received, IN, true) },
-        { key: 'paid', label: 'Paid', ...w('money'), align: 'right', render: (r) => fig(r.paid, OUT, true) },
-        { key: 'overdueIn', label: 'Customer overdue', ...w('overdue'), align: 'right', render: (r) => fig(r.sale?.overdue ?? 0, '#B91C1C', true) },
-        { key: 'overdueOut', label: 'Vendor overdue', ...w('overdue'), align: 'right', render: (r) => fig(r.purchase?.overdue ?? 0, '#B91C1C', true) },
         { key: 'started', label: 'EMI started', ...w('started'), render: (r) => line(startedOn(r), 'text-gray-700') },
       ]
     : [
@@ -229,7 +223,7 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
             </View>
           ),
         },
-        { key: 'money', label: 'Received / Paid', width: 140, align: 'right', render: (r) => inAndOut(r.received, r.paid) },
+        { key: 'money', label: 'EMI a month', width: 140, align: 'right', render: (r) => inAndOut(Number(r.sale?.p.installment) || 0, Number(r.purchase?.p.installment) || 0) },
       ];
 
   const count = `${rows.length} ${rows.length === 1 ? 'vehicle' : 'vehicles'} · Total`;
@@ -245,12 +239,10 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
         label: count,
         cells: full
           ? {
-              received: fig(sum((r) => r.received), IN, true),
-              paid: fig(sum((r) => r.paid), OUT, true),
-              overdueIn: fig(sum((r) => r.sale?.overdue ?? 0), '#B91C1C', true),
-              overdueOut: fig(sum((r) => r.purchase?.overdue ?? 0), '#B91C1C', true),
+              instIn: fig(sum((r) => monthly(r, 'sale')), IN, true),
+              instOut: fig(sum((r) => monthly(r, 'purchase')), OUT, true),
             }
-          : { money: inAndOut(sum((r) => r.received), sum((r) => r.paid)) },
+          : { money: inAndOut(sum((r) => monthly(r, 'sale')), sum((r) => monthly(r, 'purchase'))) },
       }}
     />
   );
@@ -271,8 +263,8 @@ export function EmiPanel({ userId, basePath, full }: { userId: string | undefine
               </Text>
               <Text className="text-[12px] text-gray-500">
                 {d === 'purchase'
-                  ? `Every vehicle you bought, in stock or sold: ${EMI_STOCK_MONTHS} monthly installments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the vendor on its purchase bill. What you already paid shows in Paid.`
-                  : `Every vehicle you have sold: ${EMI_STOCK_MONTHS} monthly installments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the customer on its sale bill. What they already paid shows in Received.`}
+                  ? `Every vehicle you bought and have sold: ${EMI_STOCK_MONTHS} monthly installments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the vendor on its purchase bill. What you already paid is taken off To pay.`
+                  : `Every vehicle you have sold: ${EMI_STOCK_MONTHS} monthly installments, ${EMI_STOCK_RATE}% interest a year on what is still unpaid (reducing balance), from the customer on its sale bill. What they already paid is taken off To receive.`}
                 {batch.noPrice.length > 0 ? ` ${batch.noPrice.length} with no purchase price yet ${batch.noPrice.length === 1 ? 'is' : 'are'} left out.` : ''}
               </Text>
             </View>

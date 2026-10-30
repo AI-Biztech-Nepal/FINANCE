@@ -6,6 +6,8 @@ import type { BillItem, BusinessTransaction, EmiPlan, Product } from '../../type
 /** What a stock item bought on EMI is set up with: 12 monthly installments, 10% interest a year (reducing balance). */
 export const EMI_STOCK_MONTHS = 12;
 export const EMI_STOCK_RATE = 10;
+/** The day the vehicles put in together start: Kartik 1, 2083. */
+export const EMI_STOCK_START = '2026-10-18';
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -80,9 +82,9 @@ export function vendorsByVehicle(bills: BusinessTransaction[]): Map<string, stri
 }
 
 /**
- * The EMI plans for every vehicle bought - in stock or since sold, none of them is paid up - one per item, on
+ * The EMI plans for every vehicle bought and since sold - what is still in stock is not on EMI - one per item, on
  * installments from the vendor of its latest Purchase bill: its price (what its Purchase bills come to - the same figure
- * as the car's bill on Stock and Inventory; with no bill, the cost price), `months` installments with `rate`% interest a year (reducing balance), the first one a month after the bill. What was
+ * as the car's bill on Stock and Inventory; with no bill, the cost price), `months` installments with `rate`% interest a year (reducing balance), the first one a month after EMI_STOCK_START. What was
  * already paid is not taken off here - the plan reads it from the Paid entries, so Remaining shows what is left. An
  * item that already has a purchase plan is left out, so adding twice makes no duplicates; one with no price anywhere
  * is reported in `noPrice` instead.
@@ -91,7 +93,6 @@ export function emiStockPlans(input: {
   products: Product[];
   bills: BusinessTransaction[];
   plans: Pick<EmiPlan, 'car' | 'direction'>[];
-  today: string;
   months: number;
   rate: number;
 }): { rows: PlanRow[]; noPrice: string[] } {
@@ -100,13 +101,13 @@ export function emiStockPlans(input: {
   const rows: PlanRow[] = [];
   const noPrice: string[] = [];
   for (const p of input.products) {
-    if (p.is_active === false) continue;
+    if (p.is_active === false || Number(p.stock_level) > 0) continue;
     const k = norm(p.name);
     if (!k || have.has(k)) continue;
     have.add(k);
     const f = found.get(k);
-    // Its bills come to the price; with no (priced) bill, the cost price for what is in stock - or for one, when it has been sold.
-    const price = round2(f && f.total > 0 ? f.total : Number(p.purchase_price) > 0 ? Number(p.purchase_price) * Math.max(1, Number(p.stock_level) || 0) : 0);
+    // Its bills come to the price; with no (priced) bill, the cost price.
+    const price = round2(f && f.total > 0 ? f.total : Number(p.purchase_price) || 0);
     if (!(price > 0)) {
       noPrice.push(p.name);
       continue;
@@ -122,7 +123,7 @@ export function emiStockPlans(input: {
       installment: emiInstallment(price, input.months, input.rate),
       months: input.months,
       interest_rate: input.rate,
-      first_due: addMonths(f?.date ?? input.today, 1),
+      first_due: addMonths(EMI_STOCK_START, 1),
       product_id: p.id,
       note: null,
       closed_on: null,
@@ -134,7 +135,7 @@ export function emiStockPlans(input: {
 /**
  * The other side of the same vehicles: each one already sold (it is on a Sale bill) is a plan for the customer to pay
  * us - the price its Sale bills come to, `months` installments with `rate`% interest a year (reducing balance), the first one a
- * month after the sale, the model from the vehicle's Purchase bill. What the customer already paid is not taken off here: the plan
+ * month after EMI_STOCK_START, the model from the vehicle's Purchase bill. What the customer already paid is not taken off here: the plan
  * reads it from their Received entries naming the vehicle. A vehicle that already has a sale plan is left out.
  */
 export function emiSoldPlans(input: {
@@ -166,7 +167,7 @@ export function emiSoldPlans(input: {
       installment: emiInstallment(price, input.months, input.rate),
       months: input.months,
       interest_rate: input.rate,
-      first_due: addMonths(sale.date, 1),
+      first_due: addMonths(EMI_STOCK_START, 1),
       product_id: p.id,
       note: null,
       closed_on: null,

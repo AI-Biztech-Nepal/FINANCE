@@ -57,12 +57,21 @@ const NAV_ITEMS: WebNavItem[] = [
 ];
 
 // A vehicle account also rents its cars out and sells them on EMI, and keeps Stock and Inventory as two lists: Stock
-// (only what is still in hand) stays one of Finance's pages, where Stock and Inventory was; Rent & EMI and then
-// Inventory (every vehicle, in stock and sold) are pages of their own in the side panel, just below Dashboard.
+// (only what is still in hand) stays one of Finance's pages, where Stock and Inventory was; Rent & EMI (EMI and Rent
+// nested under it) and then Inventory (every vehicle, in stock and sold) sit in the side panel, just below Dashboard.
 function vehicleNav(items: WebNavItem[]): WebNavItem[] {
   const stock: WebNavItem = { href: '/(store)/stock', label: 'Stock', icon: 'cube' };
   const own: WebNavItem[] = [
-    { href: '/(store)/rent', label: 'Rent & EMI', icon: 'car' },
+    {
+      href: '/(store)/rent',
+      label: 'Rent & EMI',
+      icon: 'car',
+      heading: true,
+      children: [
+        { href: '/(store)/rent?tab=emi', label: 'EMI', icon: 'card' },
+        { href: '/(store)/rent?tab=rent', label: 'Rent', icon: 'key' },
+      ],
+    },
     { href: '/(store)/inventory', label: 'Inventory', icon: 'layers' },
   ];
   const at = items.findIndex((item) => item.href.endsWith('/company-dashboard'));

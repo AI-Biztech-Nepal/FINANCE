@@ -16,6 +16,8 @@ export interface WebNavItem {
   // The children are always shown, indented one step further each level down:
   // nothing in the side panel opens or closes.
   children?: WebNavItem[];
+  // A title over its children, not a page of its own: it opens its first child and only the child lights up.
+  heading?: boolean;
 }
 
 /** One row of the nav list, indented by how deep it sits (0 = Home/Finance,
@@ -25,7 +27,7 @@ export interface WebNavItem {
  * an inline component here would remount this whole branch (and its children)
  * on every render instead of just updating it. */
 function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; isActive: (href: string) => boolean }) {
-  const active = isActive(item.href);
+  const active = !item.heading && isActive(item.href);
   const top = depth === 0;
 
   const color = active ? '#2563EB' : top ? '#6B7280' : '#9CA3AF';
@@ -40,7 +42,7 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
         }}
       >
         <Pressable
-          onPress={() => router.push(item.href as any)}
+          onPress={() => router.push((item.heading ? item.children?.[0]?.href ?? item.href : item.href) as any)}
           accessibilityRole="link"
           accessibilityLabel={item.label}
           accessibilityState={{ selected: active }}
