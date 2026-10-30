@@ -257,7 +257,7 @@ function TrendChart({ labels, assets, liabilities }: { labels: string[]; assets:
 }
 
 export function BalanceSheetScreen({ basePath }: { basePath: string }) {
-  const userId = useAuthStore((s) => s.session?.user.id);
+  const userId = useAuthStore((s) => s.ownerId ?? undefined);
   const profile = useAuthStore((s) => s.profile);
   const [mode] = useCalendarMode();
   const { width } = useWindowDimensions();

@@ -45,7 +45,7 @@ export function ContactPickerModal({
   partyKind?: NewPartyKind;
 }) {
   // The Ledger type each person is filed under, shown under their name.
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const { nameById: partyTypeName } = usePartyTypes(userId);
   const [search, setSearch] = useState(initialQuery);
   // On a page whose words are all capitals (the Ledger) what is typed here is too.

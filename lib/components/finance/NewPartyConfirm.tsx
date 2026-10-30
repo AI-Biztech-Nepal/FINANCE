@@ -48,7 +48,7 @@ function NewPartyDialog({
   onAdd: (answer: NewPartyAnswer) => void;
   onCancel: () => void;
 }) {
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const { types, remove: removeType } = usePartyTypes(userId);
   const [name, setName] = useState(initial);
   const [phone, setPhone] = useState(initialPhone ?? '');

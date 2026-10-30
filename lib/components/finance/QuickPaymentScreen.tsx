@@ -72,7 +72,7 @@ function QuickPaymentForm() {
     voiceNote?: string;
   }>();
   const isOut = type === 'out';
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   // Customers and vendors share one contacts list, but they're opposite
   // ledgers (see PartyBalancesScreen) - a Payment Out settling a Purchase
   // must reduce vendor_ledger_entries (what you owe), never

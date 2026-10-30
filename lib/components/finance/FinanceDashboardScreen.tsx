@@ -260,7 +260,7 @@ export function FinanceDashboardScreen({ basePath }: { basePath: string }) {
   const metricCols = zoneRight >= THREE_ACROSS_MIN ? 3 : 2;
   const metricWidth = Math.floor((zoneRight - METRIC_GAP * (metricCols - 1)) / metricCols);
 
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const profile = useAuthStore((state) => state.profile);
   // `all`: every tile below is a sum over these rows; a plain read stops at 1000.
   const { data: allEntries } = useSupabaseQuery('customer_ledger_entries', {

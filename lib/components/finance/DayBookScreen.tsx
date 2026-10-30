@@ -379,7 +379,7 @@ function EditInput(props: ComponentProps<typeof TextInput>) {
  * trigger. */
 function EditEntryModal({ target, onClose }: { target: EditTarget | null; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const bankAccounts = useBankAccounts(userId);
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [showPartyPicker, setShowPartyPicker] = useState(false);
@@ -815,7 +815,7 @@ function AccountPicker({ options, selected, onSelect, userId }: {
  * is every cash movement dated before this day, the same formula as the
  * Available Balance (useAccountBalances), so the two always agree. */
 export function DayBookScreen({ basePath }: { basePath: string }) {
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const profile = useAuthStore((state) => state.profile);
   const wide = useWideDetail();
   const { width: windowWidth } = useWindowDimensions();

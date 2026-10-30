@@ -24,7 +24,7 @@ import type { PrintReport } from '../../utils/printReport';
 export function RentScreen({ basePath }: { basePath: string }) {
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const layout = useBookLayout();
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   // The renters' daily rent lines up to today (see useRentalWageSync).
   useRentalWageSync(userId);
   const profile = useAuthStore((state) => state.profile);

@@ -81,7 +81,7 @@ function RentForm({ basePath, rental }: { basePath: string; rental: Rental | nul
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const desktopWeb = useIsWideWeb();
   const accent = FINANCE_ENTRY_ACCENT;
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const today = localTodayIso();
   const owner: Record<string, string> = userId ? { owner_id: userId } : {};
   const { data: products } = useSupabaseQuery('products', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });

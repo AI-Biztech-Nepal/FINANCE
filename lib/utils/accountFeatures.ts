@@ -5,7 +5,14 @@ import type { BillItem } from '../../types/database.types';
  * bill's item) beside the vendor. There is no per-account setting, so the account is picked out by the
  * business name saved on its profile - written "Deeva" or "Deva", in any case. */
 export function sellsVehicles(businessName: string | null | undefined): boolean {
-  return /\bdee?va\s+auto\b/i.test(businessName ?? '');
+  return orgSellsVehicles || /\bdee?va\s+auto\b/i.test(businessName ?? '');
+}
+
+/** The organization's `finance.org_settings.sells_vehicles` flag, set once at sign-in (see useAuth.ts) before any screen
+ * renders. The name match above stays as a fallback for accounts that predate the flag. */
+let orgSellsVehicles = false;
+export function setOrgSellsVehicles(value: boolean): void {
+  orgSellsVehicles = value;
 }
 
 export interface BannerColors {

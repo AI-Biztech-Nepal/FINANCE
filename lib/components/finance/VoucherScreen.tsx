@@ -9,7 +9,7 @@ import { JournalVoucherForm } from './JournalVoucherForm';
 /** The Journal Voucher as a page of its own, laid out like the Sale / Purchase / Payment forms:
  * a white card on the grey page, with the voucher's date, its debit and credit lines and the total. */
 export function VoucherScreen({ basePath }: { basePath: string }) {
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   useScreenHeader({ title: 'Journal Voucher', resetTitle: 'Journal Voucher' }, []);
   const leave = () => (router.canGoBack() ? router.back() : router.replace(`${basePath}/daybook` as never));
   return (

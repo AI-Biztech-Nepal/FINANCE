@@ -140,7 +140,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   const meta = KIND_META[kind];
   const layout = useBookLayout();
   const cameFrom = useCameFrom(basePath);
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const profile = useAuthStore((state) => state.profile);
   // The Purchase Report of an account that buys vehicles says which one, beside the vendor.
   const vehicleAccount = sellsVehicles(profile?.business_name?.trim() || profile?.full_name);

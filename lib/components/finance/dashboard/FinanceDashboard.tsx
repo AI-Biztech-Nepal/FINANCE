@@ -64,7 +64,7 @@ const TYPE_STYLE = {
 } as const;
 
 function useTransactions() {
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const { data } = useSupabaseQuery('business_transactions', {
     filters: userId ? { owner_id: userId } : {},
     enabled: !!userId,

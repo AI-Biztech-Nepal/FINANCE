@@ -51,7 +51,7 @@ export function EmiEntryScreen({ basePath }: { basePath: string }) {
 function EmiForm({ basePath, plan }: { basePath: string; plan: EmiPlan | null }) {
   useCalendarMode();
   const accent = FINANCE_ENTRY_ACCENT;
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const today = localTodayIso();
   const owner: Record<string, string> = userId ? { owner_id: userId } : {};
   const { data: products } = useSupabaseQuery('products', { filters: owner, orderBy: { column: 'name' }, enabled: !!userId });

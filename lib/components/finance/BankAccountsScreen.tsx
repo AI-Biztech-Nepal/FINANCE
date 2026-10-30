@@ -153,7 +153,7 @@ const cellText = (value: string | null | undefined) =>
   );
 
 export function BankAccountsScreen() {
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const { accounts, create, update, remove } = useBankAccounts(userId);
   const profileRow = useAuthStore((state) => state.profile);
   const setProfile = useAuthStore((state) => state.setProfile);

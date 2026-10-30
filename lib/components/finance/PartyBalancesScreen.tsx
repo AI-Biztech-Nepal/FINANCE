@@ -122,7 +122,7 @@ export function PartyBalancesScreen({ basePath, direction }: { basePath: string;
   const layout = useBookLayout();
   const cameFrom = useCameFrom(basePath);
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const profile = useAuthStore((state) => state.profile);
   const { data: customers } = useSupabaseQuery('customers', {
     filters: userId ? { owner_id: userId } : {},

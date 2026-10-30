@@ -531,7 +531,7 @@ function StockItemPopup({
 export function InventoryScreen({ basePath, inStockOnly = false }: { basePath: string; inStockOnly?: boolean }) {
   const layout = useBookLayout();
   const cameFrom = useCameFrom(basePath);
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const profile = useAuthStore((state) => state.profile);
   const bankAccounts = useBankAccounts(userId);
   const { data: products } = useSupabaseQuery('products', {

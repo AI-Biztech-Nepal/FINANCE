@@ -6,6 +6,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase, AUTH_STORAGE_KEY } from '../supabase';
 import { SecureAuthStorage } from '../utils/secureAuthStorage';
 import { queryClient } from '../providers/QueryProvider';
+import { setOrgSellsVehicles } from '../utils/accountFeatures';
 import type { Profile, UserRole } from '../../types/database.types';
 
 /** True when this page was opened from the link in a password-reset email.
@@ -20,6 +21,9 @@ function openedFromRecoveryLink(): boolean {
 interface AuthState {
   session: Session | null;
   profile: Profile | null;
+  /** The tenant of every Finance row: the active organization in the platform database (rows are `owner_id = org id`).
+   * For a one-person account this equals the user's own id. */
+  ownerId: string | null;
   isLoading: boolean;
   /** Signed in only by a reset link: the app shows "choose a new password"
    * until it's set, instead of the dashboard. */
@@ -27,6 +31,7 @@ interface AuthState {
   setSession: (session: Session | null) => void;
   setRecovering: (recovering: boolean) => void;
   setProfile: (profile: Profile | null) => void;
+  setOwnerId: (ownerId: string | null) => void;
   setLoading: (loading: boolean) => void;
   signOut: () => Promise<void>;
 }
@@ -34,11 +39,13 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   profile: null,
+  ownerId: null,
   isLoading: true,
   isRecovering: openedFromRecoveryLink(),
   setSession: (session) => set({ session }),
   setRecovering: (isRecovering) => set({ isRecovering }),
   setProfile: (profile) => set({ profile }),
+  setOwnerId: (ownerId) => set({ ownerId }),
   setLoading: (isLoading) => set({ isLoading }),
   // Deliberately does NOT clear saved fingerprint sign-in credentials here -
   // signing out is the only way to ever reach the login screen's fingerprint
@@ -67,7 +74,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
     await SecureAuthStorage.removeItem(AUTH_STORAGE_KEY);
     queryClient.clear();
-    set({ session: null, profile: null, isRecovering: false });
+    setOrgSellsVehicles(false);
+    set({ session: null, profile: null, ownerId: null, isRecovering: false });
   },
 }));
 
@@ -76,7 +84,7 @@ export const useAuthStore = create<AuthState>((set) => ({
  * state changes. Mount this once near the root of the app (see app/_layout.tsx).
  */
 export function useAuthListener() {
-  const { setSession, setProfile, setLoading, setRecovering } = useAuthStore();
+  const { setSession, setProfile, setOwnerId, setLoading, setRecovering } = useAuthStore();
 
   useEffect(() => {
     let isMounted = true;
@@ -84,6 +92,18 @@ export function useAuthListener() {
     async function loadProfile(userId: string) {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
       if (!error && isMounted) setProfile(data as Profile);
+      await loadOrg(userId);
+    }
+
+    // Rows belong to the active organization of the platform database (core), not to the user. The Database type
+    // only describes this app's own schema, so these two calls are untyped.
+    async function loadOrg(userId: string) {
+      const db = supabase as any;
+      const { data: ctx } = await db.schema('core').rpc('my_context');
+      const orgId: string = ctx?.active_org_id ?? userId; // one-person accounts: the org shares the owner's id
+      const { data: settings } = await db.from('org_settings').select('sells_vehicles').eq('org_id', orgId).maybeSingle();
+      setOrgSellsVehicles(!!settings?.sells_vehicles);
+      if (isMounted) setOwnerId(orgId);
     }
 
     // A separate getSession() call here used to race the INITIAL_SESSION
@@ -124,7 +144,7 @@ export function useAuthListener() {
       isMounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [setSession, setProfile, setLoading, setRecovering]);
+  }, [setSession, setProfile, setOwnerId, setLoading, setRecovering]);
 }
 
 export function useRole(): UserRole | null {

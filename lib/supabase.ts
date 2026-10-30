@@ -21,6 +21,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const AUTH_STORAGE_KEY = 'store-books-auth-token';
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  // This app's tables live in the `finance` schema of the shared AI Biz Tech Nepal platform database. The generated
+  // Database type only knows `public`, hence the cast.
+  db: { schema: 'finance' as 'public' },
   auth: {
     // OS-keychain-backed on native (chunked - see secureAuthStorage.ts),
     // AsyncStorage on web where SecureStore has no implementation. A leaked

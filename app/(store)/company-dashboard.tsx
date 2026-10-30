@@ -442,7 +442,7 @@ function Columns({ rows, color, onPress }: { rows: { label: string; value: numbe
 
 export default function StoreDashboard() {
   const profile = useAuthStore((state) => state.profile);
-  const userId = profile?.id;
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const { width } = useWindowDimensions();
   const wide = Platform.OS === 'web' && width >= WEB_SIDEBAR_MIN_WIDTH;
   const twoColumns = width >= 1100;

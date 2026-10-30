@@ -35,7 +35,7 @@ type OpenMenu = { index: number; kind: 'party' | 'type' | 'category' } | null;
  * is tapped. */
 export function ImportStatementScreen() {
   const insets = useSafeAreaInsets();
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const { data: customers } = useSupabaseQuery('customers', {
     filters: userId ? { owner_id: userId } : {},
     enabled: !!userId,

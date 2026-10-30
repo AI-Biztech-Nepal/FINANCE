@@ -3445,7 +3445,7 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
         : null,
     [itemParam, itemQty, itemRate, keepStockParam]
   );
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const role = useRole();
   const { data: products } = useSupabaseQuery('products', {
     filters: userId ? { owner_id: userId } : {},

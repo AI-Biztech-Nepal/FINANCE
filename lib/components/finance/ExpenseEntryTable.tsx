@@ -124,7 +124,7 @@ export const ExpenseEntryTable = forwardRef<ExpenseEntryTableHandle, Props>(func
 
   const focusedRowKey = focusedCell?.col === 0 ? focusedCell.key : null;
   // The Ledger type each person is filed under (Customer, Vendor, Employee ...), shown under their name in the list.
-  const { nameById: partyTypeName } = usePartyTypes(useAuthStore((state) => state.session?.user.id));
+  const { nameById: partyTypeName } = usePartyTypes(useAuthStore((state) => state.ownerId ?? undefined));
   const typeOf = (c: { party_type_id?: string | null }) => (c.party_type_id ? partyTypeName.get(c.party_type_id) ?? null : null);
   const suggestions = useMemo<CustomerSuggestion[]>(() => {
     if (!focusedRowKey) return [];

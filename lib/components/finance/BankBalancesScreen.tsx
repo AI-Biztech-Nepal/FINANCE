@@ -200,7 +200,7 @@ export function TransferForm({ userId, onDone, bare = false }: { userId: string;
 export function BankBalancesScreen({ basePath }: { basePath: string }) {
   const layout = useBookLayout();
   const cameFrom = useCameFrom(basePath);
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   const profile = useAuthStore((state) => state.profile);
   const balances = useAccountBalances(userId);
   const deleteTransfer = useSupabaseDelete('account_transfers');

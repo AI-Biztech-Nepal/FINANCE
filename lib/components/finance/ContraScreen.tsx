@@ -9,7 +9,7 @@ import { TransferForm } from './BankBalancesScreen';
 /** Contra - money moved between your own accounts (cash and banks) - as a page of its own, laid out like
  * the other entry forms. */
 export function ContraScreen({ basePath }: { basePath: string }) {
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   useScreenHeader({ title: 'Contra', resetTitle: 'Contra' }, []);
   const leave = () => (router.canGoBack() ? router.back() : router.replace(`${basePath}/daybook` as never));
   return (

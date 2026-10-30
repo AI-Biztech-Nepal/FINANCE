@@ -93,7 +93,7 @@ const PERIOD_LABEL: Record<Period, string> = { year: 'This Year', all: 'All Time
  * this just re-sums them for whichever period is selected instead of
  * introducing a second source of truth. */
 export function ReportScreen({ basePath }: { basePath: string }) {
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   // Every bill (not the API's first 1000): the stock at a period's start is worked out from all of them.
   const { data: transactions } = useSupabaseQuery('business_transactions', {
     filters: userId ? { owner_id: userId } : {},

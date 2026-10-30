@@ -710,7 +710,7 @@ export function CustomerDetailScreen({ basePath }: { basePath: string }) {
 
 function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const [calendarMode] = useCalendarMode(); // the history's dates are drawn again when AD / BS changes
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   // Employees' daily rental wages up to today (see useRentalWageSync).
   useRentalWageSync(userId);
   // `all` on both ledger reads: the balance is a sum over every entry.

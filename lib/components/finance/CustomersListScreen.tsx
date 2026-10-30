@@ -914,7 +914,7 @@ function PartyLedgerPopup({
 function LedgerList({ basePath }: { basePath: string }) {
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const { add } = useLocalSearchParams<{ add?: string }>();
-  const userId = useAuthStore((state) => state.session?.user.id);
+  const userId = useAuthStore((state) => state.ownerId ?? undefined);
   // Employees' daily rental wages up to today (see useRentalWageSync).
   useRentalWageSync(userId);
   const profile = useAuthStore((state) => state.profile);
